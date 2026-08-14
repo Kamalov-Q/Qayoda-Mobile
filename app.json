@@ -8,6 +8,7 @@
     "scheme": "mobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "schema": "qayoda",
     "ios": {
       "supportsTablet": true
     },
@@ -37,6 +38,14 @@
           "dark": {
             "backgroundColor": "#000000"
           }
+        }
+      ],
+      "expo-secure-store",
+      "expo-localization",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Yaqin atrofdagi e'lonlarni ko'rsatish uchun joylashuvingizdan foydalanamiz."
         }
       ]
     ],
