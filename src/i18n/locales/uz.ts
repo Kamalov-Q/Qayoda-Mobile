@@ -21,9 +21,66 @@ export const uz = {
   },
 
   tabs: {
+    home: "Asosiy",
     sale: "Sotuv",
     myListings: "E'lonlarim",
+    saved: "Saqlangan",
+    about: "Ma'lumot",
     profile: "Profil",
+  },
+
+  home: {
+    greeting: "Assalomu alaykum!",
+    greetingName: "Assalomu alaykum, {{name}}!",
+    tagline: "Ko'chmas mulk — xaritada, chegaralari bilan",
+    heroTitle: "O'z joyingizni xaritadan toping",
+    heroSubtitle:
+      "Har bir e'lon xaritada o'z chegarasi bilan turadi — qayerda ekanini taxmin qilish shart emas.",
+    heroCta: "E'lonlarni ko'rish",
+    quickTitle: "Tezkor amallar",
+    actionBrowse: "Sotuvdagi e'lonlar",
+    actionAdd: "E'lon joylash",
+    actionSaved: "Saqlanganlar",
+    adsTitle: "Aksiyalar",
+    // Dummy promos — swap for real campaigns when they exist.
+    ad1Title: "Birinchi e'lon — bepul",
+    ad1Text: "Ro'yxatdan o'tgan har bir foydalanuvchi e'lonini bepul joylaydi.",
+    ad2Title: "Xaritada aniq chegara",
+    ad2Text: "Yer va hovlilarni chegarasi bilan ko'ring — adashish yo'q.",
+    ad3Title: "Tez aloqa",
+    ad3Text: "Egasining raqami har bir e'londa — vositachisiz gaplashing.",
+    howTitle: "Qanday ishlaydi?",
+    step1: "Xaritadan qiziqtirgan hududni oching",
+    step2: "E'lonni tanlab, rasm va narxini ko'ring",
+    step3: "Egasi bilan to'g'ridan-to'g'ri bog'laning",
+  },
+
+  saved: {
+    title: "Saqlangan e'lonlar",
+    empty: "Hozircha saqlangan e'lonlar yo'q",
+    emptyHint:
+      "Yoqqan e'lonni yurakcha bilan belgilang — u shu yerda saqlanadi.",
+    browse: "E'lonlarni ko'rish",
+    save: "Saqlash",
+    unsave: "Saqlanganlardan olib tashlash",
+    added: "E'lon saqlandi",
+    removed: "Saqlanganlardan olib tashlandi",
+  },
+
+  about: {
+    title: "Ilova haqida",
+    version: "Versiya {{version}}",
+    descriptionTitle: "Qayoda nima?",
+    description:
+      "Qayoda — ko'chmas mulkni xaritada izlash ilovasi. E'lonlar shunchaki ro'yxat emas: har bir mulk o'z chegarasi bilan xaritada turadi, narxi va rasmlari bilan. Bu matn — namuna, keyinroq haqiqiy tavsif bilan almashtiriladi.",
+    contactTitle: "Bog'lanish",
+    contactEmail: "Email",
+    contactPhone: "Telefon",
+    contactWebsite: "Veb-sayt",
+    legalTitle: "Hujjatlar",
+    terms: "Foydalanish shartlari",
+    privacy: "Maxfiylik siyosati",
+    soon: "Tez orada qo'shiladi",
   },
 
   auth: {
@@ -42,6 +99,11 @@ export const uz = {
     loginWithPasswordSubtitle: "Email va parolingizni kiriting.",
     showPassword: "Parolni ko'rsatish",
     hidePassword: "Parolni yashirish",
+
+    emailNotFound:
+      "Bu email bilan hisob topilmadi. Avval ro'yxatdan o'ting.",
+    emailTaken:
+      "Bu email allaqachon ro'yxatdan o'tgan. Kirish bo'limidan foydalaning.",
 
     otpTitle: "Kodni kiriting",
     otpSubtitle: "{{email}} manziliga 6 xonali kod yubordik.",
@@ -208,6 +270,7 @@ export const uz = {
     myLocation: "Mening joylashuvim",
     previewHint: "Joylashuvingizni xaritada ko'rsatamiz",
     show: "Xaritada ko'rsatish",
+    tapToOpen: "To'liq xarita uchun bosing",
     permissionMessage:
       "Yaqin atrofdagi e'lonlarni ko'rish uchun joylashuvga ruxsat bering.",
     permissionBlocked:
@@ -227,6 +290,17 @@ export const uz = {
     undo: "Ortga",
     clear: "Tozalash",
     unavailableWeb: "Xarita brauzerda mavjud emas — ilovada oching.",
+  },
+
+  profile: {
+    statListings: "E'lonlarim",
+    statActive: "Faol",
+    statSaved: "Saqlangan",
+    links: "Tezkor havolalar",
+    linkMyListings: "Mening e'lonlarim",
+    linkSaved: "Saqlangan e'lonlar",
+    linkAdd: "Yangi e'lon joylash",
+    linkAbout: "Ilova haqida",
   },
 
   settings: {

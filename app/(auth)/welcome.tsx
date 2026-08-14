@@ -18,6 +18,7 @@ import { spacing } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT } from "../../src/i18n";
 import { errorMessage } from "../../src/lib/api-error";
+import { ApiError } from "../../src/lib/api-client";
 import { useRequestOtp } from "../../src/features/auth/hooks/useAuth";
 import { useAuthFlowStore } from "../../src/features/auth/store/auth-flow.store";
 
@@ -29,6 +30,19 @@ type Intent = "LOGIN" | "REGISTER";
 // language changes rather than frozen at module load.
 const makeSchema = (t: ReturnType<typeof useT>) =>
   z.object({ email: z.string().email(t("validation.emailInvalid")) });
+
+/**
+ * The two account-state answers this screen can get deserve their own words:
+ * "Topilmadi" tells a user nothing about WHAT to do, while "no account — go
+ * register" does. Everything else falls through to the shared mapping.
+ */
+function otpRequestError(error: unknown, t: ReturnType<typeof useT>): string {
+  if (error instanceof ApiError) {
+    if (error.status === 404) return t("auth.emailNotFound");
+    if (error.status === 409) return t("auth.emailTaken");
+  }
+  return errorMessage(error);
+}
 
 type FormData = z.infer<ReturnType<typeof makeSchema>>;
 
@@ -120,7 +134,11 @@ export default function WelcomeScreen() {
           />
 
           <ErrorBanner
-            message={requestOtp.isError ? errorMessage(requestOtp.error) : null}
+            message={
+              requestOtp.isError
+                ? otpRequestError(requestOtp.error, t)
+                : null
+            }
           />
 
           <Button

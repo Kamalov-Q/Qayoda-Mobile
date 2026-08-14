@@ -7,7 +7,7 @@ export default function Index() {
   // status can't be 'loading' here — root layout gates rendering until bootstrap finishes
   return (
     <Redirect
-      href={status === "authenticated" ? "/(tabs)/sotuv" : "/(auth)/welcome"}
+      href={status === "authenticated" ? "/(tabs)/home" : "/(auth)/welcome"}
     />
   );
 }

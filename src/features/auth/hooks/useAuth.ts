@@ -13,7 +13,7 @@ async function establishSession(session: SessionResponse) {
   await secureSession.saveRefreshToken(session.refreshToken);
   useAuthStore.getState().setSession(session.accessToken, session.user);
   useAuthFlowStore.getState().reset();
-  router.replace("/(tabs)/sotuv");
+  router.replace("/(tabs)/home");
   toast.successKey("auth.loggedIn");
 }
 

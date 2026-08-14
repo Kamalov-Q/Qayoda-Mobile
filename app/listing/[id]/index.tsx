@@ -1,5 +1,11 @@
 // app/listing/[id]/index.tsx
-import { Text, View, ScrollView, ActivityIndicator } from "react-native";
+import {
+  Text,
+  View,
+  ScrollView,
+  ActivityIndicator,
+  Pressable,
+} from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -18,6 +24,10 @@ import {
   useArchiveListing,
   useRestoreListing,
 } from "../../../src/features/listings/hooks/useCreateListing";
+import {
+  useIsSaved,
+  useToggleSave,
+} from "../../../src/features/listings/hooks/useSavedListings";
 import { ListingImageCarousel } from "../../../src/features/listings/components/ListingImageCarousel";
 import { OfferBadge } from "../../../src/features/listings/components/OfferBadge";
 import { htmlToText } from "../../../src/features/listings/utils/format";
@@ -29,6 +39,8 @@ export default function ListingDetailScreen() {
   const userId = useAuthStore((s) => s.user?.id);
   const archive = useArchiveListing();
   const restore = useRestoreListing();
+  const isSaved = useIsSaved(id ?? "");
+  const toggleSave = useToggleSave();
   const { colors, text } = useTheme();
   const t = useT();
 
@@ -116,7 +128,46 @@ export default function ListingDetailScreen() {
     // already clears the notch.
     <Screen style={{ padding: 0 }} scroll={false} edges={HEADER_EDGES}>
       <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl }}>
-        <ListingImageCarousel images={listing.images} />
+        <View>
+          <ListingImageCarousel images={listing.images} />
+
+          {/* Save rides on the photo, where every listings app puts it. Any
+              signed-in user gets it, owners included — hiding it from owners
+              made the feature invisible to anyone testing with one account.
+              Signed-out viewers have no saved set, so they see nothing. */}
+          {userId ? (
+            <Pressable
+              onPress={() =>
+                toggleSave.mutate({ listingId: listing.id, listing, next: !isSaved })
+              }
+              disabled={toggleSave.isPending}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={t(isSaved ? "saved.unsave" : "saved.save")}
+              accessibilityState={{ selected: isSaved }}
+              style={({ pressed }) => ({
+                position: "absolute",
+                top: spacing.md,
+                right: spacing.md,
+                width: 44,
+                height: 44,
+                borderRadius: radii.pill,
+                alignItems: "center",
+                justifyContent: "center",
+                // Scrim, not a themed surface: it sits on photography, where
+                // a translucent dark disc reads in both schemes.
+                backgroundColor: colors.imageScrim,
+                transform: [{ scale: pressed ? 0.92 : 1 }],
+              })}
+            >
+              <Ionicons
+                name={isSaved ? "heart" : "heart-outline"}
+                size={22}
+                color={isSaved ? colors.danger : "#FFFFFF"}
+              />
+            </Pressable>
+          ) : null}
+        </View>
 
         <View style={{ padding: spacing.lg, gap: spacing.lg }}>
           {offers.length ? (

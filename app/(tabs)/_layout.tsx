@@ -9,8 +9,11 @@ import { useT } from "../../src/i18n";
 // Filled when selected, outline when not — the icon carries the active state
 // alongside the tint, so it still reads for colour-blind users.
 const ICONS = {
+  home: ["home", "home-outline"],
   sotuv: ["pricetag", "pricetag-outline"],
   places: ["business", "business-outline"],
+  saved: ["heart", "heart-outline"],
+  about: ["information-circle", "information-circle-outline"],
   account: ["person-circle", "person-circle-outline"],
 } as const;
 
@@ -58,6 +61,15 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen
+        name="home"
+        options={{
+          title: t("tabs.home"),
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={ICONS.home[focused ? 0 : 1]} color={color} size={ICON_SIZE} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="sotuv"
         options={{
           title: t("tabs.sale"),
@@ -72,6 +84,24 @@ export default function TabsLayout() {
           title: t("tabs.myListings"),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={ICONS.places[focused ? 0 : 1]} color={color} size={ICON_SIZE} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="saved"
+        options={{
+          title: t("tabs.saved"),
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={ICONS.saved[focused ? 0 : 1]} color={color} size={ICON_SIZE} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="about"
+        options={{
+          title: t("tabs.about"),
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={ICONS.about[focused ? 0 : 1]} color={color} size={ICON_SIZE} />
           ),
         }}
       />

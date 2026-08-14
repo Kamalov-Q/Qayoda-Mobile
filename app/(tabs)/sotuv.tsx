@@ -34,6 +34,11 @@ import {
 } from "../../src/features/listings/api/listings.api";
 import { useDebouncedValue } from "../../src/lib/use-debounced-value";
 import { useMapViewport } from "../../src/features/listings/hooks/useMapViewport";
+import {
+  useIsSaved,
+  useToggleSave,
+} from "../../src/features/listings/hooks/useSavedListings";
+import { useAuthStore } from "../../src/features/auth/store/auth.store";
 import { usePriceFormatter } from "../../src/features/listings/utils/format";
 import { ListingsMap } from "../../src/features/map/ListingsMap";
 
@@ -410,11 +415,50 @@ const FeedRow = memo(function FeedRow({
         </Text>
       </View>
 
+      <SaveHeart listingId={item.id} />
+
       <Ionicons
         name="chevron-forward"
         size={18}
         color={colors.textFaint}
         style={{ marginRight: spacing.sm }}
+      />
+    </Pressable>
+  );
+});
+
+/** Row-level save toggle. The feed's row model is too slim to seed the Saved
+ *  cache, so the tab itself fills in on the refetch the toggle kicks off. */
+const SaveHeart = memo(function SaveHeart({ listingId }: { listingId: string }) {
+  const { colors } = useTheme();
+  const t = useT();
+  const authed = useAuthStore((s) => s.status === "authenticated");
+  const isSaved = useIsSaved(listingId);
+  const toggleSave = useToggleSave();
+
+  if (!authed) return null;
+
+  return (
+    <Pressable
+      onPress={() => toggleSave.mutate({ listingId, next: !isSaved })}
+      disabled={toggleSave.isPending}
+      hitSlop={10}
+      accessibilityRole="button"
+      accessibilityLabel={t(isSaved ? "saved.unsave" : "saved.save")}
+      accessibilityState={{ selected: isSaved }}
+      style={({ pressed }) => ({
+        width: 36,
+        height: 36,
+        borderRadius: radii.pill,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: pressed ? colors.surfaceRaised : "transparent",
+      })}
+    >
+      <Ionicons
+        name={isSaved ? "heart" : "heart-outline"}
+        size={20}
+        color={isSaved ? colors.danger : colors.textFaint}
       />
     </Pressable>
   );

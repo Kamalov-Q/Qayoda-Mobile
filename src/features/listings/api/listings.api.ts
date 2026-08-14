@@ -157,4 +157,13 @@ export const listingApi = {
   /** Undoes an archive. Returns the listing, now ACTIVE and back on the map. */
   restore: (id: string) =>
     api<Listing>(`/listings/${id}/restore`, { method: "PATCH" }),
+
+  getSaved: () => api<Listing[]>(`/listings/saved`),
+
+  /** Both idempotent server-side, so a repeated tap can't error. */
+  save: (id: string) =>
+    api<{ saved: boolean }>(`/listings/${id}/save`, { method: "PUT" }),
+
+  unsave: (id: string) =>
+    api<{ saved: boolean }>(`/listings/${id}/save`, { method: "DELETE" }),
 };
