@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { Text, View, Pressable } from "react-native";
 import { router, type Href } from "expo-router";
 import Constants from "expo-constants";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Screen,
@@ -21,6 +22,8 @@ import { confirm } from "../../src/lib/alerts";
 import { MiniLocationMap } from "../../src/features/map/MiniLocationMap";
 import { useAuthStore } from "../../src/features/auth/store/auth.store";
 import { useLogout } from "../../src/features/auth/hooks/useAuth";
+import { useProfile } from "../../src/features/profile/hooks/useProfile";
+import { resolveMediaUrl } from "../../src/lib/media-url";
 import { useMyListings } from "../../src/features/listings/hooks/useMyListings";
 import { useSavedListings } from "../../src/features/listings/hooks/useSavedListings";
 
@@ -65,6 +68,9 @@ export default function AccountScreen() {
   // costs no extra requests once either has been visited.
   const { data: mine } = useMyListings();
   const { data: saved } = useSavedListings();
+  // Full profile (avatar, phone) lives behind /profile, not the session user.
+  const { data: profile } = useProfile();
+  const avatarUri = resolveMediaUrl(profile?.avatarThumbUrl);
   const activeCount = mine?.filter((l) => l.status === "ACTIVE").length;
 
   const themeOptions = useMemo<Option<ThemeMode>[]>(
@@ -122,6 +128,29 @@ export default function AccountScreen() {
             ...shadow.card,
           }}
         >
+          {/* Pencil sits on the banner itself: editing identity belongs where
+              the identity is shown, not among the quick links below. */}
+          <Pressable
+            onPress={() => router.push("/profile/edit")}
+            accessibilityRole="button"
+            accessibilityLabel={t("profile.edit")}
+            hitSlop={8}
+            style={({ pressed }) => ({
+              position: "absolute",
+              top: spacing.sm,
+              right: spacing.sm,
+              zIndex: 1,
+              width: 36,
+              height: 36,
+              borderRadius: radii.pill,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: pressed ? colors.surfaceRaised : "transparent",
+            })}
+          >
+            <Ionicons name="create-outline" size={20} color={colors.primary} />
+          </Pressable>
+
           <View
             style={{
               alignItems: "center",
@@ -140,9 +169,16 @@ export default function AccountScreen() {
                 borderColor: colors.primaryBorder,
                 alignItems: "center",
                 justifyContent: "center",
+                overflow: "hidden",
               }}
             >
-              {initials ? (
+              {avatarUri ? (
+                <Image
+                  source={{ uri: avatarUri }}
+                  style={{ width: "100%", height: "100%" }}
+                  contentFit="cover"
+                />
+              ) : initials ? (
                 <Text
                   style={{
                     ...type.display,

@@ -2,7 +2,7 @@
 // Tap-to-add-vertex drawing — controlled component: value + onChange, GeoJSON
 // [lng, lat]. The ring is kept open while drawing; Polygon closes it visually
 // and closeRing() closes it for real on save.
-import { memo } from "react";
+import { memo, useRef } from "react";
 import { View, Text } from "react-native";
 import MapView, {
   Marker,
@@ -13,9 +13,14 @@ import MapView, {
   type MarkerDragStartEndEvent,
 } from "react-native-maps";
 import { Button } from "../../components/ui";
+import { toast } from "../../components/ui/Toast";
 import { spacing, radii, type } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 import { useT } from "../../i18n";
+import {
+  insertionIndexFor,
+  ringSelfIntersects,
+} from "../listings/utils/geo";
 import { DEFAULT_CENTER, parcelRegion, toLatLng, toPosition, withAlpha } from "./maps";
 import { useMarkerTracking } from "./useMarkerTracking";
 
@@ -34,18 +39,56 @@ export const PolygonEditor = memo(function PolygonEditor({
   const { colors } = useTheme();
   const t = useT();
 
-  const addVertex = (e: MapPressEvent) =>
-    onChange([...value, toPosition(e.nativeEvent.coordinate)]);
+  const invalid = ringSelfIntersects(value);
 
-  const moveVertex = (index: number, e: MarkerDragStartEndEvent) =>
-    onChange(
-      value.map((p, i) =>
-        i === index ? toPosition(e.nativeEvent.coordinate) : p,
-      ),
+  // Google Maps delivers the map press as well as the marker press when a
+  // vertex is tapped, so deleting one immediately re-added it in the same
+  // spot and tapping a point looked like it did nothing at all.
+  const vertexPressedAt = useRef(0);
+
+  // A tap is placed where it keeps the boundary simple rather than always at
+  // the end of the ring. Tracing in order still just appends; a point that
+  // would cross the shape goes into the edge it belongs to instead.
+  const addVertex = (e: MapPressEvent) => {
+    if (Date.now() - vertexPressedAt.current < 400) return;
+
+    const point = toPosition(e.nativeEvent.coordinate);
+    const index = insertionIndexFor(value, point);
+
+    if (index === null) {
+      toast.errorKey("map.pointBlocked");
+      return;
+    }
+
+    const next = [...value];
+    next.splice(index, 0, point);
+    onChange(next);
+  };
+
+  // Dropping a vertex across the shape is the other way to invalidate it, and
+  // there is nothing sensible to do but put it back where it was.
+  const moveVertex = (index: number, e: MarkerDragStartEndEvent) => {
+    const next = value.map((p, i) =>
+      i === index ? toPosition(e.nativeEvent.coordinate) : p,
     );
 
-  const removeVertex = (index: number) =>
+    if (ringSelfIntersects(next)) {
+      toast.errorKey("map.pointBlocked");
+      // The marker is memoised on its point and has already moved itself
+      // natively, so putting the ring back is not enough — the dragged vertex
+      // needs a fresh tuple to re-render and snap home.
+      onChange(
+        value.map((p, i) => (i === index ? ([...p] as [number, number]) : p)),
+      );
+      return;
+    }
+    onChange(next);
+  };
+
+  const removeVertex = (index: number) => {
+    vertexPressedAt.current = Date.now();
     onChange(value.filter((_, i) => i !== index));
+  };
 
   return (
     <View style={{ flex: 1 }}>
@@ -72,8 +115,8 @@ export const PolygonEditor = memo(function PolygonEditor({
         {value.length >= 3 ? (
           <Polygon
             coordinates={value.map(toLatLng)}
-            fillColor={withAlpha(colors.primary, 0.3)}
-            strokeColor={colors.primary}
+            fillColor={withAlpha(invalid ? colors.danger : colors.primary, 0.3)}
+            strokeColor={invalid ? colors.danger : colors.primary}
             strokeWidth={2}
             tappable={false}
           />

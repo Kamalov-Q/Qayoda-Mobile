@@ -4,14 +4,18 @@
 // map is only mounted once the sheet actually opens.
 import { Suspense, lazy, useState } from "react";
 import { Modal, View, Text, ActivityIndicator, Pressable } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { spacing, type } from "../../theme/tokens";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { Button } from "../../components/ui";
+import { spacing, radii, sizing, type } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 import { useT } from "../../i18n";
 import {
   MIN_POLYGON_POINTS,
+  dedupeRing,
   formatAreaM2,
   polygonAreaM2,
+  ringSelfIntersects,
 } from "../listings/utils/geo";
 
 const PolygonEditor = lazy(() => import("./PolygonEditor"));
@@ -30,10 +34,20 @@ export function PolygonPickerModal({
   onCancel,
   onSave,
 }: Props) {
-  const { colors } = useTheme();
+  const { colors, text, shadow } = useTheme();
   const t = useT();
+  // Not <SafeAreaView>: that measures its own native view, and inside a Modal
+  // it measures a window with no insets — which is why the header ended up
+  // under the status bar, sharing a line with iOS's "back to app" pill. The
+  // hook reads the screen's provider, which has the real numbers.
+  const insets = useSafeAreaInsets();
   const [points, setPoints] = useState<[number, number][]>(initial);
-  const canSave = points.length >= MIN_POLYGON_POINTS;
+
+  const ring = dedupeRing(points);
+  // Both conditions the API enforces, checked here where the shape is still on
+  // screen and fixable — a rejection after submit points at nothing.
+  const invalid = ringSelfIntersects(ring);
+  const canSave = ring.length >= MIN_POLYGON_POINTS && !invalid;
 
   return (
     <Modal
@@ -42,54 +56,96 @@ export function PolygonPickerModal({
       onRequestClose={onCancel}
       statusBarTranslucent
     >
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors.bg,
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom,
+        }}
+      >
         <View
           style={{
             flexDirection: "row",
             alignItems: "center",
-            justifyContent: "space-between",
-            paddingHorizontal: spacing.lg,
-            paddingVertical: spacing.md,
+            gap: spacing.md,
+            paddingHorizontal: spacing.md,
+            // Taller than a stock header: iOS parks its "back to app" pill in
+            // the status bar, and the controls were sitting right under it.
+            paddingTop: spacing.md,
+            paddingBottom: spacing.md,
             borderBottomWidth: 1,
             borderBottomColor: colors.border,
           }}
         >
-          <Pressable onPress={onCancel} hitSlop={12}>
-            <Text style={{ ...type.bodyStrong, color: colors.textMuted }}>
-              {t("common.cancel")}
-            </Text>
+          {/* A filled disc, not a bare word: on the drawing screen these two
+              controls are the only chrome, and "Bekor qilish" as plain grey
+              text read as a caption rather than a button. */}
+          <Pressable
+            onPress={onCancel}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t("common.cancel")}
+            style={({ pressed }) => ({
+              width: sizing.controlMd,
+              height: sizing.controlMd,
+              borderRadius: radii.pill,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: pressed ? colors.surfaceRaised : colors.surface,
+              borderWidth: 1,
+              borderColor: colors.border,
+            })}
+          >
+            <Ionicons name="close" size={24} color={colors.text} />
           </Pressable>
 
-          <View style={{ alignItems: "center" }}>
-            <Text style={{ ...type.bodyStrong, color: colors.text }}>
+          <View style={{ flex: 1, alignItems: "center" }}>
+            <Text style={text.bodyStrong} numberOfLines={1}>
               {t("map.drawTitle")}
             </Text>
-            <Text style={{ ...type.caption, color: colors.textMuted }}>
-              {t("map.points", { count: points.length })}
-              {canSave ? ` · ${formatAreaM2(polygonAreaM2(points))}` : ""}
+            <Text style={text.caption} numberOfLines={1}>
+              {t("map.points", { count: ring.length })}
+              {ring.length >= MIN_POLYGON_POINTS
+                ? ` · ${formatAreaM2(polygonAreaM2(ring))}`
+                : ""}
             </Text>
           </View>
 
-          <Pressable
-            onPress={() => onSave(points)}
+          <Button
+            title={t("common.save")}
+            icon="checkmark"
+            size="sm"
             disabled={!canSave}
-            hitSlop={12}
-          >
-            <Text
-              style={{
-                ...type.bodyStrong,
-                color: canSave ? colors.primary : colors.textFaint,
-              }}
-            >
-              {t("common.save")}
-            </Text>
-          </Pressable>
+            onPress={() => onSave(ring)}
+            style={{ minWidth: 116, ...(canSave ? shadow.control : null) }}
+          />
         </View>
+
+        {invalid ? (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: spacing.sm,
+              paddingHorizontal: spacing.md,
+              paddingVertical: spacing.sm,
+              backgroundColor: colors.dangerSurface,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.dangerBorder,
+            }}
+          >
+            <Ionicons name="alert-circle" size={18} color={colors.danger} />
+            <Text style={{ ...type.caption, color: colors.danger, flex: 1 }}>
+              {t("map.selfIntersects")}
+            </Text>
+          </View>
+        ) : null}
 
         <Suspense
           fallback={
             <View style={{ flex: 1, justifyContent: "center" }}>
-              <ActivityIndicator />
+              <ActivityIndicator color={colors.primary} />
             </View>
           }
         >
@@ -99,7 +155,7 @@ export function PolygonPickerModal({
             center={initial[0]}
           />
         </Suspense>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 }

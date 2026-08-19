@@ -80,6 +80,13 @@ export default function RootLayout() {
               name="listing/[id]/edit-images"
               options={{ title: t("listings.editImages") }}
             />
+            <Stack.Screen
+              name="profile/edit"
+              options={{ title: t("profile.edit") }}
+            />
+            {/* The thread replaces the title with the peer's name and presence,
+                so this only sets what it shows before the fetch lands. */}
+            <Stack.Screen name="chat/[id]" options={{ title: t("chat.title") }} />
           </Stack>
         ) : (
           <View style={{ flex: 1, backgroundColor: colors.bg }} />

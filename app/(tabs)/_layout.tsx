@@ -5,6 +5,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuthStore } from "../../src/features/auth/store/auth.store";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT } from "../../src/i18n";
+import { useChatSocket } from "@/src/features/chat/hooks/useChatSocket";
+import { useUnreadTotal } from "@/src/features/chat/hooks/useConversations";
 
 // Filled when selected, outline when not — the icon carries the active state
 // alongside the tint, so it still reads for colour-blind users.
@@ -13,6 +15,7 @@ const ICONS = {
   sotuv: ["pricetag", "pricetag-outline"],
   places: ["business", "business-outline"],
   saved: ["heart", "heart-outline"],
+  chat: ["chatbubble", "chatbubble-outline"],
   about: ["information-circle", "information-circle-outline"],
   account: ["person-circle", "person-circle-outline"],
 } as const;
@@ -28,6 +31,8 @@ const BAR_HEIGHT = 58;
 const ICON_SIZE = 24;
 
 export default function TabsLayout() {
+  useChatSocket();
+  const unread = useUnreadTotal();
   const status = useAuthStore((s) => s.status);
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -65,7 +70,11 @@ export default function TabsLayout() {
         options={{
           title: t("tabs.home"),
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={ICONS.home[focused ? 0 : 1]} color={color} size={ICON_SIZE} />
+            <Ionicons
+              name={ICONS.home[focused ? 0 : 1]}
+              color={color}
+              size={ICON_SIZE}
+            />
           ),
         }}
       />
@@ -74,7 +83,11 @@ export default function TabsLayout() {
         options={{
           title: t("tabs.sale"),
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={ICONS.sotuv[focused ? 0 : 1]} color={color} size={ICON_SIZE} />
+            <Ionicons
+              name={ICONS.sotuv[focused ? 0 : 1]}
+              color={color}
+              size={ICON_SIZE}
+            />
           ),
         }}
       />
@@ -83,7 +96,25 @@ export default function TabsLayout() {
         options={{
           title: t("tabs.myListings"),
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={ICONS.places[focused ? 0 : 1]} color={color} size={ICON_SIZE} />
+            <Ionicons
+              name={ICONS.places[focused ? 0 : 1]}
+              color={color}
+              size={ICON_SIZE}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="chat"
+        options={{
+          title: t("tabs.chat"),
+          tabBarBadge: unread > 0 ? unread : undefined,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={ICONS.chat[focused ? 0 : 1]}
+              color={color}
+              size={ICON_SIZE}
+            />
           ),
         }}
       />
@@ -92,7 +123,11 @@ export default function TabsLayout() {
         options={{
           title: t("tabs.saved"),
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={ICONS.saved[focused ? 0 : 1]} color={color} size={ICON_SIZE} />
+            <Ionicons
+              name={ICONS.saved[focused ? 0 : 1]}
+              color={color}
+              size={ICON_SIZE}
+            />
           ),
         }}
       />
@@ -101,7 +136,11 @@ export default function TabsLayout() {
         options={{
           title: t("tabs.about"),
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={ICONS.about[focused ? 0 : 1]} color={color} size={ICON_SIZE} />
+            <Ionicons
+              name={ICONS.about[focused ? 0 : 1]}
+              color={color}
+              size={ICON_SIZE}
+            />
           ),
         }}
       />
@@ -110,7 +149,11 @@ export default function TabsLayout() {
         options={{
           title: t("tabs.profile"),
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={ICONS.account[focused ? 0 : 1]} color={color} size={ICON_SIZE} />
+            <Ionicons
+              name={ICONS.account[focused ? 0 : 1]}
+              color={color}
+              size={ICON_SIZE}
+            />
           ),
         }}
       />

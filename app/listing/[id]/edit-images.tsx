@@ -90,7 +90,7 @@ function EditImagesForm({
     pickAndUpload,
     remove,
     retry,
-    makePrimary,
+    reorder,
     toPayload,
     isUploading,
   } = useImageUpload(toUploaded(initial));
@@ -117,7 +117,7 @@ function EditImagesForm({
           onAdd={pickAndUpload}
           onRemove={remove}
           onRetry={retry}
-          onMakePrimary={makePrimary}
+          onReorder={reorder}
         />
 
         <Button

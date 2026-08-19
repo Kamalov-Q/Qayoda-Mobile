@@ -1,14 +1,13 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "uyNest",
+    "slug": "uynest",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobile",
+    "scheme": "uynest",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "schema": "qayoda",
     "ios": {
       "supportsTablet": true
     },
@@ -46,6 +45,26 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "Yaqin atrofdagi e'lonlarni ko'rsatish uchun joylashuvingizdan foydalanamiz."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "Suhbatdagi rasmlarni galereyangizga saqlash uchun ruxsat kerak.",
+          "photosPermission": "E'lon va suhbat uchun rasm tanlashda galereyangizdan foydalanamiz."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "E'lon va suhbat uchun rasm tanlashda galereyangizdan foydalanamiz.",
+          "cameraPermission": "Rasmga olish uchun kameradan foydalanamiz."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Ovozli xabar yozish uchun mikrofondan foydalanamiz."
         }
       ]
     ],

@@ -128,7 +128,7 @@ export default function AddListingScreen() {
     pickAndUpload,
     remove,
     retry,
-    makePrimary,
+    reorder,
     toPayload,
     isUploading,
   } = useImageUpload();
@@ -158,6 +158,8 @@ export default function AddListingScreen() {
   const {
     control,
     handleSubmit,
+    getValues,
+    setValue,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -174,9 +176,33 @@ export default function AddListingScreen() {
 
   const hasBoundary = polygon.length >= MIN_POLYGON_POINTS;
 
+  /**
+   * The drawn boundary already is the area, to the metre — retyping it from
+   * the header of the map sheet is busywork. It fills the field on save, but
+   * only while the field is empty or still holds the last value this put
+   * there, so a number typed by hand is never overwritten.
+   */
+  const autoArea = useRef<string | null>(null);
+  const fillAreaFrom = (points: [number, number][]) => {
+    if (points.length < MIN_POLYGON_POINTS) return;
+    const current = getValues("areaM2") ?? "";
+    if (current && current !== autoArea.current) return;
+
+    const measured = String(Math.round(polygonAreaM2(points)));
+    autoArea.current = measured;
+    setValue("areaM2", measured, { shouldValidate: true });
+  };
+
   const onSubmit = (d: FormData) => {
     if (!hasBoundary) {
       notify("add.missingBoundaryTitle", "add.missingBoundaryMessage");
+      return;
+    }
+    // A listing with no photo is a listing nobody opens, so the API's optional
+    // images are required here. Checked against the payload rather than the
+    // tiles: a tile that failed to upload has nothing to send.
+    if (toPayload().length === 0) {
+      notify("images.requiredTitle", "images.requiredMessage");
       return;
     }
     // Guards a double submit while a photo is still in flight — the payload is
@@ -360,7 +386,7 @@ export default function AddListingScreen() {
           onAdd={pickAndUpload}
           onRemove={remove}
           onRetry={retry}
-          onMakePrimary={makePrimary}
+          onReorder={reorder}
         />
 
         <ErrorBanner
@@ -385,6 +411,7 @@ export default function AddListingScreen() {
           onCancel={() => setDrawing(false)}
           onSave={(points) => {
             setPolygon(points);
+            fillAreaFrom(points);
             setDrawing(false);
           }}
         />

@@ -156,6 +156,19 @@ export function useImageUpload(initial: UploadedImage[] = []) {
     await uploadBatch(errored.map((i) => i.sourceUri!));
   }, [images, uploadBatch]);
 
+  /** Drag-and-drop reorder. Position 0 is the primary image, so dragging a
+   *  tile to the front is also how the cover photo gets chosen. */
+  const reorder = useCallback((from: number, to: number) => {
+    setImages((prev) => {
+      if (from === to || from < 0 || to < 0) return prev;
+      if (from >= prev.length || to >= prev.length) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }, []);
+
   const makePrimary = useCallback((key: string) => {
     setImages((prev) => {
       const target = prev.find((img) => img.key === key);
@@ -193,6 +206,7 @@ export function useImageUpload(initial: UploadedImage[] = []) {
     pickAndUpload,
     remove,
     retry,
+    reorder,
     makePrimary,
     toPayload,
     isUploading,

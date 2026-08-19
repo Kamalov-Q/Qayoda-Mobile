@@ -2,7 +2,7 @@
 // expo-secure-store does not support web.
 import * as SecureStore from "expo-secure-store";
 
-const REFRESH_KEY = "qayoda.refreshToken";
+const REFRESH_KEY = "uynest.refreshToken";
 
 export const secureSession = {
   saveRefreshToken: (token: string): Promise<void> =>

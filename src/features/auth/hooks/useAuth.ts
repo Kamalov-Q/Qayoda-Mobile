@@ -6,6 +6,7 @@ import { useAuthStore } from "../store/auth.store";
 import { secureSession } from "../../../lib/secure-session";
 import { refreshSession } from "../../../lib/api-client";
 import { queryClient } from "../../../lib/query-client";
+import { disconnectChatSocket } from "../../../lib/chat-socket";
 import { OtpPurpose, useAuthFlowStore } from "../store/auth-flow.store";
 import { toast } from "../../../components/ui/Toast";
 
@@ -90,6 +91,11 @@ export function useLogout() {
       // local logout — the device is signed out either way — so it stays
       // swallowed, but it is no longer expected to fail.
       await authApi.logout().catch(() => {});
+      // Before the store is cleared, and before the query cache is: the socket
+      // authenticates with the access token held there and reconnects on its
+      // own, so leaving it up would keep streaming the old account's messages
+      // into a signed-out app.
+      disconnectChatSocket();
       await secureSession.clear();
       useAuthStore.getState().clear();
       queryClient.clear(); // wipe cached personal data on logout — cheap and prevents cross-account leaks

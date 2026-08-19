@@ -301,7 +301,7 @@ const PriceMarker = memo(function PriceMarker({
   label: string;
   onPress: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, shadow } = useTheme();
   // A marker with custom children that starts at tracksViewChanges={false}
   // renders blank on Android — it is snapshotted before its child lays out.
   // Tracking stays on until that first layout, then off so panning is smooth.
@@ -314,18 +314,27 @@ const PriceMarker = memo(function PriceMarker({
       anchor={{ x: 0.5, y: 0.5 }}
       tracksViewChanges={tracking.tracksViewChanges}
     >
+      {/* Sized to be read at arm's length over satellite imagery, where a
+          13pt label on a 4pt-padded chip disappears into the roofs. */}
       <View
         onLayout={tracking.onLayout}
         style={{
           backgroundColor: colors.primary,
-          paddingHorizontal: 8,
-          paddingVertical: 4,
-          borderRadius: radii.sm,
-          borderWidth: 1.5,
+          paddingHorizontal: 12,
+          paddingVertical: 7,
+          borderRadius: radii.pill,
+          borderWidth: 2,
           borderColor: "#FFFFFF",
+          ...shadow.control,
         }}
       >
-        <Text style={{ ...type.caption, fontWeight: "700", color: "#FFFFFF" }}>
+        <Text
+          style={{
+            ...type.bodyStrong,
+            fontWeight: "800",
+            color: "#FFFFFF",
+          }}
+        >
           {label}
         </Text>
       </View>

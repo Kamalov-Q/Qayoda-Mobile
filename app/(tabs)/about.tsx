@@ -22,8 +22,8 @@ const CONTACTS = [
   {
     labelKey: "about.contactEmail" as TranslationKey,
     icon: "mail-outline",
-    value: "support@qayoda.uz",
-    url: "mailto:support@qayoda.uz",
+    value: "support@uynest.uz",
+    url: "mailto:support@uynest.uz",
   },
   {
     labelKey: "about.contactPhone" as TranslationKey,
@@ -34,8 +34,8 @@ const CONTACTS = [
   {
     labelKey: "about.contactWebsite" as TranslationKey,
     icon: "globe-outline",
-    value: "qayoda.uz",
-    url: "https://qayoda.uz",
+    value: "uynest.uz",
+    url: "https://uynest.uz",
   },
 ] as const;
 

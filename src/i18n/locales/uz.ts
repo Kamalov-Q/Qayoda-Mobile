@@ -25,6 +25,7 @@ export const uz = {
     sale: "Sotuv",
     myListings: "E'lonlarim",
     saved: "Saqlangan",
+    chat: "Xabarlar",
     about: "Ma'lumot",
     profile: "Profil",
   },
@@ -70,9 +71,9 @@ export const uz = {
   about: {
     title: "Ilova haqida",
     version: "Versiya {{version}}",
-    descriptionTitle: "Qayoda nima?",
+    descriptionTitle: "uyNest nima?",
     description:
-      "Qayoda — ko'chmas mulkni xaritada izlash ilovasi. E'lonlar shunchaki ro'yxat emas: har bir mulk o'z chegarasi bilan xaritada turadi, narxi va rasmlari bilan. Bu matn — namuna, keyinroq haqiqiy tavsif bilan almashtiriladi.",
+      "uyNest — ko'chmas mulkni xaritada izlash ilovasi. E'lonlar shunchaki ro'yxat emas: har bir mulk o'z chegarasi bilan xaritada turadi, narxi va rasmlari bilan. Bu matn — namuna, keyinroq haqiqiy tavsif bilan almashtiriladi.",
     contactTitle: "Bog'lanish",
     contactEmail: "Email",
     contactPhone: "Telefon",
@@ -255,7 +256,7 @@ export const uz = {
     add: "Rasm qo'shish",
     remove: "Rasmni o'chirish",
     primary: "Asosiy",
-    hint: "Bosish — asosiy qilish · Bosib turish — o'chirish",
+    hint: "Rasmni bosib turib suring — tartib o'zgaradi. Birinchi rasm asosiy bo'ladi.",
     failed: "Xato",
     retryHint: "Qayta bosing",
     uploading: "Rasmlar yuklanmoqda...",
@@ -289,6 +290,8 @@ export const uz = {
     hint: "Chegarani belgilash uchun xaritaga bosing · nuqtani o'chirish uchun uning ustiga bosing · surish uchun bosib turing",
     undo: "Ortga",
     clear: "Tozalash",
+    pointBlocked: "Bu nuqta chegarani kesib o'tadi",
+    selfIntersects: "Chegara o'z-o'zini kesib o'tmoqda — nuqtalarni to'g'rilang",
     unavailableWeb: "Xarita brauzerda mavjud emas — ilovada oching.",
   },
 
@@ -301,6 +304,14 @@ export const uz = {
     linkSaved: "Saqlangan e'lonlar",
     linkAdd: "Yangi e'lon joylash",
     linkAbout: "Ilova haqida",
+    edit: "Profilni tahrirlash",
+    phone: "Telefon raqami",
+    changePhoto: "Rasm tanlash",
+    removePhoto: "Rasmni o'chirish",
+    removePhotoConfirm: "Profil rasmini o'chirmoqchimisiz?",
+    photoUpdated: "Profil rasmi yangilandi",
+    photoRemoved: "Profil rasmi o'chirildi",
+    updated: "Profil saqlandi",
   },
 
   settings: {
@@ -315,6 +326,40 @@ export const uz = {
     languageRu: "Ruscha",
     languageChanged: "Til o'zgartirildi",
     themeChanged: "Mavzu o'zgartirildi",
+  },
+
+  chat: {
+    title: "Xabarlar",
+    empty: "Hozircha xabarlar yo'q",
+    emptyHint: "E'lon egasiga yozing — suhbat shu yerda paydo bo'ladi",
+    unknownUser: "Foydalanuvchi",
+    online: "onlayn",
+    lastSeen: "oxirgi faollik: {{when}}",
+    typing: "yozmoqda",
+    typingVoice: "ovozli xabar yozilmoqda",
+    typingVideo: "video yozilmoqda",
+    inputPlaceholder: "Xabar yozing...",
+    deletedMessage: "O'chirilgan xabar",
+    edited: "tahrirlangan",
+    file: "Fayl",
+    messageActions: "Xabar",
+    reply: "Javob berish",
+    replyBanner: "Javob",
+    editBanner: "Tahrirlash",
+    micPermissionTitle: "Mikrofon",
+    micPermissionMessage:
+      "Ovozli xabar uchun mikrofonga ruxsat berishingiz kerak",
+    uploadError: "Yuklashda xatolik",
+    voiceLoadError: "Ovozli xabarni ochib bo'lmadi",
+    saveImage: "Rasmni saqlash",
+    imageSaved: "Rasm galereyaga saqlandi",
+    saveImageError: "Rasmni saqlab bo'lmadi",
+    galleryPermissionTitle: "Galereya",
+    galleryPermissionMessage:
+      "Rasmni saqlash uchun galereyaga ruxsat berishingiz kerak",
+    // Guest-side entry point on the listing detail screen.
+    contactOwner: "Xabar yozish",
+    starter: "Assalomu alaykum! E'loningiz haqida yozyapman.",
   },
 
   errors: {

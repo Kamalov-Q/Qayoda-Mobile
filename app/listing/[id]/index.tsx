@@ -32,6 +32,7 @@ import { ListingImageCarousel } from "../../../src/features/listings/components/
 import { OfferBadge } from "../../../src/features/listings/components/OfferBadge";
 import { htmlToText } from "../../../src/features/listings/utils/format";
 import { useAuthStore } from "../../../src/features/auth/store/auth.store";
+import { useStartConversation } from "../../../src/features/chat/hooks/useStartConversation";
 
 export default function ListingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -41,6 +42,7 @@ export default function ListingDetailScreen() {
   const restore = useRestoreListing();
   const isSaved = useIsSaved(id ?? "");
   const toggleSave = useToggleSave();
+  const startChat = useStartConversation(id ?? "");
   const { colors, text } = useTheme();
   const t = useT();
 
@@ -279,6 +281,18 @@ export default function ListingDetailScreen() {
                 onPress={onToggleArchive}
               />
             </View>
+          ) : userId ? (
+            // The guest's way in. Sending the opener is what creates the
+            // conversation, so the first message is written for them — the
+            // thread opens with something already on screen.
+            <Button
+              title={t("chat.contactOwner")}
+              icon="chatbubble-ellipses-outline"
+              loading={startChat.isPending}
+              onPress={() =>
+                startChat.mutate({ type: "TEXT", body: t("chat.starter") })
+              }
+            />
           ) : null}
         </View>
       </ScrollView>

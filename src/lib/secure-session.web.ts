@@ -5,7 +5,7 @@
 // token is XSS-exposed here in a way it is not on native. Acceptable for dev;
 // production web should move refresh tokens to an httpOnly cookie.
 
-const REFRESH_KEY = "qayoda.refreshToken";
+const REFRESH_KEY = "uynest.refreshToken";
 
 // Guarded for static rendering (no window during SSR) and for browsers that
 // throw on storage access in private mode.
