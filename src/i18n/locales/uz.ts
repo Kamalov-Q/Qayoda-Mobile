@@ -285,6 +285,8 @@ export const uz = {
     zoomOut: "Uzoqlashtirish",
     expand: "Xaritani butun ekranga ochish",
     collapse: "Xaritani kichraytirish",
+    showList: "Ro'yxatni ko'rsatish",
+    showMap: "Xaritani ko'rsatish",
     drawTitle: "Chegarani chizing",
     points: "{{count}} nuqta",
     hint: "Chegarani belgilash uchun xaritaga bosing · nuqtani o'chirish uchun uning ustiga bosing · surish uchun bosib turing",

@@ -45,10 +45,6 @@ interface Props {
   data: ViewportResponse | undefined;
   onRegionChange: (bbox: BBox, zoom: number) => void;
   onPressListing: (id: string) => void;
-  /** Whether the host screen is showing the map full-screen right now. */
-  expanded?: boolean;
-  /** Renders the expand/collapse control when provided. */
-  onToggleExpand?: () => void;
 }
 
 // Height of the preview card, so the locate button can clear it.
@@ -63,7 +59,7 @@ const clampDelta = (d: number) => Math.min(MAX_DELTA, Math.max(MIN_DELTA, d));
 
 export const ListingsMap = memo(
   forwardRef<ListingsMapHandle, Props>(function ListingsMap(
-    { data, onRegionChange, onPressListing, expanded, onToggleExpand },
+    { data, onRegionChange, onPressListing },
     ref,
   ) {
     const mapRef = useRef<MapView>(null);
@@ -159,9 +155,9 @@ export const ListingsMap = memo(
             ))}
         </MapView>
 
-        {/* Control stack, top-right: expand first (it changes the most), then
-            the zoom pair. The locate button keeps the bottom corner — it pairs
-            with the blue you-are-here dot rather than with the camera. */}
+        {/* Zoom pair, top-right. The locate button keeps the bottom corner —
+            it pairs with the blue you-are-here dot rather than with the
+            camera. */}
         <View
           style={{
             position: "absolute",
@@ -170,13 +166,6 @@ export const ListingsMap = memo(
             gap: spacing.sm,
           }}
         >
-          {onToggleExpand ? (
-            <MapIconButton
-              icon={expanded ? "contract-outline" : "expand-outline"}
-              label={t(expanded ? "map.collapse" : "map.expand")}
-              onPress={onToggleExpand}
-            />
-          ) : null}
           <MapIconButton
             icon="add"
             label={t("map.zoomIn")}
@@ -269,6 +258,7 @@ const PolygonWithLabel = memo(function PolygonWithLabel({
 }) {
   const { colors } = useTheme();
   const formatPrice = usePriceFormatter();
+  const formatSpecs = useSpecsFormatter();
 
   return (
     <>
@@ -285,6 +275,9 @@ const PolygonWithLabel = memo(function PolygonWithLabel({
         <PriceMarker
           coordinate={toLatLng(feature.centroid.coordinates)}
           label={formatPrice(feature.price, feature.currency)}
+          // Polygons only exist zoomed in, where there is room on screen for
+          // more than the price — zoomed-out point markers stay price-only.
+          sublabel={formatSpecs(feature) || undefined}
           onPress={onPress}
         />
       ) : null}
@@ -295,10 +288,13 @@ const PolygonWithLabel = memo(function PolygonWithLabel({
 const PriceMarker = memo(function PriceMarker({
   coordinate,
   label,
+  sublabel,
   onPress,
 }: {
   coordinate: LatLng;
   label: string;
+  /** Second, smaller line (e.g. "80 m² · 3 xona") — shown when zoomed in. */
+  sublabel?: string;
   onPress: () => void;
 }) {
   const { colors, shadow } = useTheme();
@@ -321,10 +317,11 @@ const PriceMarker = memo(function PriceMarker({
         style={{
           backgroundColor: colors.primary,
           paddingHorizontal: 12,
-          paddingVertical: 7,
-          borderRadius: radii.pill,
+          paddingVertical: sublabel ? 6 : 7,
+          borderRadius: sublabel ? radii.lg : radii.pill,
           borderWidth: 2,
           borderColor: "#FFFFFF",
+          alignItems: "center",
           ...shadow.control,
         }}
       >
@@ -337,6 +334,19 @@ const PriceMarker = memo(function PriceMarker({
         >
           {label}
         </Text>
+        {sublabel ? (
+          <Text
+            style={{
+              ...type.caption,
+              fontSize: 11,
+              fontWeight: "600",
+              color: "#FFFFFF",
+              opacity: 0.9,
+            }}
+          >
+            {sublabel}
+          </Text>
+        ) : null}
       </View>
     </Marker>
   );

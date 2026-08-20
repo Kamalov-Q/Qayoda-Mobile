@@ -35,7 +35,7 @@ export const BrandMark = memo(function BrandMark({
           letterSpacing: -1,
         }}
       >
-        Q
+        U
       </Text>
     </View>
   );

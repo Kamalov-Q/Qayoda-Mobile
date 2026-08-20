@@ -19,8 +19,6 @@ interface Props {
   data: ViewportResponse | undefined;
   onRegionChange: (bbox: BBox, zoom: number) => void;
   onPressListing: (id: string) => void;
-  expanded?: boolean;
-  onToggleExpand?: () => void;
 }
 
 export function ListingsMap(_props: Props) {
