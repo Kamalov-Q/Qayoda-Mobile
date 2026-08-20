@@ -71,6 +71,30 @@ const PURPOSES = [
   "RENT_DAILY",
 ] as const satisfies readonly OfferPurpose[];
 
+// Mirrors FLOOR_CAPABLE_CATEGORIES on the server, which rejects a floor sent
+// for anything else. A house or a dacha IS the building, and land has no
+// storeys at all — only a unit inside a stack, or the stack itself, can answer
+// "which floor".
+const FLOOR_CATEGORIES = [
+  "APARTMENT",
+  "BUILDING",
+] as const satisfies readonly PropertyCategory[];
+
+const canHaveFloors = (category: PropertyCategory) =>
+  (FLOOR_CATEGORIES as readonly PropertyCategory[]).includes(category);
+
+// Being in a floor-capable category still does not mean the property has
+// floors: a single-storey shop filed as BUILDING, or a ground-level house
+// converted into an APARTMENT, has none to give. Asked rather than assumed,
+// because a blank floor field is ambiguous between "no floors" and "skipped".
+const FLOOR_CHOICES = ["yes", "no"] as const;
+type FloorChoice = (typeof FLOOR_CHOICES)[number];
+
+const FLOOR_CHOICE_ICONS = {
+  yes: "layers-outline",
+  no: "square-outline",
+} as const satisfies Record<FloorChoice, keyof typeof Ionicons.glyphMap>;
+
 // Deliberately loose: numbers are written +998 90 123 45 67, 90-123-45-67 or
 // as a bare local number depending on who is filling the form. It only has to
 // catch a half-typed number, not enforce a format.
@@ -92,6 +116,12 @@ const makeSchema = (t: ReturnType<typeof useT>) =>
       .string()
       .regex(/^\d*\.?\d*$/, t("validation.numbersOnly"))
       .optional(),
+    hasFloors: z.enum(FLOOR_CHOICES),
+    floor: z.string().regex(/^\d*$/, t("validation.numbersOnly")).optional(),
+    totalFloors: z
+      .string()
+      .regex(/^\d*$/, t("validation.numbersOnly"))
+      .optional(),
     price: z
       .string()
       .regex(/^\d+$/, t("validation.priceRequired"))
@@ -108,7 +138,39 @@ const makeSchema = (t: ReturnType<typeof useT>) =>
       .trim()
       .max(DESCRIPTION_MAX, t("validation.maxChars", { count: DESCRIPTION_MAX }))
       .optional(),
-  });
+  })
+    // Cross-field rules, so they hang off the object rather than a field. The
+    // category is not part of the form — it does not need to be, because
+    // picking a category that cannot have floors forces `hasFloors` back to
+    // "no", which switches every rule below off.
+    .superRefine((v, ctx) => {
+      if (v.hasFloors !== "yes") return;
+
+      // Which floor you live on is always known; how tall the block is often
+      // is not, so only the first is required once floors are declared.
+      if (!v.floor) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["floor"],
+          message: t("validation.required"),
+        });
+      }
+      if (v.totalFloors && Number(v.totalFloors) === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["totalFloors"],
+          message: t("validation.positiveNumber"),
+        });
+      }
+      // Catches the transposed pair — "9 of 4" — which the server rejects too.
+      if (v.floor && v.totalFloors && Number(v.floor) > Number(v.totalFloors)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["floor"],
+          message: t("validation.floorAboveTotal"),
+        });
+      }
+    });
 
 type FormData = z.infer<ReturnType<typeof makeSchema>>;
 
@@ -154,12 +216,23 @@ export default function AddListingScreen() {
       })),
     [t],
   );
+  const floorOptions = useMemo<SelectGridOption<FloorChoice>[]>(
+    () =>
+      FLOOR_CHOICES.map((value) => ({
+        value,
+        label: value === "yes" ? t("add.hasFloors") : t("add.noFloors"),
+        icon: FLOOR_CHOICE_ICONS[value],
+      })),
+    [t],
+  );
 
   const {
     control,
     handleSubmit,
     getValues,
     setValue,
+    clearErrors,
+    watch,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -168,11 +241,39 @@ export default function AddListingScreen() {
       rooms: "",
       areaM2: "",
       price: "",
+      // The default category is APARTMENT, and an apartment in a block is the
+      // common case here — so the two fields start open rather than behind a
+      // tap, and only the one nobody has to look up is required.
+      hasFloors: "yes",
+      floor: "",
+      totalFloors: "",
       address: "",
       phone: "",
       description: "",
     },
   });
+
+  const showFloors = canHaveFloors(category);
+  const floorsDeclared = watch("hasFloors") === "yes";
+
+  const resetFloorFields = () => {
+    setValue("floor", "");
+    setValue("totalFloors", "");
+    clearErrors(["floor", "totalFloors"]);
+  };
+
+  /**
+   * Keeps the answer and the category in step. Moving to a category with no
+   * floors does not just hide the fields — it clears them, so a floor typed
+   * for an apartment cannot ride along in the payload after the listing has
+   * been refiled as land (which the server would reject anyway).
+   */
+  const changeCategory = (next: PropertyCategory) => {
+    setCategory(next);
+    if (canHaveFloors(next) === showFloors) return;
+    setValue("hasFloors", canHaveFloors(next) ? "yes" : "no");
+    resetFloorFields();
+  };
 
   const hasBoundary = polygon.length >= MIN_POLYGON_POINTS;
 
@@ -210,12 +311,18 @@ export default function AddListingScreen() {
     if (isUploading || create.isPending) return;
 
     const description = d.description?.trim();
+    const sendFloors = showFloors && d.hasFloors === "yes";
 
     create.mutate({
       category,
       title: d.title.trim(),
       rooms: d.rooms ? Number(d.rooms) : undefined,
       areaM2: d.areaM2 ? Number(d.areaM2) : undefined,
+      // Both stay off the payload unless the category can carry them AND the
+      // owner said it does — the server rejects a floor on anything else.
+      floor: sendFloors && d.floor ? Number(d.floor) : undefined,
+      totalFloors:
+        sendFloors && d.totalFloors ? Number(d.totalFloors) : undefined,
       address: d.address?.trim() || undefined,
       contactPhone: d.phone?.trim() || undefined,
       descriptionHtml: description ? textToHtml(description) : undefined,
@@ -232,7 +339,7 @@ export default function AddListingScreen() {
           <SelectGrid
             options={categoryOptions}
             value={category}
-            onChange={setCategory}
+            onChange={changeCategory}
           />
         </Section>
 
@@ -309,6 +416,79 @@ export default function AddListingScreen() {
             />
           )}
         />
+        {showFloors ? (
+          <Section title={t("add.floors")}>
+            <View style={{ gap: spacing.md }}>
+              <Controller
+                control={control}
+                name="hasFloors"
+                render={({ field: { value, onChange } }) => (
+                  <SelectGrid
+                    options={floorOptions}
+                    value={value}
+                    columns={2}
+                    onChange={(next) => {
+                      onChange(next);
+                      // Answering "no" drops whatever was typed: leaving the
+                      // numbers behind a hidden branch is how a stale floor
+                      // reaches the server.
+                      if (next === "no") resetFloorFields();
+                    }}
+                  />
+                )}
+              />
+
+              {/* Paired on one row: both hold one or two digits, and "4 of 9"
+                  is how the pair is read back on the listing page. Aligned to
+                  the top so an error under one does not stretch the other. */}
+              {floorsDeclared ? (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    gap: spacing.md,
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Controller
+                      control={control}
+                      name="floor"
+                      render={({ field: { value, onChange, onBlur } }) => (
+                        <TextField
+                          label={t("add.floor")}
+                          placeholder={t("add.floorPlaceholder")}
+                          keyboardType="number-pad"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          error={errors.floor?.message}
+                        />
+                      )}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Controller
+                      control={control}
+                      name="totalFloors"
+                      render={({ field: { value, onChange, onBlur } }) => (
+                        <TextField
+                          label={t("add.totalFloors")}
+                          placeholder={t("add.totalFloorsPlaceholder")}
+                          keyboardType="number-pad"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          error={errors.totalFloors?.message}
+                        />
+                      )}
+                    />
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          </Section>
+        ) : null}
+
         <Controller
           control={control}
           name="address"

@@ -137,6 +137,9 @@ export const ru: Dictionary = {
     numbersOnly: "Только цифры",
     priceRequired: "Введите цену",
     phoneInvalid: "Введите номер телефона полностью",
+    required: "Заполните это поле",
+    positiveNumber: "Должно быть больше 0",
+    floorAboveTotal: "Этаж не может быть больше этажности дома",
   },
 
   listings: {
@@ -205,6 +208,13 @@ export const ru: Dictionary = {
     roomsPlaceholder: "3",
     area: "Площадь (м²)",
     areaPlaceholder: "80",
+    floors: "Этажность",
+    hasFloors: "С этажом",
+    noFloors: "Без этажей",
+    floor: "Этаж",
+    floorPlaceholder: "4",
+    totalFloors: "Этажей в доме",
+    totalFloorsPlaceholder: "9",
     address: "Адрес",
     addressPlaceholder: "Ташкент, Чиланзарский район, 12-квартал",
     phone: "Контактный телефон",

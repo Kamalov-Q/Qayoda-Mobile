@@ -137,6 +137,9 @@ export const uz = {
     numbersOnly: "Faqat raqam",
     priceRequired: "Narxni kiriting",
     phoneInvalid: "Telefon raqamini to'liq kiriting",
+    required: "Bu maydonni to'ldiring",
+    positiveNumber: "0 dan katta bo'lsin",
+    floorAboveTotal: "Qavat binodagi qavatlardan ko'p bo'lmasin",
   },
 
   listings: {
@@ -207,6 +210,13 @@ export const uz = {
     roomsPlaceholder: "3",
     area: "Maydon (m²)",
     areaPlaceholder: "80",
+    floors: "Qavatlar",
+    hasFloors: "Qavati bor",
+    noFloors: "Qavatsiz",
+    floor: "Qavat",
+    floorPlaceholder: "4",
+    totalFloors: "Binodagi qavatlar",
+    totalFloorsPlaceholder: "9",
     address: "Manzil",
     addressPlaceholder: "Toshkent, Chilonzor tumani, 12-mavze",
     phone: "Aloqa telefoni",
