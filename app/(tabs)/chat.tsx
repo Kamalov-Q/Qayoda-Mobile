@@ -9,7 +9,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { router } from "expo-router";
-import { Screen, EmptyState, TAB_EDGES } from "../../src/components/ui";
+import { Screen, EmptyState, Avatar, TAB_EDGES } from "../../src/components/ui";
 import { spacing } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT, useLanguage } from "../../src/i18n";
@@ -23,6 +23,10 @@ export default function ChatInboxScreen() {
     useConversations();
 
   const onPress = useCallback((id: string) => router.push(`/chat/${id}`), []);
+  const onPressAvatar = useCallback(
+    (userId: string) => router.push(`/profile/${userId}`),
+    [],
+  );
 
   return (
     <Screen style={{ padding: 0 }} scroll={false} edges={TAB_EDGES}>
@@ -67,7 +71,11 @@ export default function ChatInboxScreen() {
             />
           }
           renderItem={({ item }) => (
-            <ConversationRow item={item} onPress={onPress} />
+            <ConversationRow
+              item={item}
+              onPress={onPress}
+              onPressAvatar={onPressAvatar}
+            />
           )}
         />
       )}
@@ -78,9 +86,11 @@ export default function ChatInboxScreen() {
 const ConversationRow = memo(function ConversationRow({
   item,
   onPress,
+  onPressAvatar,
 }: {
   item: Conversation;
   onPress: (id: string) => void;
+  onPressAvatar: (userId: string) => void;
 }) {
   const { colors, text } = useTheme();
   const t = useT();
@@ -110,37 +120,22 @@ const ConversationRow = memo(function ConversationRow({
         backgroundColor: pressed ? colors.surface : "transparent",
       })}
     >
-      <View
-        style={{
-          width: 48,
-          height: 48,
-          borderRadius: 24,
-          backgroundColor: colors.primary,
-          justifyContent: "center",
-          alignItems: "center",
-        }}
+      {/* The avatar opens the profile, the rest of the row opens the thread —
+          the same split every messenger uses. hitSlop keeps the 48pt circle
+          from being a fiddly target inside a row that is itself pressable. */}
+      <Pressable
+        onPress={() => onPressAvatar(item.other.id)}
+        hitSlop={6}
+        accessibilityRole="button"
+        accessibilityLabel={t("userProfile.openProfile")}
       >
-        <Text
-          style={{ color: colors.onPrimary, fontWeight: "700", fontSize: 18 }}
-        >
-          {name.charAt(0).toUpperCase()}
-        </Text>
-        {item.other.online ? (
-          <View
-            style={{
-              position: "absolute",
-              bottom: 0,
-              right: 0,
-              width: 13,
-              height: 13,
-              borderRadius: 7,
-              backgroundColor: colors.success,
-              borderWidth: 2,
-              borderColor: colors.bg,
-            }}
-          />
-        ) : null}
-      </View>
+        <Avatar
+          uri={item.other.avatarThumbUrl ?? item.other.avatarUrl}
+          name={name}
+          size={48}
+          online={item.other.online}
+        />
+      </Pressable>
 
       <View style={{ flex: 1, gap: 2 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>

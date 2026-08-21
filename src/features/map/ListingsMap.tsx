@@ -45,10 +45,28 @@ interface Props {
   data: ViewportResponse | undefined;
   onRegionChange: (bbox: BBox, zoom: number) => void;
   onPressListing: (id: string) => void;
+  /**
+   * Room to leave at the bottom for whatever the screen floats over the map —
+   * on the sale tab, the map/list switch. Everything the map pins to its own
+   * bottom edge (the preview card, the locate button) is lifted by it.
+   */
+  bottomInset?: number;
 }
 
 // Height of the preview card, so the locate button can clear it.
 const CARD_HEIGHT = 110;
+
+/**
+ * How long after tapping a polygon or its price bubble the map's own press —
+ * and any camera settle — is treated as part of that same tap.
+ *
+ * Both providers deliver the map press alongside the overlay's. iOS is the
+ * blunt one: `handleMapTap` dispatches the polygon's `onPress` and then falls
+ * through to the map's with no early return, so selecting a listing and
+ * clearing the selection happened in the same tap and the map looked dead
+ * exactly where it had something to show.
+ */
+const OVERLAY_PRESS_GRACE_MS = 400;
 
 // Guard rails for the zoom buttons: past either end animateToRegion just
 // bounces, so stop where the providers do (block scale to whole world).
@@ -59,7 +77,7 @@ const clampDelta = (d: number) => Math.min(MAX_DELTA, Math.max(MIN_DELTA, d));
 
 export const ListingsMap = memo(
   forwardRef<ListingsMapHandle, Props>(function ListingsMap(
-    { data, onRegionChange, onPressListing },
+    { data, onRegionChange, onPressListing, bottomInset = 0 },
     ref,
   ) {
     const mapRef = useRef<MapView>(null);
@@ -67,6 +85,7 @@ export const ListingsMap = memo(
     // getter — so the last settled region is remembered here.
     const regionRef = useRef<Region>(TASHKENT_REGION);
     const [selected, setSelected] = useState<MapPolygonFeature | null>(null);
+    const overlayPressedAt = useRef(0);
     const { locate, loading: locating } = useMyLocation();
     const { colors, text, shadow } = useTheme();
     const t = useT();
@@ -82,14 +101,28 @@ export const ListingsMap = memo(
       },
     }));
 
+    const selectFeature = useCallback((feature: MapPolygonFeature) => {
+      overlayPressedAt.current = Date.now();
+      setSelected(feature);
+    }, []);
+
+    /** Dismisses the preview — unless the "dismiss" is the tail of the tap
+     *  that just opened it. */
+    const clearSelection = useCallback(() => {
+      if (Date.now() - overlayPressedAt.current < OVERLAY_PRESS_GRACE_MS) return;
+      setSelected(null);
+    }, []);
+
     const handleRegionChangeComplete = useCallback(
       (region: Region) => {
         regionRef.current = region;
         const { bbox, zoom } = regionToViewport(region);
         onRegionChange(bbox, zoom);
-        setSelected(null);
+        // Panning away from a selected parcel should drop its card — but a
+        // marker press nudges the camera on Android, and that settles here.
+        clearSelection();
       },
-      [onRegionChange],
+      [onRegionChange, clearSelection],
     );
 
     // Halving the spans is one conventional zoom step in; doubling is one out.
@@ -129,18 +162,22 @@ export const ListingsMap = memo(
           initialRegion={TASHKENT_REGION}
           mapType="hybrid"
           onRegionChangeComplete={handleRegionChangeComplete}
-          onPress={() => setSelected(null)}
+          onPress={clearSelection}
           showsUserLocation
           showsMyLocationButton={false}
           showsPointsOfInterest={false}
           toolbarEnabled={false}
+          // Android recentres on a marker press by default, which settles into
+          // onRegionChangeComplete a beat later — another route to the card
+          // being torn down by the tap that opened it.
+          moveOnMarkerPress={false}
         >
           {data?.mode === "polygons" &&
             data.features.map((f) => (
               <PolygonWithLabel
                 key={f.id}
                 feature={f}
-                onPress={() => setSelected(f)}
+                onPress={() => selectFeature(f)}
               />
             ))}
 
@@ -182,7 +219,8 @@ export const ListingsMap = memo(
           onPress={goToMyLocation}
           loading={locating}
           bottomOffset={
-            selected ? CARD_HEIGHT + spacing.lg + spacing.md : spacing.xl
+            bottomInset +
+            (selected ? CARD_HEIGHT + spacing.lg + spacing.md : spacing.xl)
           }
         />
 
@@ -194,7 +232,7 @@ export const ListingsMap = memo(
               position: "absolute",
               left: spacing.md,
               right: spacing.md,
-              bottom: spacing.md,
+              bottom: spacing.md + bottomInset,
               flexDirection: "row",
               backgroundColor: colors.surface,
               borderRadius: radii.lg,

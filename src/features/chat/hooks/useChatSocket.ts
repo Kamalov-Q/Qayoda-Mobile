@@ -4,6 +4,7 @@ import { getChatSocket } from "../../../lib/chat-socket";
 import { useAuthStore } from "../../auth/store/auth.store";
 import { ChatMessage, Conversation } from "../api/chat.api";
 import { hydrateReply } from "../utils/preview";
+import { clearUnread } from "../utils/cache";
 
 /**
  * Mount ONCE while authenticated (in the tabs layout). Routes every socket
@@ -11,6 +12,7 @@ import { hydrateReply } from "../utils/preview";
  */
 export function useChatSocket() {
   const status = useAuthStore((s) => s.status);
+  const userId = useAuthStore((s) => s.user?.id);
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -44,12 +46,20 @@ export function useChatSocket() {
       queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
     };
 
-    const onRead = (p: { conversationId: string; readAt: string }) => {
+    const onRead = (p: {
+      conversationId: string;
+      readAt: string;
+      readBy: string;
+    }) => {
       queryClient.setQueryData<ChatMessage[]>(
         ["chat", "messages", p.conversationId],
         (old) =>
           old?.map((m) =>
-            m.readAt
+            // The sweep only touches what the reader did NOT send, so the
+            // receipt says nothing about the reader's own messages — blanket
+            // -marking every message READ backdated the wrong half of the
+            // thread on whichever side received the event.
+            m.readAt || m.senderId === p.readBy
               ? m
               : {
                   ...m,
@@ -59,6 +69,10 @@ export function useChatSocket() {
                 },
           ),
       );
+
+      // Our own read, possibly from another device: drop the badge here too,
+      // or it survives until something refetches the conversation list.
+      if (p.readBy === userId) clearUnread(p.conversationId);
     };
 
     const onDeleted = (p: {
@@ -142,5 +156,5 @@ export function useChatSocket() {
       socket.off("typing", onTyping);
       socket.off("presence", onPresence);
     };
-  }, [status]);
+  }, [status, userId]);
 }

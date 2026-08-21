@@ -8,6 +8,8 @@ export { SelectGrid, type SelectGridOption } from "./SelectGrid";
 export { FilterSheet, FilterButton, PriceRangeFilter } from "./FilterSheet";
 export { ErrorBanner } from "./ErrorBanner";
 export { BrandMark } from "./BrandMark";
+export { Avatar } from "./Avatar";
+export { ImageViewer } from "./ImageViewer";
 export { BackButton } from "./BackButton";
 export { LanguageSwitcher } from "./LanguageSwitcher";
 export { Card, Section } from "./Card";

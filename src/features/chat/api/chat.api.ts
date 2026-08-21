@@ -54,6 +54,10 @@ export interface Conversation {
     id: string;
     name: string | null;
     surname: string | null;
+    /** Prefer this one; `avatarThumbUrl` is the fallback. Both may be null. */
+    avatarUrl?: string | null;
+    avatarThumbUrl?: string | null;
+    phoneNumber?: string | null;
     online: boolean;
     lastSeenAt: string | null;
   };

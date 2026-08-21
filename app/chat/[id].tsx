@@ -4,14 +4,16 @@ import {
   View,
   Text,
   FlatList,
+  Pressable,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { useLocalSearchParams, Stack } from "expo-router";
+import { router, useLocalSearchParams, Stack } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
+import { Avatar, ImageViewer } from "../../src/components/ui";
 import { spacing } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT, useLanguage } from "../../src/i18n";
@@ -22,6 +24,7 @@ import {
   type ChatMessage,
   type Conversation,
 } from "../../src/features/chat/api/chat.api";
+import { clearUnread } from "../../src/features/chat/utils/cache";
 import { useMessages } from "../../src/features/chat/hooks/useMessages";
 import { useSendMessage } from "../../src/features/chat/hooks/useSendMessage";
 import { MessageBubble } from "../../src/features/chat/components/MessageBubble";
@@ -31,7 +34,6 @@ import {
   MessageActionSheet,
   type MessageAction,
 } from "../../src/features/chat/components/MessageActionSheet";
-import { ImageViewer } from "../../src/features/chat/components/ImageViewer";
 import { useAuthStore } from "../../src/features/auth/store/auth.store";
 
 export default function ChatThreadScreen() {
@@ -54,13 +56,30 @@ export default function ChatThreadScreen() {
   const [actionsFor, setActionsFor] = useState<ChatMessage | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
 
-  // Mark read on open + whenever a new incoming message lands while open
+  /**
+   * Read on open, unconditionally. The unread messages may sit older than the
+   * thirty this first page holds, and then no message in `messages` looks
+   * unread while the inbox still shows a badge — which is exactly how a badge
+   * survived opening the thread. The sweep is idempotent server-side.
+   *
+   * The local clear does not wait for the receipt to come back: the badge is
+   * on the screen the user just left, and a round trip of latency there reads
+   * as the bug rather than as loading.
+   */
+  useEffect(() => {
+    getChatSocket().emit("message:read", { conversationId: id });
+    clearUnread(id);
+  }, [id]);
+
+  // And again for anything that lands while the thread is open.
   useEffect(() => {
     if (!messages?.length) return;
     const hasUnread = messages.some(
       (m) => m.senderId !== userId && !m.readAt && !m.deletedAt,
     );
-    if (hasUnread) getChatSocket().emit("message:read", { conversationId: id });
+    if (!hasUnread) return;
+    getChatSocket().emit("message:read", { conversationId: id });
+    clearUnread(id);
   }, [id, messages, userId]);
 
   const onLongPress = useCallback((m: ChatMessage) => {
@@ -131,6 +150,11 @@ export default function ChatThreadScreen() {
         .join(" ") || t("chat.unknownUser")
     : "";
 
+  const openProfile = () => {
+    if (!conversation) return;
+    router.push(`/profile/${conversation.other.id}`);
+  };
+
   const lastSeenLabel = (other: Conversation["other"]): string => {
     if (other.online) return t("chat.online");
     if (!other.lastSeenAt) return "";
@@ -153,24 +177,53 @@ export default function ChatThreadScreen() {
       <Stack.Screen
         options={{
           headerShown: true,
+          // Left, not centred: the avatar makes the title wide enough that
+          // iOS's centred slot would squeeze the name, and sitting next to the
+          // back chevron is the messenger convention anyway.
+          headerTitleAlign: "left",
+          // Avatar + name + presence, and the whole thing opens the peer's
+          // profile — the same target a tap on the title has in every
+          // messenger, and the only route to their ads from inside a thread.
           headerTitle: () => (
-            <View>
-              <Text style={text.heading} numberOfLines={1}>
-                {otherName}
-              </Text>
-              {conversation ? (
-                <Text
-                  style={{
-                    ...text.caption,
-                    color: conversation.other.online
-                      ? colors.primary
-                      : colors.textMuted,
-                  }}
-                >
-                  {lastSeenLabel(conversation.other)}
+            <Pressable
+              onPress={openProfile}
+              disabled={!conversation}
+              accessibilityRole="button"
+              accessibilityLabel={t("userProfile.openProfile")}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing.sm,
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Avatar
+                uri={
+                  conversation?.other.avatarThumbUrl ??
+                  conversation?.other.avatarUrl
+                }
+                name={otherName}
+                size={34}
+                online={conversation?.other.online}
+              />
+              <View style={{ flexShrink: 1 }}>
+                <Text style={text.heading} numberOfLines={1}>
+                  {otherName}
                 </Text>
-              ) : null}
-            </View>
+                {conversation ? (
+                  <Text
+                    style={{
+                      ...text.caption,
+                      color: conversation.other.online
+                        ? colors.primary
+                        : colors.textMuted,
+                    }}
+                  >
+                    {lastSeenLabel(conversation.other)}
+                  </Text>
+                ) : null}
+              </View>
+            </Pressable>
           ),
         }}
       />

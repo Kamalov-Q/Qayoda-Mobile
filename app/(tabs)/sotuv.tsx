@@ -10,7 +10,6 @@ import {
   StyleSheet,
 } from "react-native";
 import { router } from "expo-router";
-import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Screen,
@@ -20,13 +19,13 @@ import {
   FilterSheet,
   FilterButton,
   PriceRangeFilter,
+  SegmentedControl,
   TextField,
   TAB_EDGES,
 } from "../../src/components/ui";
 import { spacing, radii, sizing } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT } from "../../src/i18n";
-import { resolveMediaUrl } from "../../src/lib/media-url";
 import {
   MapPointFeature,
   MapPolygonFeature,
@@ -44,7 +43,14 @@ import {
   usePriceFormatter,
   useSpecsFormatter,
 } from "../../src/features/listings/utils/format";
+import { ListingCardBase } from "../../src/features/listings/components/ListingCardBase";
 import { ListingsMap } from "../../src/features/map/ListingsMap";
+
+// The floating map/list switch: its own width, and the room the map controls
+// and the feed have to leave under themselves so nothing hides behind it.
+const SWITCH_WIDTH = 232;
+const SWITCH_HEIGHT = 58; // 46pt segments + 5pt track padding + hairline
+const SWITCH_CLEARANCE = SWITCH_HEIGHT + spacing.lg;
 
 // Feed driven by the viewport endpoint until a search endpoint exists.
 // Normalize both feature shapes into one row model — the polygon shape
@@ -167,6 +173,19 @@ export default function SotuvScreen() {
     [t],
   );
 
+  const viewOptions = useMemo(
+    () =>
+      [
+        { value: "map", label: t("map.map"), icon: "map-outline" },
+        { value: "list", label: t("map.list"), icon: "list-outline" },
+      ] as const satisfies readonly {
+        value: ViewMode;
+        label: string;
+        icon: keyof typeof Ionicons.glyphMap;
+      }[],
+    [t],
+  );
+
   const onPressItem = useCallback(
     (id: string) => router.push(`/listing/${id}`),
     [],
@@ -225,33 +244,6 @@ export default function SotuvScreen() {
             gap: spacing.sm,
           }}
         >
-          {/* View toggle shows the mode it switches TO, like a play/pause
-              button: a list glyph over the map, a map glyph over the list. */}
-          <Pressable
-            onPress={() => setView((v) => (v === "map" ? "list" : "map"))}
-            accessibilityRole="button"
-            accessibilityLabel={t(
-              view === "map" ? "map.showList" : "map.showMap",
-            )}
-            style={({ pressed }) => ({
-              width: sizing.controlMd,
-              height: sizing.controlMd,
-              borderRadius: radii.pill,
-              alignItems: "center",
-              justifyContent: "center",
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: pressed ? colors.surfaceRaised : colors.surface,
-              transform: [{ scale: pressed ? 0.94 : 1 }],
-            })}
-          >
-            <Ionicons
-              name={view === "map" ? "list-outline" : "map-outline"}
-              size={20}
-              color={colors.textMuted}
-            />
-          </Pressable>
-
           <FilterButton
             onPress={() => setFiltersOpen(true)}
             activeCount={activeCount}
@@ -298,6 +290,7 @@ export default function SotuvScreen() {
             data={visible}
             onRegionChange={onRegionChange}
             onPressListing={onPressItem}
+            bottomInset={SWITCH_CLEARANCE}
           />
         </View>
 
@@ -329,6 +322,9 @@ export default function SotuvScreen() {
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={{
                   padding: spacing.lg,
+                  // Clears the floating switch, which otherwise covers the
+                  // last card in the feed.
+                  paddingBottom: SWITCH_CLEARANCE + spacing.lg,
                   gap: spacing.md,
                   flexGrow: 1,
                 }}
@@ -358,6 +354,32 @@ export default function SotuvScreen() {
             )}
           </View>
         ) : null}
+
+        {/* Floating, centred, over whichever view is up. It was a 46pt icon
+            button lost among two other icon buttons in the header — the one
+            control on this screen that changes what you are looking at, and
+            the least visible thing on it. Down here it is thumb-height, both
+            destinations are spelled out, and the filled segment says which
+            one you are in. */}
+        <View
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: spacing.lg,
+            alignItems: "center",
+          }}
+          pointerEvents="box-none"
+        >
+          <View style={{ width: SWITCH_WIDTH, borderRadius: radii.pill, ...shadow.raised }}>
+            <SegmentedControl
+              segments={viewOptions}
+              value={view}
+              onChange={setView}
+              size="lg"
+            />
+          </View>
+        </View>
       </View>
 
       <FilterSheet
@@ -398,8 +420,6 @@ export default function SotuvScreen() {
   );
 }
 
-const IMAGE_SIZE = 104;
-
 const FeedRow = memo(function FeedRow({
   item,
   purpose,
@@ -409,108 +429,29 @@ const FeedRow = memo(function FeedRow({
   purpose: OfferPurpose;
   onPress: (id: string) => void;
 }) {
-  const { colors, text, shadow } = useTheme();
-  const t = useT();
   const formatPrice = usePriceFormatter();
   const formatSpecs = useSpecsFormatter();
 
   const specs = formatSpecs(item);
 
   return (
-    <Pressable
+    <ListingCardBase
+      thumbUrl={item.thumbUrl}
+      price={formatPrice(item.price, item.currency, purpose)}
+      title={item.title}
+      // Zoomed out the API returns points, which carry neither title nor
+      // specs — those cards are a photo and a price, and the shared card is
+      // built to look finished that way rather than half-loaded.
+      specs={specs || null}
       onPress={() => onPress(item.id)}
-      accessibilityRole="button"
-      style={({ pressed }) => ({
-        flexDirection: "row",
-        gap: spacing.md,
-        padding: spacing.sm,
-        backgroundColor: colors.surface,
-        borderRadius: radii.xl,
-        borderWidth: 1,
-        borderColor: colors.border,
-        transform: [{ scale: pressed ? 0.985 : 1 }],
-        ...shadow.card,
-      })}
-    >
-      <View
-        style={{
-          width: IMAGE_SIZE,
-          height: IMAGE_SIZE,
-          borderRadius: radii.lg,
-          overflow: "hidden",
-          backgroundColor: colors.surfaceRaised,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {item.thumbUrl ? (
-          <Image
-            source={{ uri: resolveMediaUrl(item.thumbUrl) }}
-            style={{ width: "100%", height: "100%" }}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-          />
-        ) : (
-          <Ionicons name="image-outline" size={24} color={colors.textFaint} />
-        )}
-      </View>
-
-      {/* Text column leads with the price — it is the one field every feature
-          shape carries, so the cards stay aligned whether or not the zoomed-in
-          shape supplied a title and specs. */}
-      <View
-        style={{
-          flex: 1,
-          paddingVertical: spacing.xs,
-          paddingRight: spacing.xs,
-          justifyContent: "space-between",
-        }}
-      >
-        <View style={{ gap: 2 }}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "flex-start",
-              gap: spacing.sm,
-            }}
-          >
-            <Text
-              style={{ ...text.title, color: colors.primary, flex: 1 }}
-              numberOfLines={1}
-            >
-              {formatPrice(item.price, item.currency, purpose)}
-            </Text>
-            <SaveHeart listingId={item.id} />
-          </View>
-
-          {item.title ? (
-            <Text style={text.body} numberOfLines={1}>
-              {item.title}
-            </Text>
-          ) : null}
-
-          {specs ? (
-            <Text style={text.caption} numberOfLines={1}>
-              {specs}
-            </Text>
-          ) : null}
-        </View>
-
-        <View
-          style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}
-        >
-          <Text style={{ ...text.caption, color: colors.primary }}>
-            {t("listings.viewDetails")}
-          </Text>
-          <Ionicons name="chevron-forward" size={12} color={colors.primary} />
-        </View>
-      </View>
-    </Pressable>
+      overlay={<SaveHeart listingId={item.id} />}
+    />
   );
 });
 
-/** Row-level save toggle. The feed's row model is too slim to seed the Saved
- *  cache, so the tab itself fills in on the refetch the toggle kicks off. */
+/** Save toggle for the card's photo overlay. The feed's row model is too slim
+ *  to seed the Saved cache, so the tab itself fills in on the refetch the
+ *  toggle kicks off. */
 const SaveHeart = memo(function SaveHeart({ listingId }: { listingId: string }) {
   const { colors } = useTheme();
   const t = useT();
@@ -529,18 +470,22 @@ const SaveHeart = memo(function SaveHeart({ listingId }: { listingId: string }) 
       accessibilityLabel={t(isSaved ? "saved.unsave" : "saved.save")}
       accessibilityState={{ selected: isSaved }}
       style={({ pressed }) => ({
-        width: 28,
-        height: 28,
+        width: 34,
+        height: 34,
         borderRadius: radii.pill,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: pressed ? colors.surfaceRaised : "transparent",
+        // A scrim, because the heart sits on an unknown photo — an outline
+        // glyph alone disappears against a pale one.
+        backgroundColor: colors.imageScrim,
+        opacity: pressed ? 0.7 : 1,
       })}
     >
       <Ionicons
         name={isSaved ? "heart" : "heart-outline"}
-        size={20}
-        color={isSaved ? colors.danger : colors.textFaint}
+        size={19}
+        // White, not textFaint: the scrim is dark whichever theme is on.
+        color={isSaved ? colors.danger : "#FFFFFF"}
       />
     </Pressable>
   );

@@ -1,5 +1,5 @@
 // app/(tabs)/account.tsx
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Text, View, Pressable } from "react-native";
 import { router, type Href } from "expo-router";
 import Constants from "expo-constants";
@@ -11,6 +11,7 @@ import {
   Card,
   Section,
   OptionList,
+  ImageViewer,
   TAB_EDGES,
   type Option,
 } from "../../src/components/ui";
@@ -70,7 +71,15 @@ export default function AccountScreen() {
   const { data: saved } = useSavedListings();
   // Full profile (avatar, phone) lives behind /profile, not the session user.
   const { data: profile } = useProfile();
+  // Two URLs, two jobs: the thumb is what the 76pt circle needs, and blowing
+  // it up to full screen would show its compression. The viewer gets the
+  // original, falling back to the thumb for accounts uploaded before the
+  // full-size column existed.
   const avatarUri = resolveMediaUrl(profile?.avatarThumbUrl);
+  const fullAvatarUri = resolveMediaUrl(
+    profile?.avatarUrl ?? profile?.avatarThumbUrl,
+  );
+  const [viewingAvatar, setViewingAvatar] = useState(false);
   const activeCount = mine?.filter((l) => l.status === "ACTIVE").length;
 
   const themeOptions = useMemo<Option<ThemeMode>[]>(
@@ -159,8 +168,15 @@ export default function AccountScreen() {
               paddingHorizontal: spacing.md,
             }}
           >
-            <View
-              style={{
+            {/* Tappable only when there is a photo to open: a circle with two
+                initials in it has no bigger version, and a press effect that
+                leads nowhere is worse than none. */}
+            <Pressable
+              onPress={() => fullAvatarUri && setViewingAvatar(true)}
+              disabled={!fullAvatarUri}
+              accessibilityRole={fullAvatarUri ? "imagebutton" : "image"}
+              accessibilityLabel={t("profile.viewPhoto")}
+              style={({ pressed }) => ({
                 width: 76,
                 height: 76,
                 borderRadius: radii.pill,
@@ -170,7 +186,8 @@ export default function AccountScreen() {
                 alignItems: "center",
                 justifyContent: "center",
                 overflow: "hidden",
-              }}
+                opacity: pressed ? 0.8 : 1,
+              })}
             >
               {avatarUri ? (
                 <Image
@@ -191,7 +208,7 @@ export default function AccountScreen() {
               ) : (
                 <Ionicons name="person" size={32} color={colors.primary} />
               )}
-            </View>
+            </Pressable>
 
             <View style={{ alignItems: "center", gap: 2 }}>
               <Text style={text.heading} numberOfLines={1}>
@@ -306,6 +323,15 @@ export default function AccountScreen() {
           })}
         </Text>
       </View>
+
+      {/* Mounted only while open, so a dismissed viewer cannot hold the last
+          photo's zoom for the next one. */}
+      {viewingAvatar ? (
+        <ImageViewer
+          uri={fullAvatarUri ?? null}
+          onClose={() => setViewingAvatar(false)}
+        />
+      ) : null}
     </Screen>
   );
 }

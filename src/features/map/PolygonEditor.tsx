@@ -2,7 +2,7 @@
 // Tap-to-add-vertex drawing — controlled component: value + onChange, GeoJSON
 // [lng, lat]. The ring is kept open while drawing; Polygon closes it visually
 // and closeRing() closes it for real on save.
-import { memo, useRef } from "react";
+import { memo, useCallback, useRef } from "react";
 import { View, Text } from "react-native";
 import MapView, {
   Marker,
@@ -14,15 +14,25 @@ import MapView, {
 } from "react-native-maps";
 import { Button } from "../../components/ui";
 import { toast } from "../../components/ui/Toast";
-import { spacing, radii, type } from "../../theme/tokens";
+import { spacing, radii, sizing, type } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 import { useT } from "../../i18n";
 import {
   insertionIndexFor,
   ringSelfIntersects,
 } from "../listings/utils/geo";
-import { DEFAULT_CENTER, parcelRegion, toLatLng, toPosition, withAlpha } from "./maps";
+import {
+  DEFAULT_CENTER,
+  parcelRegion,
+  searchResultRegion,
+  toLatLng,
+  toPosition,
+  withAlpha,
+} from "./maps";
 import { useMarkerTracking } from "./useMarkerTracking";
+import { MapSearchBar } from "./MapSearchBar";
+import { MyLocationButton } from "./MyLocationButton";
+import { useGeocode, useMyLocation } from "../listings/hooks/useMyLocation";
 
 interface Props {
   value: [number, number][]; // open ring while drawing; closed on save
@@ -38,6 +48,9 @@ export const PolygonEditor = memo(function PolygonEditor({
 }: Props) {
   const { colors } = useTheme();
   const t = useT();
+  const mapRef = useRef<MapView>(null);
+  const { locate, loading: locating } = useMyLocation();
+  const { search, loading: searching } = useGeocode();
 
   const invalid = ringSelfIntersects(value);
 
@@ -90,15 +103,61 @@ export const PolygonEditor = memo(function PolygonEditor({
     onChange(value.filter((_, i) => i !== index));
   };
 
+  /**
+   * Most people draw the boundary of the place they are standing in, and the
+   * editor opened on Tashkent's centre — so every one of them started by
+   * panning across the city. This drops the camera on them at parcel zoom,
+   * close enough that the first tap lands on the right roof.
+   *
+   * Camera only: it never adds a vertex. Where you stand is rarely a corner,
+   * and an unasked-for point in the ring is worse than no point at all.
+   */
+  /**
+   * The other way to reach the right place: people listing a flat they do not
+   * live in had only pinch-and-drag from Tashkent's centre, which is a long
+   * way to travel by thumb.
+   *
+   * Camera only, like the locate button — a geocoded point is accurate to a
+   * building at best, and dropping a vertex on it would be a guess presented
+   * as the user's own work.
+   */
+  const goToSearchResult = useCallback(
+    async (query: string) => {
+      const pos = await search(query);
+      if (!pos) return;
+      mapRef.current?.animateToRegion(
+        searchResultRegion([pos.longitude, pos.latitude]),
+        600,
+      );
+    },
+    [search],
+  );
+
+  const goToMyLocation = useCallback(async () => {
+    const pos = await locate();
+    if (!pos) return;
+    mapRef.current?.animateToRegion(
+      parcelRegion([pos.longitude, pos.latitude]),
+      600,
+    );
+  }, [locate]);
+
   return (
     <View style={{ flex: 1 }}>
       <MapView
+        ref={mapRef}
         style={{ flex: 1 }}
         provider={PROVIDER_GOOGLE}
         mapType="hybrid"
         initialRegion={parcelRegion(center ?? DEFAULT_CENTER)}
         onPress={addVertex}
         toolbarEnabled={false}
+        // The blue dot is the whole point of the locate control — without it
+        // the camera moves and nothing on screen says where "here" is.
+        showsUserLocation
+        // Ours is drawn below, clear of the undo/clear row; Google's sits
+        // wherever it likes and would collide with it.
+        showsMyLocationButton={false}
         // Tapping a vertex means "delete it", never "recentre on it".
         moveOnMarkerPress={false}
       >
@@ -132,23 +191,43 @@ export const PolygonEditor = memo(function PolygonEditor({
         ))}
       </MapView>
 
+      {/* box-none so the gap between the two bands stays part of the map —
+          a transparent container over the top third would otherwise eat every
+          tap aimed at the roofs up there. */}
       <View
+        pointerEvents="box-none"
         style={{
           position: "absolute",
           top: spacing.md,
           left: spacing.md,
           right: spacing.md,
-          padding: spacing.sm,
-          borderRadius: radii.md,
-          backgroundColor: colors.overlay,
+          gap: spacing.sm,
         }}
       >
-        <Text
-          style={{ ...type.caption, color: "#FFFFFF", textAlign: "center" }}
+        <MapSearchBar onSubmit={goToSearchResult} loading={searching} />
+
+        <View
+          style={{
+            padding: spacing.sm,
+            borderRadius: radii.md,
+            backgroundColor: colors.overlay,
+          }}
         >
-          {t("map.hint")}
-        </Text>
+          <Text
+            style={{ ...type.caption, color: "#FFFFFF", textAlign: "center" }}
+          >
+            {t("map.hint")}
+          </Text>
+        </View>
       </View>
+
+      {/* Clears the undo/clear row: those are full-height Buttons sitting at
+          spacing.lg from the bottom. */}
+      <MyLocationButton
+        onPress={goToMyLocation}
+        loading={locating}
+        bottomOffset={spacing.lg + sizing.control + spacing.md}
+      />
 
       <View
         style={{

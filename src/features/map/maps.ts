@@ -23,6 +23,7 @@ export const DEFAULT_CENTER: [number, number] = [69.28, 41.32];
 
 /** Roughly one city block across — the span a parcel is drawn at. */
 const PARCEL_SPAN_DEG = 0.002;
+const SEARCH_SPAN_DEG = 0.008;
 
 /**
  * Mapbox GL sizes the world at 512·2^zoom px, Google at 256·2^zoom, so Google's
@@ -57,15 +58,29 @@ export function bboxToRegion(bbox: BBox): Region {
 
 export const DEFAULT_REGION = bboxToRegion(DEFAULT_BBOX);
 
-/** Camera for drawing/inspecting a single parcel. */
-export function parcelRegion(center: [number, number]): Region {
+function regionAround(center: [number, number], span: number): Region {
   const [longitude, latitude] = center;
   return {
     latitude,
     longitude,
-    latitudeDelta: PARCEL_SPAN_DEG,
-    longitudeDelta: PARCEL_SPAN_DEG,
+    latitudeDelta: span,
+    longitudeDelta: span,
   };
+}
+
+/** Camera for drawing/inspecting a single parcel. */
+export function parcelRegion(center: [number, number]): Region {
+  return regionAround(center, PARCEL_SPAN_DEG);
+}
+
+/**
+ * Camera for a geocoded search hit — wider than a parcel. The geocoder answers
+ * "Navoiy ko'chasi 12" and "Chilonzor" with the same shape of result, and
+ * dropping onto the second at drawing zoom lands the user in an anonymous
+ * courtyard with no idea which way to pan.
+ */
+export function searchResultRegion(center: [number, number]): Region {
+  return regionAround(center, SEARCH_SPAN_DEG);
 }
 
 export function regionToBBox(region: Region): BBox {

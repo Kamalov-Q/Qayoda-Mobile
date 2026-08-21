@@ -22,10 +22,10 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { spacing } from "../../../theme/tokens";
-import { t } from "../../../i18n";
-import { toast } from "../../../components/ui/Toast";
-import { notify } from "../../../lib/alerts";
+import { spacing } from "../../theme/tokens";
+import { t } from "../../i18n";
+import { toast } from "./Toast";
+import { notify } from "../../lib/alerts";
 
 const MAX_SCALE = 4;
 
@@ -73,8 +73,12 @@ async function saveToLibrary(uri: string) {
 }
 
 /**
- * Full-screen photo view. Chat images are capped at 220pt in the bubble, so
- * without this a photo could only be squinted at — tapping one did nothing.
+ * Full-screen photo view: pinch, pan, double-tap to zoom, tap to dismiss, and
+ * save to the camera roll on native.
+ *
+ * Shared rather than chat's own, because every place the app shows a photo
+ * shows it small — a 220pt chat bubble, a 76pt avatar — and small is not the
+ * only size anyone wants to see it at.
  */
 export function ImageViewer({
   uri,

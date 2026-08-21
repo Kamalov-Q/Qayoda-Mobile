@@ -84,6 +84,13 @@ export default function RootLayout() {
               name="profile/edit"
               options={{ title: t("profile.edit") }}
             />
+            {/* Static "edit" wins over the dynamic segment, so /profile/edit
+                still reaches the form. This one swaps in the person's name
+                once their card lands. */}
+            <Stack.Screen
+              name="profile/[id]"
+              options={{ title: t("userProfile.title") }}
+            />
             {/* The thread replaces the title with the peer's name and presence,
                 so this only sets what it shows before the fetch lands. */}
             <Stack.Screen name="chat/[id]" options={{ title: t("chat.title") }} />
