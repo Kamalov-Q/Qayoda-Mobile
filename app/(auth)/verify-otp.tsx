@@ -18,14 +18,15 @@ import {
   useResendOtp,
 } from "../../src/features/auth/hooks/useAuth";
 import { useAuthFlowStore } from "../../src/features/auth/store/auth-flow.store";
+import { prettyPhone } from "../../src/lib/phone";
 
 const RESEND_COOLDOWN = 60;
+
 
 export default function VerifyOtpScreen() {
   const [code, setCode] = useState("");
   const [cooldown, setCooldown] = useState(RESEND_COOLDOWN);
-  const email = useAuthFlowStore((s) => s.email);
-  const purpose = useAuthFlowStore((s) => s.purpose);
+  const phone = useAuthFlowStore((s) => s.phone);
   const verifyOtp = useVerifyOtp();
   const resendOtp = useResendOtp();
   const submitted = useRef(false);
@@ -38,36 +39,44 @@ export default function VerifyOtpScreen() {
     return () => clearTimeout(timer);
   }, [cooldown]);
 
-  useEffect(() => {
-    if (code.length === 6 && !submitted.current && !verifyOtp.isPending) {
-      submitted.current = true;
-      verifyOtp.mutate(code, {
+  const submit = () =>
+    verifyOtp.mutate(
+      { code },
+      {
         onError: () => {
           submitted.current = false;
           setCode("");
         },
-      });
+      },
+    );
+
+  useEffect(() => {
+    if (code.length === 6 && !submitted.current && !verifyOtp.isPending) {
+      submitted.current = true;
+      submit();
     }
     if (code.length < 6) submitted.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
 
-  // Split the rendered sentence on a marker so the email can be bolded
-  // wherever each language's grammar places it. The marker is plain ASCII
-  // that no dictionary string contains.
-  const EMAIL_SLOT = "%EMAIL%";
-  const [before, after] = t("auth.otpSubtitle", { email: EMAIL_SLOT }).split(
-    EMAIL_SLOT,
-  );
+  // Split the rendered sentence on a marker so the number can be bolded
+  // wherever each language's grammar places it.
+  const SLOT = "%PHONE%";
+  const [before, after] = t("auth.otpSubtitle", { phone: SLOT }).split(SLOT);
 
   const onResend = () => {
-    resendOtp.mutate(
-      { email, purpose },
-      { onSuccess: () => toast.successKey("auth.otpResent") },
-    );
+    resendOtp.mutate(undefined, {
+      onSuccess: () => toast.successKey("auth.otpResent"),
+    });
     setCooldown(RESEND_COOLDOWN);
     setCode("");
   };
+
+  const error = verifyOtp.isError
+    ? errorMessage(verifyOtp.error)
+    : resendOtp.isError
+      ? errorMessage(resendOtp.error)
+      : null;
 
   return (
     <Screen centered>
@@ -80,19 +89,15 @@ export default function VerifyOtpScreen() {
               justifyContent: "space-between",
             }}
           >
-            <BackButton />
+            <BackButton fallback="/(auth)/welcome" />
             <LanguageSwitcher />
           </View>
           <View style={{ gap: spacing.xs }}>
             <Text style={text.display}>{t("auth.otpTitle")}</Text>
-            {/* The address is interpolated by the dictionary, so each language
-                puts it where its grammar wants it — uz trails it with a
-                postposition, ru leads with a preposition. Splitting on a
-                sentinel finds that position without hard-coding either. */}
             <Text style={text.caption}>
               {before}
               <Text style={{ color: colors.text, fontWeight: "600" }}>
-                {email}
+                {prettyPhone(phone)}
               </Text>
               {after}
             </Text>
@@ -102,13 +107,11 @@ export default function VerifyOtpScreen() {
         <View style={{ gap: spacing.md }}>
           <OtpInput value={code} onChange={setCode} error={verifyOtp.isError} />
 
-          <ErrorBanner
-            message={verifyOtp.isError ? errorMessage(verifyOtp.error) : null}
-          />
+          <ErrorBanner message={error} />
 
           <Button
             title={t("common.confirm")}
-            onPress={() => verifyOtp.mutate(code)}
+            onPress={submit}
             loading={verifyOtp.isPending}
             disabled={code.length !== 6}
           />

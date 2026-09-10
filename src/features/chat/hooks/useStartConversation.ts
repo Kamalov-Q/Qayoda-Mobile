@@ -10,7 +10,7 @@ import { chatApi, type SendMessageInput } from "../api/chat.api";
  * conversation when there already is one for this listing/guest pair, so
  * tapping the button twice reopens the thread rather than forking it.
  */
-export function useStartConversation(listingId: string) {
+export function useStartConversation(listingId: string, replaceRoute = false) {
   return useMutation({
     mutationFn: (message: SendMessageInput) =>
       chatApi.startConversation(listingId, message),
@@ -22,7 +22,10 @@ export function useStartConversation(listingId: string) {
         conversation,
       );
       queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
-      router.push(`/chat/${conversation.id}`);
+      // From the draft screen the thread REPLACES it — back must return to
+      // the listing, not to a stale draft.
+      if (replaceRoute) router.replace(`/chat/${conversation.id}`);
+      else router.push(`/chat/${conversation.id}`);
     },
     onError: (error) => toast.error(errorMessage(error)),
   });

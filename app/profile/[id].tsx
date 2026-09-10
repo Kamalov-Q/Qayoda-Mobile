@@ -96,12 +96,6 @@ export default function UserProfileScreen() {
               }
               first
             />
-            <ContactRow
-              icon="mail-outline"
-              label={t("userProfile.email")}
-              value={data.email}
-              href={`mailto:${data.email}`}
-            />
           </Card>
         </View>
       ) : null}

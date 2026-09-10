@@ -25,6 +25,13 @@ import { spacing, radii, type } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT, type TranslationKey } from "../../src/i18n";
 import { useAuthStore } from "../../src/features/auth/store/auth.store";
+import { useLatestListings } from "../../src/features/listings/hooks/useLatestListings";
+import { ListingGridCard } from "../../src/features/listings/components/ListingGridCard";
+import {
+  usePriceFormatter,
+  useSpecsFormatter,
+} from "../../src/features/listings/utils/format";
+import type { Listing } from "../../src/features/listings/api/listings.api";
 
 const ACTIONS = [
   {
@@ -130,6 +137,12 @@ export default function HomeScreen() {
           </View>
         </Card>
 
+        {/* Fresh listings — real content above the fold, not just doors to
+            it. Joymee opens on a wall of promoted cards; this is the honest
+            version: the newest things actually posted, horizontally, with
+            the full feed one tap away. */}
+        <LatestStrip />
+
         {/* Quick actions */}
         <Section title={t("home.quickTitle")}>
           <View style={{ flexDirection: "row", gap: spacing.sm }}>
@@ -214,6 +227,101 @@ export default function HomeScreen() {
         </Section>
       </View>
     </Screen>
+  );
+}
+
+/** Card width in the horizontal strip — two-ish per screen, like a shelf. */
+const STRIP_CARD_WIDTH = 190;
+
+function LatestStrip() {
+  const { data } = useLatestListings();
+  const t = useT();
+  const formatPrice = usePriceFormatter();
+  const formatSpecs = useSpecsFormatter();
+
+  // Silent when empty or failed: the Home screen must not show an error for
+  // a strip that is a bonus, and a skeleton for 10 cards is more motion than
+  // this screen needs.
+  if (!data?.length) return null;
+
+  const priceOf = (l: Listing) => {
+    const offer = l.offers.find((o) => o.isActive) ?? l.offers[0];
+    return offer ? formatPrice(offer.price, offer.currency, offer.purpose) : null;
+  };
+  const thumbOf = (l: Listing) =>
+    (l.images.find((i) => i.isPrimary) ?? l.images[0])?.thumbUrl ?? null;
+
+  return (
+    <Section title={t("home.latestTitle")}>
+      <FlatList
+        data={data}
+        keyExtractor={(l) => l.id}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        // Bleeds to the screen edges while staying aligned with the content.
+        style={{ marginHorizontal: -spacing.lg }}
+        contentContainerStyle={{
+          paddingHorizontal: spacing.lg,
+          gap: spacing.md,
+        }}
+        renderItem={({ item }) => (
+          <View style={{ width: STRIP_CARD_WIDTH }}>
+            <ListingGridCard
+              thumbUrl={thumbOf(item)}
+              price={priceOf(item)}
+              title={item.title}
+              specs={formatSpecs(item) || null}
+              onPress={() => router.push(`/listing/${item.id}`)}
+            />
+          </View>
+        )}
+        ListFooterComponent={
+          <Pressable
+            onPress={() => router.push("/(tabs)/sotuv")}
+            accessibilityRole="button"
+            accessibilityLabel={t("home.seeAll")}
+            style={({ pressed }) => ({
+              width: 110,
+              alignSelf: "stretch",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: spacing.xs,
+              borderRadius: radii.lg,
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <SeeAllInner />
+          </Pressable>
+        }
+      />
+    </Section>
+  );
+}
+
+/** Split out only to reach the theme without re-rendering the whole strip. */
+function SeeAllInner() {
+  const { colors, text } = useTheme();
+  const t = useT();
+  return (
+    <View style={{ alignItems: "center", gap: spacing.xs }}>
+      <View
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: radii.pill,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: colors.primarySoft,
+          borderWidth: 1,
+          borderColor: colors.primaryBorder,
+        }}
+      >
+        <Ionicons name="arrow-forward" size={18} color={colors.primary} />
+      </View>
+      <Text style={{ ...text.caption, textAlign: "center" }}>
+        {t("home.seeAll")}
+      </Text>
+    </View>
   );
 }
 

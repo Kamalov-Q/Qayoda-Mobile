@@ -1,3 +1,4 @@
+import {} from "react";
 // app/listing/[id]/index.tsx
 import {
   Text,
@@ -29,10 +30,13 @@ import {
   useToggleSave,
 } from "../../../src/features/listings/hooks/useSavedListings";
 import { ListingImageCarousel } from "../../../src/features/listings/components/ListingImageCarousel";
+import { ListingLocationMap } from "../../../src/features/listings/components/ListingLocationMap";
+import { SimilarListings } from "../../../src/features/listings/components/SimilarListings";
+import { useConversations } from "../../../src/features/chat/hooks/useConversations";
 import { OfferBadge } from "../../../src/features/listings/components/OfferBadge";
 import { htmlToText } from "../../../src/features/listings/utils/format";
 import { useAuthStore } from "../../../src/features/auth/store/auth.store";
-import { useStartConversation } from "../../../src/features/chat/hooks/useStartConversation";
+import { requireAuth } from "../../../src/features/auth/guest";
 
 export default function ListingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -42,9 +46,12 @@ export default function ListingDetailScreen() {
   const restore = useRestoreListing();
   const isSaved = useIsSaved(id ?? "");
   const toggleSave = useToggleSave();
-  const startChat = useStartConversation(id ?? "");
   const { colors, text } = useTheme();
   const t = useT();
+  // For "Xabar yozish": an existing thread about THIS listing reopens instead
+  // of drafting a duplicate — the server would merge them on send anyway, but
+  // reopening shows the history immediately.
+  const { data: conversations } = useConversations();
 
   if (isLoading) {
     return (
@@ -253,6 +260,48 @@ export default function ListingDetailScreen() {
             </Card>
           ) : null}
 
+          {/* The boundary is the app's whole pitch — the detail page is
+              exactly where it has to show up. */}
+          <View style={{ gap: spacing.sm }}>
+            <Text style={text.label}>{t("location.title")}</Text>
+            <ListingLocationMap
+              coordinates={listing.geom?.coordinates}
+              centroid={listing.centroid?.coordinates}
+              address={listing.address}
+            />
+          </View>
+
+          {listing.properties?.length ? (
+            <View style={{ gap: spacing.sm }}>
+              <Text style={text.label}>{t("listings.propertiesTitle")}</Text>
+              <View
+                style={{
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  gap: spacing.sm,
+                }}
+              >
+                {listing.properties.map((key) => (
+                  <View
+                    key={key}
+                    style={{
+                      paddingHorizontal: spacing.md,
+                      paddingVertical: 6,
+                      borderRadius: radii.pill,
+                      borderWidth: 1,
+                      borderColor: colors.primaryBorder,
+                      backgroundColor: colors.primarySoft,
+                    }}
+                  >
+                    <Text style={{ ...text.caption, color: colors.primary }}>
+                      {t(`props.${key}` as Parameters<typeof t>[0])}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : null}
+
           {description ? (
             <View style={{ gap: spacing.sm }}>
               <Text style={text.label}>{t("listings.description")}</Text>
@@ -281,19 +330,41 @@ export default function ListingDetailScreen() {
                 onPress={onToggleArchive}
               />
             </View>
-          ) : userId ? (
-            // The guest's way in. Sending the opener is what creates the
-            // conversation, so the first message is written for them — the
-            // thread opens with something already on screen.
+          ) : (
+            // The way in for everyone else — guests included: the tap routes
+            // through requireAuth, so a signed-out user lands on the login
+            // flow instead of a silent 401. Sending the opener is what creates
+            // the conversation, so the first message is written for them.
             <Button
               title={t("chat.contactOwner")}
               icon="chatbubble-ellipses-outline"
-              loading={startChat.isPending}
+              // Opens the thread in DRAFT mode: composer prefilled, nothing
+              // sent until the buyer presses send themselves.
               onPress={() =>
-                startChat.mutate({ type: "TEXT", body: t("chat.starter") })
+                requireAuth(() => {
+                  const existing = conversations?.find(
+                    (c) => c.listingId === listing.id && c.role === "guest",
+                  );
+                  if (existing) {
+                    router.push({
+                      pathname: "/chat/[id]",
+                      params: { id: existing.id, prefill: "1" },
+                    });
+                    return;
+                  }
+                  router.push({
+                    pathname: "/chat/[id]",
+                    params: { id: "new", listingId: listing.id },
+                  });
+                })
               }
             />
-          ) : null}
+          )}
+
+          <SimilarListings
+            listingId={listing.id}
+            purpose={activeOffers[0]?.purpose ?? "SALE"}
+          />
         </View>
       </ScrollView>
     </Screen>

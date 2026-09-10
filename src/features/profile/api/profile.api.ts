@@ -7,20 +7,26 @@ import { useAuthStore } from "../../auth/store/auth.store";
 /** Mirror of the server's ProfileResponse. */
 export interface Profile {
   id: string;
-  email: string;
+  /** Null unless a Google account is linked. */
+  email: string | null;
   name: string | null;
   surname: string | null;
   avatarUrl: string | null;
   avatarThumbUrl: string | null;
+  /** Null unless a number was verified by SMS. */
   phoneNumber: string | null;
+  language: "uz" | "ru";
+  isVerifiedRealtor: boolean;
   createdAt: string;
 }
 
+/**
+ * Name and surname only. Phone and email are owned by the sign-in method
+ * that verified them — see `authApi.identities` / link / unlink.
+ */
 export interface UpdateProfileInput {
   name?: string;
   surname?: string;
-  /** `null` clears the number server-side; omit to leave it untouched. */
-  phoneNumber?: string | null;
 }
 
 /**

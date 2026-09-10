@@ -10,11 +10,12 @@ import {
   Platform,
 } from "react-native";
 import { router, useLocalSearchParams, Stack } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { Avatar, ImageViewer } from "../../src/components/ui";
-import { spacing } from "../../src/theme/tokens";
+import { spacing, radii } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT, useLanguage } from "../../src/i18n";
 import { confirm } from "../../src/lib/alerts";
@@ -35,9 +36,26 @@ import {
   type MessageAction,
 } from "../../src/features/chat/components/MessageActionSheet";
 import { useAuthStore } from "../../src/features/auth/store/auth.store";
+import { Image } from "expo-image";
+import { resolveMediaUrl } from "../../src/lib/media-url";
+import { listingApi, type Listing } from "../../src/features/listings/api/listings.api";
+import { usersApi } from "../../src/features/users/api/users.api";
+import {
+  usePriceFormatter,
+  useSpecsFormatter,
+} from "../../src/features/listings/utils/format";
+import { useStartConversation } from "../../src/features/chat/hooks/useStartConversation";
 
 export default function ChatThreadScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, listingId, prefill } = useLocalSearchParams<{
+    id: string;
+    listingId?: string;
+    prefill?: string;
+  }>();
+  // "new" + a listing = draft mode: the composer opens prefilled and NOTHING
+  // exists server-side until the user sends — the send creates the thread and
+  // this screen is replaced by the real one.
+  const isDraft = id === "new" && !!listingId;
   const userId = useAuthStore((s) => s.user?.id);
   const { colors, text } = useTheme();
   const t = useT();
@@ -47,9 +65,33 @@ export default function ChatThreadScreen() {
   const { data: conversation } = useQuery({
     queryKey: ["chat", "conversation", id],
     queryFn: () => chatApi.getConversation(id),
+    enabled: !isDraft,
   });
 
-  const { data: messages, isLoading, loadOlder, loadingMore } = useMessages(id);
+  const { data: draftListing } = useQuery({
+    queryKey: ["listings", "byId", listingId],
+    queryFn: () => listingApi.getById(listingId!),
+    enabled: isDraft,
+  });
+  const ownerId = draftListing?.ownerId;
+  // Old conversations predate `listingTitle` being denormalised onto the row;
+  // the prefill then needs the listing itself or it says "Nomsiz e'lon".
+  const { data: prefillListing } = useQuery({
+    queryKey: ["listings", "byId", conversation?.listingId],
+    queryFn: () => listingApi.getById(conversation!.listingId),
+    enabled: prefill === "1" && !!conversation && !conversation.listingTitle,
+  });
+  const { data: ownerCard } = useQuery({
+    queryKey: ["users", "profile", ownerId],
+    queryFn: () => usersApi.getProfile(ownerId!),
+    enabled: isDraft && !!ownerId,
+  });
+  const startChat = useStartConversation(listingId ?? "", true);
+
+  const { data: messages, isLoading, loadOlder, loadingMore } = useMessages(
+    id,
+    !isDraft,
+  );
   const send = useSendMessage(id);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [editing, setEditing] = useState<ChatMessage | null>(null);
@@ -67,20 +109,21 @@ export default function ChatThreadScreen() {
    * as the bug rather than as loading.
    */
   useEffect(() => {
+    if (isDraft) return;
     getChatSocket().emit("message:read", { conversationId: id });
     clearUnread(id);
-  }, [id]);
+  }, [id, isDraft]);
 
   // And again for anything that lands while the thread is open.
   useEffect(() => {
-    if (!messages?.length) return;
+    if (isDraft || !messages?.length) return;
     const hasUnread = messages.some(
       (m) => m.senderId !== userId && !m.readAt && !m.deletedAt,
     );
     if (!hasUnread) return;
     getChatSocket().emit("message:read", { conversationId: id });
     clearUnread(id);
-  }, [id, messages, userId]);
+  }, [id, isDraft, messages, userId]);
 
   const onLongPress = useCallback((m: ChatMessage) => {
     if (m.deletedAt || m.pending) return;
@@ -148,11 +191,13 @@ export default function ChatThreadScreen() {
     ? [conversation.other.name, conversation.other.surname]
         .filter(Boolean)
         .join(" ") || t("chat.unknownUser")
-    : "";
+    : isDraft
+      ? (ownerCard?.fullName ?? t("chat.composeTitle"))
+      : "";
 
   const openProfile = () => {
-    if (!conversation) return;
-    router.push(`/profile/${conversation.other.id}`);
+    const target = conversation?.other.id ?? (isDraft ? ownerId : undefined);
+    if (target) router.push(`/profile/${target}`);
   };
 
   const lastSeenLabel = (other: Conversation["other"]): string => {
@@ -181,26 +226,64 @@ export default function ChatThreadScreen() {
           // iOS's centred slot would squeeze the name, and sitting next to the
           // back chevron is the messenger convention anyway.
           headerTitleAlign: "left",
+          // Our own chevron instead of the native one. With a custom, left-
+          // aligned title the native header on Android let the title view
+          // grow across the back slot, and the chevron underneath stopped
+          // receiving taps — the thread became a dead end. A JS-owned button
+          // has no such overlap and pops the same way.
+          headerBackVisible: false,
+          headerLeft: () => (
+            <Pressable
+              onPress={() =>
+                router.canGoBack() ? router.back() : router.replace("/(tabs)/chat")
+              }
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={t("common.back")}
+              // Same capsule as the app's BackButton — a bare chevron read
+              // as part of the title, not as a control.
+              style={({ pressed }) => ({
+                width: 36,
+                height: 36,
+                marginLeft: Platform.OS === "ios" ? 0 : spacing.xs,
+                marginRight: spacing.sm,
+                borderRadius: radii.md,
+                alignItems: "center",
+                justifyContent: "center",
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: pressed ? colors.surfaceRaised : colors.surface,
+              })}
+            >
+              <Ionicons name="chevron-back" size={20} color={colors.text} />
+            </Pressable>
+          ),
           // Avatar + name + presence, and the whole thing opens the peer's
           // profile — the same target a tap on the title has in every
           // messenger, and the only route to their ads from inside a thread.
           headerTitle: () => (
             <Pressable
               onPress={openProfile}
-              disabled={!conversation}
+              disabled={!conversation && !ownerId}
               accessibilityRole="button"
               accessibilityLabel={t("userProfile.openProfile")}
               style={({ pressed }) => ({
                 flexDirection: "row",
                 alignItems: "center",
                 gap: spacing.sm,
+                // Hug the content: a stretching title is what covered the
+                // back button in the first place.
+                alignSelf: "flex-start",
+                flexShrink: 1,
                 opacity: pressed ? 0.6 : 1,
               })}
             >
               <Avatar
                 uri={
                   conversation?.other.avatarThumbUrl ??
-                  conversation?.other.avatarUrl
+                  conversation?.other.avatarUrl ??
+                  ownerCard?.avatarThumbUrl ??
+                  ownerCard?.avatarUrl
                 }
                 name={otherName}
                 size={34}
@@ -230,10 +313,15 @@ export default function ChatThreadScreen() {
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={headerHeight}
+        // "padding" on BOTH platforms: with edge-to-edge enabled, Android no
+        // longer resizes the window for the keyboard, so `undefined` left the
+        // composer buried under it — typing was invisible.
+        behavior="padding"
+        keyboardVerticalOffset={Platform.OS === "ios" ? headerHeight : 0}
       >
-        {isLoading ? (
+        {isDraft ? (
+          <DraftContext listing={draftListing} />
+        ) : isLoading ? (
           <ActivityIndicator style={{ flex: 1 }} color={colors.primary} />
         ) : (
           <FlatList
@@ -267,11 +355,29 @@ export default function ChatThreadScreen() {
           />
         )}
 
-        <TypingIndicator conversationId={id} />
+        {isDraft ? null : <TypingIndicator conversationId={id} />}
 
         <ChatInput
           conversationId={id}
-          onSend={send}
+          draft={isDraft}
+          initialText={
+            isDraft && draftListing
+              ? t("chat.starterTemplate", {
+                  title: draftListing.title ?? t("listings.untitled"),
+                })
+              : // Arrived from the listing page into an existing thread: the
+                // same template lands in the box, still unsent, still theirs
+                // to edit. From the inbox the box stays empty.
+                prefill === "1" && conversation
+                ? t("chat.starterTemplate", {
+                    title:
+                      conversation.listingTitle ??
+                      prefillListing?.title ??
+                      t("listings.untitled"),
+                  })
+                : undefined
+          }
+          onSend={isDraft ? (input) => startChat.mutate(input) : send}
           replyTo={replyTo}
           onClearReply={() => setReplyTo(null)}
           editing={editing}
@@ -288,5 +394,93 @@ export default function ChatThreadScreen() {
 
       <ImageViewer uri={photo} onClose={() => setPhoto(null)} />
     </SafeAreaView>
+  );
+}
+
+/** What the draft is about, sitting where messages will be: the listing's
+ *  photo and facts, plus the one-line explanation that nothing is sent yet. */
+function DraftContext({ listing }: { listing: Listing | undefined }) {
+  const { colors, text } = useTheme();
+  const t = useT();
+  const formatPrice = usePriceFormatter();
+  const formatSpecs = useSpecsFormatter();
+
+  if (!listing) {
+    return <ActivityIndicator style={{ flex: 1 }} color={colors.primary} />;
+  }
+
+  const offer = listing.offers.find((o) => o.isActive) ?? listing.offers[0];
+  const thumb = resolveMediaUrl(
+    (listing.images.find((i) => i.isPrimary) ?? listing.images[0])?.thumbUrl ??
+      null,
+  );
+
+  return (
+    <View
+      style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        padding: spacing.xl,
+        gap: spacing.md,
+      }}
+    >
+      <View
+        style={{
+          width: "100%",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: spacing.md,
+          padding: spacing.md,
+          borderRadius: radii.xl,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.surface,
+        }}
+      >
+        <View
+          style={{
+            width: 64,
+            height: 64,
+            borderRadius: radii.md,
+            overflow: "hidden",
+            backgroundColor: colors.surfaceRaised,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {thumb ? (
+            <Image
+              source={{ uri: thumb }}
+              style={{ width: "100%", height: "100%" }}
+              contentFit="cover"
+            />
+          ) : (
+            <Ionicons name="image-outline" size={22} color={colors.textFaint} />
+          )}
+        </View>
+        <View style={{ flex: 1, gap: 2 }}>
+          {offer ? (
+            <Text style={text.bodyStrong} numberOfLines={1}>
+              {formatPrice(offer.price, offer.currency, offer.purpose)}
+            </Text>
+          ) : null}
+          <Text style={text.caption} numberOfLines={2}>
+            {listing.title ?? t("listings.untitled")}
+          </Text>
+          {formatSpecs(listing) ? (
+            <Text
+              style={{ ...text.caption, color: colors.textMuted }}
+              numberOfLines={1}
+            >
+              {formatSpecs(listing)}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+      <Text style={{ ...text.caption, textAlign: "center" }}>
+        {t("chat.draftHint")}
+      </Text>
+    </View>
   );
 }

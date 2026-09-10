@@ -1,35 +1,19 @@
 import { create } from "zustand";
 
-export type OtpPurpose =
-  | "REGISTER"
-  | "LOGIN"
-  | "CHANGE_EMAIL"
-  | "RESET_PASSWORD";
-
+/**
+ * Transient state for the multi-screen phone login: the number entered on the
+ * welcome screen is what the code screen verifies and resends to. Cleared the
+ * moment a session is established.
+ */
 interface AuthFlowState {
-  email: string;
-  purpose: OtpPurpose;
-  requestId: string | null;
-  verificationToken: string | null;
-  setEmailAndPurpose: (email: string, purpose: OtpPurpose) => void;
-  setRequestId: (id: string) => void;
-  setVerificationToken: (token: string) => void;
+  /** Normalized `+998XXXXXXXXX`. */
+  phone: string;
+  setPhone: (phone: string) => void;
   reset: () => void;
 }
 
 export const useAuthFlowStore = create<AuthFlowState>((set) => ({
-  email: "",
-  purpose: "LOGIN",
-  requestId: null,
-  verificationToken: null,
-  setEmailAndPurpose: (email, purpose) => set({ email, purpose }),
-  setRequestId: (requestId) => set({ requestId }),
-  setVerificationToken: (verificationToken) => set({ verificationToken }),
-  reset: () =>
-    set({
-      email: "",
-      purpose: "LOGIN",
-      requestId: null,
-      verificationToken: null,
-    }),
+  phone: "",
+  setPhone: (phone) => set({ phone }),
+  reset: () => set({ phone: "" }),
 }));

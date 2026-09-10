@@ -9,7 +9,12 @@ import { errorMessage } from "../../../lib/api-error";
 export const PROFILE_KEY = ["profile"] as const;
 
 export function useProfile() {
-  return useQuery({ queryKey: PROFILE_KEY, queryFn: profileApi.get });
+  const authed = useAuthStore((s) => s.status === "authenticated");
+  return useQuery({
+    queryKey: PROFILE_KEY,
+    queryFn: profileApi.get,
+    enabled: authed,
+  });
 }
 
 /**
@@ -26,8 +31,9 @@ function applyProfile(profile: Profile) {
   if (accessToken && user) {
     setSession(accessToken, {
       ...user,
-      name: profile.name ?? "",
-      surname: profile.surname ?? "",
+      name: profile.name,
+      surname: profile.surname,
+      avatarUrl: profile.avatarUrl,
     });
   }
 }

@@ -13,6 +13,8 @@ interface Props {
   title: string | null;
   /** The "80 m² · 3 xona" line, or null when nothing is known. */
   specs: string | null;
+  /** Faint second line — "Chilonzor · 5 kun oldin". */
+  meta?: string | null;
   /** Sits at the photo's top-right: a status badge, a save toggle. */
   overlay?: ReactNode;
   onPress: () => void;
@@ -38,6 +40,7 @@ export const ListingCardBase = memo(function ListingCardBase({
   price,
   title,
   specs,
+  meta,
   overlay,
   onPress,
 }: Props) {
@@ -107,7 +110,7 @@ export const ListingCardBase = memo(function ListingCardBase({
       {/* Dropped entirely when neither is known, instead of printing a row of
           identical "untitled" placeholders down the feed. A photo with a price
           on it is already a complete card. */}
-      {title || specs ? (
+      {title || specs || meta ? (
         <View style={{ padding: spacing.md, gap: spacing.xs }}>
           {title ? (
             <Text style={text.heading} numberOfLines={1}>
@@ -127,6 +130,14 @@ export const ListingCardBase = memo(function ListingCardBase({
                 {specs}
               </Text>
             </View>
+          ) : null}
+          {meta ? (
+            <Text
+              style={{ ...type.caption, color: colors.textMuted }}
+              numberOfLines={1}
+            >
+              {meta}
+            </Text>
           ) : null}
         </View>
       ) : null}

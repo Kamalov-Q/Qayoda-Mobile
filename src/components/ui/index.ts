@@ -15,5 +15,6 @@ export { LanguageSwitcher } from "./LanguageSwitcher";
 export { Card, Section } from "./Card";
 export { EmptyState } from "./EmptyState";
 export { OptionList, type Option } from "./OptionList";
+export { SelectSheet } from "./SelectSheet";
 export { ToastHost, toast, type ToastType } from "./Toast";
 export { DialogHost, showDialog } from "./Dialog";

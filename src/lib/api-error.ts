@@ -15,8 +15,35 @@ const BY_STATUS: Record<number, TranslationKey> = {
   429: "errors.tooManyRequests",
 };
 
+// Auth errors carry a `code`; each one has its own line because the status
+// alone ("401") would tell a user nothing about whether to retype the code
+// or ask for a new one.
+const BY_CODE: Record<string, TranslationKey> = {
+  PHONE_INVALID: "validation.phoneInvalid",
+  OTP_INVALID: "errors.otpInvalid",
+  OTP_LOCKED: "errors.otpLocked",
+  OTP_COOLDOWN: "errors.otpCooldown",
+  OTP_RATE_LIMITED: "errors.otpRateLimited",
+  SMS_SEND_FAILED: "errors.smsFailed",
+  GOOGLE_TOKEN_INVALID: "errors.googleFailed",
+  SESSION_NOT_FOUND: "errors.telegramExpired",
+  SESSION_CONSUMED: "errors.telegramExpired",
+  ACCOUNT_BANNED: "errors.accountBanned",
+  ACCOUNT_DELETED: "errors.accountDeleted",
+  IDENTITY_TAKEN: "errors.identityTaken",
+  PROVIDER_ALREADY_LINKED: "errors.providerAlreadyLinked",
+  LAST_IDENTITY: "errors.lastIdentity",
+  INVALID_CREDENTIALS: "errors.invalidCredentials",
+  PASSWORD_NOT_SET: "errors.passwordNotSet",
+  ACCOUNT_NOT_FOUND: "errors.accountNotFound",
+  CURRENT_PASSWORD_WRONG: "errors.currentPasswordWrong",
+};
+
 export function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
+    if (error.code && BY_CODE[error.code]) {
+      return t(BY_CODE[error.code], { seconds: error.retryAfter ?? 60 });
+    }
     if (error.status >= 500) return t("errors.server");
 
     const key = BY_STATUS[error.status];

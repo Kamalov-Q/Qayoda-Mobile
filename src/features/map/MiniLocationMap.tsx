@@ -3,9 +3,10 @@
 // tappable map preview that opens a full-screen interactive map.
 import { useCallback, useRef, useState } from "react";
 import { Modal, View, Text, Pressable } from "react-native";
-import MapView, { Marker, Region, PROVIDER_DEFAULT } from "react-native-maps";
+import MapView, { Marker, Region } from "react-native-maps";
+import { MAP_PROVIDER } from "./provider";
 import * as Location from "expo-location";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets, type EdgeInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { radii, spacing, type } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
@@ -30,6 +31,10 @@ export function MiniLocationMap() {
   const { locate, loading } = useMyLocation();
   const { colors, text } = useTheme();
   const t = useT();
+  // Captured here, OUTSIDE the modal: inside a native Modal the safe-area
+  // context can report zero insets, which put the full map's title bar under
+  // the status bar clock and its close button out of reach.
+  const insets = useSafeAreaInsets();
 
   // Nothing runs on mount: opening the profile tab is not consent to a
   // permission prompt, and an unprompted sheet is the fastest way to get
@@ -106,7 +111,10 @@ export function MiniLocationMap() {
           // scroll and every touch falls through to the Pressable that opens
           // the real, fully interactive map.
           style={{ flex: 1, pointerEvents: "none" }}
-          provider={PROVIDER_DEFAULT}
+          provider={MAP_PROVIDER}
+          // iOS: render once and hand back a bitmap — a live map is wasted
+          // on a non-interactive 150pt preview.
+          cacheEnabled
           region={{
             latitude: coords.latitude,
             longitude: coords.longitude,
@@ -176,26 +184,30 @@ export function MiniLocationMap() {
         </Pressable>
       </View>
 
-      {fullOpen ? (
-        <FullMap
-          coords={coords}
-          onRelocate={onLocate}
-          locating={loading}
-          onClose={() => setFullOpen(false)}
-        />
-      ) : null}
+      <FullMap
+        visible={fullOpen}
+        coords={coords}
+        insets={insets}
+        onRelocate={onLocate}
+        locating={loading}
+        onClose={() => setFullOpen(false)}
+      />
     </View>
   );
 }
 
 /** Full-screen, fully interactive map — pan, zoom buttons, re-locate. */
 function FullMap({
+  visible,
   coords,
+  insets,
   locating,
   onRelocate,
   onClose,
 }: {
+  visible: boolean;
   coords: Coords;
+  insets: EdgeInsets;
   locating: boolean;
   onRelocate: () => void;
   onClose: () => void;
@@ -232,8 +244,21 @@ function FullMap({
   };
 
   return (
-    <Modal visible animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
+    // Mounted permanently, shown via `visible` — same iOS dismissal-race
+    // avoidance as the other modal hosts.
+    <Modal
+      visible={visible}
+      animationType="slide"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors.bg,
+          paddingTop: insets.top,
+        }}
+      >
         <View
           style={{
             flexDirection: "row",
@@ -257,21 +282,27 @@ function FullMap({
         </View>
 
         <View style={{ flex: 1 }}>
-          <MapView
-            ref={mapRef}
-            style={{ flex: 1 }}
-            provider={PROVIDER_DEFAULT}
-            initialRegion={initialRegion}
-            onRegionChangeComplete={(region) => {
-              regionRef.current = region;
-            }}
-            showsUserLocation
-            showsMyLocationButton={false}
-            showsPointsOfInterest={false}
-            toolbarEnabled={false}
-          >
-            <LocationDot coords={coords} />
-          </MapView>
+          {/* Only while shown: the modal itself stays mounted (iOS dismissal
+              race), but a hidden live map — with user-location tracking on —
+              kept rendering behind the settings screen and made its back
+              button stutter after any location action. */}
+          {visible ? (
+            <MapView
+              ref={mapRef}
+              style={{ flex: 1 }}
+              provider={MAP_PROVIDER}
+              initialRegion={initialRegion}
+              onRegionChangeComplete={(region) => {
+                regionRef.current = region;
+              }}
+              showsUserLocation
+              showsMyLocationButton={false}
+              showsPointsOfInterest={false}
+              toolbarEnabled={false}
+            >
+              <LocationDot coords={coords} />
+            </MapView>
+          ) : null}
 
           <View
             style={{
@@ -301,11 +332,12 @@ function FullMap({
             style={{
               position: "absolute",
               right: spacing.md,
-              bottom: spacing.xl,
+              // Above the home indicator, not under it.
+              bottom: insets.bottom + spacing.xl,
             }}
           />
         </View>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 }
@@ -324,6 +356,7 @@ function LocationDot({ coords }: { coords: Coords }) {
     >
       <View
         onLayout={tracking.onLayout}
+        collapsable={false}
         style={{
           width: 22,
           height: 22,

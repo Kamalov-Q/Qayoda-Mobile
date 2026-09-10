@@ -10,7 +10,6 @@
 // modules rather than only from components holding a hook.
 import { Modal, View, Text, Pressable } from "react-native";
 import { create } from "zustand";
-import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { spacing, radii, type } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 import { useT, type TranslationKey, type TranslationParams } from "../../i18n";
@@ -51,39 +50,31 @@ export function DialogHost() {
   const { colors, text, shadow } = useTheme();
   const t = useT();
 
-  if (!request) return null;
-
-  const {
-    titleKey,
-    messageKey,
-    params,
-    confirmKey,
-    cancelKey,
-    destructive,
-    onConfirm,
-    onCancel,
-  } = request;
-
-  // Dismiss first, then act: the callback usually navigates, and leaving the
-  // modal mounted across a route change strands it over the new screen.
+  // Dismiss first, then act: the callback usually navigates, and an open
+  // modal across a route change strands it over the new screen.
   const dismissThen = (action?: () => void) => {
     close();
     action?.();
   };
 
-  const accent = destructive ? colors.danger : colors.primary;
+  const accent = request?.destructive ? colors.danger : colors.primary;
 
   return (
+    // The Modal stays MOUNTED and is driven by `visible` — unmounting a
+    // transparent modal mid-dismissal is an iOS race that leaves the dead
+    // modal host eating touches (unresponsive back buttons after an archive
+    // or logout confirm). Native fade replaces the reanimated entering
+    // animations, which with a persistent mount would only fire once.
     <Modal
-      visible
+      visible={request !== null}
       transparent
-      animationType="none" // reanimated drives it; the native fade double-animates
+      animationType="fade"
       statusBarTranslucent
       // Android hardware back and web Escape both land here.
-      onRequestClose={() => dismissThen(onCancel)}
+      onRequestClose={() => dismissThen(request?.onCancel)}
     >
-      <Animated.View
-        entering={FadeIn.duration(140)}
+      {request === null ? null : (
+      <View
         style={{
           flex: 1,
           backgroundColor: colors.overlay,
@@ -97,11 +88,10 @@ export function DialogHost() {
           style={{ position: "absolute", inset: 0 }}
           accessibilityElementsHidden
           importantForAccessibility="no"
-          onPress={() => dismissThen(onCancel)}
+          onPress={() => dismissThen(request.onCancel)}
         />
 
-        <Animated.View
-          entering={FadeInDown.duration(180).springify().damping(20)}
+        <View
           accessibilityViewIsModal
           accessibilityRole="alert"
           style={{
@@ -117,34 +107,35 @@ export function DialogHost() {
           }}
         >
           <View style={{ gap: spacing.sm }}>
-            <Text style={text.heading}>{t(titleKey, params)}</Text>
-            {messageKey ? (
+            <Text style={text.heading}>{t(request.titleKey, request.params)}</Text>
+            {request.messageKey ? (
               <Text style={{ ...text.body, color: colors.textMuted }}>
-                {t(messageKey, params)}
+                {t(request.messageKey, request.params)}
               </Text>
             ) : null}
           </View>
 
           <View style={{ flexDirection: "row", gap: spacing.sm }}>
-            {cancelKey ? (
+            {request.cancelKey ? (
               <DialogButton
-                label={t(cancelKey)}
-                onPress={() => dismissThen(onCancel)}
+                label={t(request.cancelKey)}
+                onPress={() => dismissThen(request.onCancel)}
                 color={colors.text}
                 background={colors.surfaceRaised}
                 border={colors.border}
               />
             ) : null}
             <DialogButton
-              label={t(confirmKey)}
-              onPress={() => dismissThen(onConfirm)}
-              color={destructive ? colors.danger : colors.onPrimary}
-              background={destructive ? colors.dangerSurface : accent}
-              border={destructive ? colors.dangerBorder : accent}
+              label={t(request.confirmKey)}
+              onPress={() => dismissThen(request.onConfirm)}
+              color={request.destructive ? colors.danger : colors.onPrimary}
+              background={request.destructive ? colors.dangerSurface : accent}
+              border={request.destructive ? colors.dangerBorder : accent}
             />
           </View>
-        </Animated.View>
-      </Animated.View>
+        </View>
+      </View>
+      )}
     </Modal>
   );
 }

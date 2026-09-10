@@ -15,10 +15,13 @@ import { useTheme } from "../../src/theme/useTheme";
 import { useT, useLanguage } from "../../src/i18n";
 import { useConversations } from "../../src/features/chat/hooks/useConversations";
 import type { Conversation } from "../../src/features/chat/api/chat.api";
+import { useIsAuthed } from "../../src/features/auth/guest";
+import { GuestPrompt } from "../../src/features/auth/components/GuestPrompt";
 
 export default function ChatInboxScreen() {
   const { text, colors } = useTheme();
   const t = useT();
+  const authed = useIsAuthed();
   const { data, isLoading, isError, refetch, isRefetching } =
     useConversations();
 
@@ -38,7 +41,9 @@ export default function ChatInboxScreen() {
         </Text>
       </View>
 
-      {isLoading ? (
+      {!authed ? (
+        <GuestPrompt subtitle={t("auth.guestChatSubtitle")} />
+      ) : isLoading ? (
         <ActivityIndicator
           style={{ marginTop: spacing.xxl }}
           color={colors.primary}

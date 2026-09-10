@@ -1,29 +1,32 @@
 import {
   memo,
-  useCallback,
+  useCallback, useMemo,
   useRef,
   useState,
   forwardRef,
   useImperativeHandle,
 } from "react";
-import { StyleSheet, Text, View, Pressable } from "react-native";
+import { Platform, StyleSheet, Text, View, Pressable } from "react-native";
 import MapView, {
   Marker,
   Polygon,
   Region,
-  PROVIDER_DEFAULT,
   type LatLng,
 } from "react-native-maps";
+import { MAP_PROVIDER } from "./provider";
 import { Image } from "expo-image";
+import Svg, { Circle, Rect, Text as SvgText } from "react-native-svg";
 import { radii, spacing, type } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 import { useT } from "../../i18n";
 import {
   ViewportResponse,
   BBox,
+  MapPointFeature,
   MapPolygonFeature,
 } from "../listings/api/listings.api";
 import {
+  isDrawableRing,
   ringToLatLngs,
   toLatLng,
   regionToViewport,
@@ -56,6 +59,11 @@ interface Props {
 // Height of the preview card, so the locate button can clear it.
 const CARD_HEIGHT = 110;
 
+/** Hard ceiling on live map views: every feature is a native marker (and
+ *  often a polygon), and past a couple hundred iOS kills the app for memory
+ *  long before the map becomes unusable for any other reason. */
+const MAX_RENDERED_FEATURES = 120;
+
 /**
  * How long after tapping a polygon or its price bubble the map's own press —
  * and any camera settle — is treated as part of that same tap.
@@ -75,6 +83,102 @@ const MAX_DELTA = 120;
 
 const clampDelta = (d: number) => Math.min(MAX_DELTA, Math.max(MIN_DELTA, d));
 
+/** A grid cell is roughly this fraction of the screen — two bubbles closer
+ *  than that overlap anyway, so they merge into one numbered cluster. */
+const CLUSTER_GRID_DIVISIONS = 4;
+
+interface PointCluster {
+  key: string;
+  latitude: number;
+  longitude: number;
+  count: number;
+  /** Set when the cluster is a single listing — rendered as a price bubble. */
+  single: MapPointFeature | null;
+  /** Members' bounds, for the tap-to-zoom. */
+  west: number;
+  east: number;
+  south: number;
+  north: number;
+}
+
+/**
+ * Screen-space grid clustering — the "449" circles every serious listings map
+ * shows when zoomed out. Runs on each settled region over at most a few
+ * hundred points, so a plain O(n) pass beats pulling in a cluster library.
+ */
+function clusterPoints(
+  features: MapPointFeature[],
+  region: Region,
+): PointCluster[] {
+  const cell = Math.max(region.longitudeDelta / CLUSTER_GRID_DIVISIONS, 1e-6);
+  const buckets = new Map<string, MapPointFeature[]>();
+
+  for (const f of features) {
+    const [lng, lat] = f.centroid.coordinates;
+    const key = `${Math.floor(lng / cell)}:${Math.floor(lat / cell)}`;
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(f);
+    else buckets.set(key, [f]);
+  }
+
+  const raw: PointCluster[] = [];
+  for (const [key, members] of buckets) {
+    let west = Infinity,
+      east = -Infinity,
+      south = Infinity,
+      north = -Infinity,
+      sumLng = 0,
+      sumLat = 0;
+    for (const m of members) {
+      const [lng, lat] = m.centroid.coordinates;
+      west = Math.min(west, lng);
+      east = Math.max(east, lng);
+      south = Math.min(south, lat);
+      north = Math.max(north, lat);
+      sumLng += lng;
+      sumLat += lat;
+    }
+    raw.push({
+      key,
+      latitude: sumLat / members.length,
+      longitude: sumLng / members.length,
+      count: members.length,
+      single: members.length === 1 ? members[0] : null,
+      west,
+      east,
+      south,
+      north,
+    });
+  }
+
+  // Second pass: points that straddled a cell border land in neighbouring
+  // cells and their bubbles stack on screen — merge anything closer than a
+  // cell. O(n²) over at most a couple hundred clusters.
+  const clusters: PointCluster[] = [];
+  for (const c of raw) {
+    const near = clusters.find(
+      (r) =>
+        Math.abs(r.longitude - c.longitude) < cell &&
+        Math.abs(r.latitude - c.latitude) < cell,
+    );
+    if (!near) {
+      clusters.push({ ...c });
+      continue;
+    }
+    const total = near.count + c.count;
+    near.latitude = (near.latitude * near.count + c.latitude * c.count) / total;
+    near.longitude =
+      (near.longitude * near.count + c.longitude * c.count) / total;
+    near.count = total;
+    near.single = null;
+    near.west = Math.min(near.west, c.west);
+    near.east = Math.max(near.east, c.east);
+    near.south = Math.min(near.south, c.south);
+    near.north = Math.max(near.north, c.north);
+  }
+  return clusters;
+}
+
 export const ListingsMap = memo(
   forwardRef<ListingsMapHandle, Props>(function ListingsMap(
     { data, onRegionChange, onPressListing, bottomInset = 0 },
@@ -84,6 +188,8 @@ export const ListingsMap = memo(
     // The zoom buttons need the current camera, and MapView has no synchronous
     // getter — so the last settled region is remembered here.
     const regionRef = useRef<Region>(TASHKENT_REGION);
+    // Mirrored into state so the clusters recompute when the camera settles.
+    const [settledRegion, setSettledRegion] = useState<Region>(TASHKENT_REGION);
     const [selected, setSelected] = useState<MapPolygonFeature | null>(null);
     const overlayPressedAt = useRef(0);
     const { locate, loading: locating } = useMyLocation();
@@ -116,6 +222,7 @@ export const ListingsMap = memo(
     const handleRegionChangeComplete = useCallback(
       (region: Region) => {
         regionRef.current = region;
+        setSettledRegion(region);
         const { bbox, zoom } = regionToViewport(region);
         onRegionChange(bbox, zoom);
         // Panning away from a selected parcel should drop its card — but a
@@ -135,6 +242,26 @@ export const ListingsMap = memo(
           longitudeDelta: clampDelta(region.longitudeDelta * factor),
         },
         220,
+      );
+    }, []);
+
+    const clusters = useMemo(
+      () =>
+        data?.mode === "points"
+          ? clusterPoints(data.features, settledRegion)
+          : [],
+      [data, settledRegion],
+    );
+
+    const zoomToCluster = useCallback((c: PointCluster) => {
+      mapRef.current?.animateToRegion(
+        {
+          latitude: c.latitude,
+          longitude: c.longitude,
+          latitudeDelta: Math.max((c.north - c.south) * 1.6, 0.006),
+          longitudeDelta: Math.max((c.east - c.west) * 1.6, 0.006),
+        },
+        400,
       );
     }, []);
 
@@ -158,7 +285,7 @@ export const ListingsMap = memo(
         <MapView
           ref={mapRef}
           style={StyleSheet.absoluteFillObject}
-          provider={PROVIDER_DEFAULT}
+          provider={MAP_PROVIDER}
           initialRegion={TASHKENT_REGION}
           mapType="hybrid"
           onRegionChangeComplete={handleRegionChangeComplete}
@@ -173,7 +300,7 @@ export const ListingsMap = memo(
           moveOnMarkerPress={false}
         >
           {data?.mode === "polygons" &&
-            data.features.map((f) => (
+            data.features.slice(0, MAX_RENDERED_FEATURES).map((f) => (
               <PolygonWithLabel
                 key={f.id}
                 feature={f}
@@ -182,14 +309,22 @@ export const ListingsMap = memo(
             ))}
 
           {data?.mode === "points" &&
-            data.features.map((f) => (
-              <PriceMarker
-                key={f.listingId}
-                coordinate={toLatLng(f.centroid.coordinates)}
-                label={formatPrice(f.price, f.currency)}
-                onPress={() => onPressListing(f.listingId)}
-              />
-            ))}
+            clusters.slice(0, MAX_RENDERED_FEATURES).map((c) =>
+              c.single ? (
+                <PriceMarker
+                  key={c.single.listingId}
+                  coordinate={toLatLng(c.single.centroid.coordinates)}
+                  label={formatPrice(c.single.price, c.single.currency)}
+                  onPress={() => onPressListing(c.single!.listingId)}
+                />
+              ) : (
+                <ClusterMarker
+                  key={c.key}
+                  cluster={c}
+                  onPress={() => zoomToCluster(c)}
+                />
+              ),
+            )}
         </MapView>
 
         {/* Zoom pair, top-right. The locate button keeps the bottom corner —
@@ -298,16 +433,23 @@ const PolygonWithLabel = memo(function PolygonWithLabel({
   const formatPrice = usePriceFormatter();
   const formatSpecs = useSpecsFormatter();
 
+  // Only the outline is dropped when the ring is unusable or absent (PIN
+  // listings carry no boundary at all) — the bubble below still places the
+  // listing on the map, which beats it vanishing entirely.
+  const ring = feature.geom?.coordinates[0];
+
   return (
     <>
-      <Polygon
-        coordinates={ringToLatLngs(feature.geom.coordinates[0])}
-        strokeColor={colors.primary}
-        strokeWidth={2}
-        fillColor={withAlpha(colors.primary, 0.35)}
-        tappable
-        onPress={onPress}
-      />
+      {ring && isDrawableRing(ring) ? (
+        <Polygon
+          coordinates={ringToLatLngs(ring)}
+          strokeColor={colors.primary}
+          strokeWidth={2}
+          fillColor={withAlpha(colors.primary, 0.35)}
+          tappable
+          onPress={onPress}
+        />
+      ) : null}
       {/* Guard: backend types centroid as nullable — no bubble without one */}
       {feature.centroid ? (
         <PriceMarker
@@ -320,6 +462,75 @@ const PolygonWithLabel = memo(function PolygonWithLabel({
         />
       ) : null}
     </>
+  );
+});
+
+/** The numbered circle a zoomed-out map collapses nearby listings into.
+ *  Tapping it dives into that neighbourhood. */
+const ClusterMarker = memo(function ClusterMarker({
+  cluster,
+  onPress,
+}: {
+  cluster: PointCluster;
+  onPress: () => void;
+}) {
+  const { colors, shadow } = useTheme();
+  const t = useT();
+  const tracking = useMarkerTracking();
+  // Bigger circles for bigger neighbourhoods, gently.
+  const size = Math.min(56, 38 + Math.floor(Math.log10(cluster.count) * 12));
+
+  return (
+    <Marker
+      coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
+      anchor={{ x: 0.5, y: 0.5 }}
+      // Android + Fabric: the marker SNAPSHOT itself mispositions children
+      // (offset discs, clipped text) — verified on the emulator. Keeping the
+      // view live-composited sidesteps the capture entirely; with clustering
+      // the visible marker count stays low enough that panning holds 60fps.
+      tracksViewChanges={
+        Platform.OS === "android" ? true : tracking.tracksViewChanges
+      }
+      zIndex={2}
+      onPress={onPress}
+      accessibilityLabel={t("map.clusterLabel", { count: cluster.count })}
+    >
+      {/* SVG, not styled Views: Fabric misaligns the borderRadius clip mask
+          inside marker rasterisation on Android (verified through four
+          structural variants on the emulator) — an Svg surface draws its own
+          pixels and sidesteps the whole pipeline. */}
+      <View
+        onLayout={tracking.onLayout}
+        collapsable={false}
+        style={{ width: size + 6, height: size + 6 }}
+      >
+        <Svg width={size + 6} height={size + 6}>
+          <Circle
+            cx={(size + 6) / 2}
+            cy={(size + 6) / 2}
+            r={(size + 6) / 2}
+            fill={colors.onPrimary}
+          />
+          <Circle
+            cx={(size + 6) / 2}
+            cy={(size + 6) / 2}
+            r={size / 2}
+            fill={colors.primary}
+          />
+          <SvgText
+            x={(size + 6) / 2}
+            y={(size + 6) / 2}
+            fill={colors.onPrimary}
+            fontSize={cluster.count > 99 ? 13 : 15}
+            fontWeight="bold"
+            textAnchor="middle"
+            alignmentBaseline="central"
+          >
+            {String(cluster.count)}
+          </SvgText>
+        </Svg>
+      </View>
+    </Marker>
   );
 });
 
@@ -341,50 +552,79 @@ const PriceMarker = memo(function PriceMarker({
   // Tracking stays on until that first layout, then off so panning is smooth.
   const tracking = useMarkerTracking();
 
+  // EXPLICIT width, like the cluster circle (which never clipped): letting
+  // the bubble size itself from its text is what cut bubbles to "$5" on
+  // Android — the snapshot is measured narrower than the text renders,
+  // especially with the OS font scale up. Fixed metrics make the bitmap
+  // deterministic; allowFontScaling=false keeps the estimate honest.
+  const width = Math.ceil(
+    Math.max(label.length * 9.2, (sublabel?.length ?? 0) * 6.4) + 28,
+  );
+  const height = sublabel ? 46 : 33;
+
   return (
     <Marker
       coordinate={coordinate}
       onPress={onPress}
       anchor={{ x: 0.5, y: 0.5 }}
-      tracksViewChanges={tracking.tracksViewChanges}
+      // Android + Fabric: the marker SNAPSHOT itself mispositions children
+      // (offset discs, clipped text) — verified on the emulator. Keeping the
+      // view live-composited sidesteps the capture entirely; with clustering
+      // the visible marker count stays low enough that panning holds 60fps.
+      tracksViewChanges={
+        Platform.OS === "android" ? true : tracking.tracksViewChanges
+      }
+      zIndex={1}
     >
-      {/* Sized to be read at arm's length over satellite imagery, where a
-          13pt label on a 4pt-padded chip disappears into the roofs. */}
+      {/* Same SVG rationale as the cluster. */}
       <View
         onLayout={tracking.onLayout}
-        style={{
-          backgroundColor: colors.primary,
-          paddingHorizontal: 12,
-          paddingVertical: sublabel ? 6 : 7,
-          borderRadius: sublabel ? radii.lg : radii.pill,
-          borderWidth: 2,
-          borderColor: "#FFFFFF",
-          alignItems: "center",
-          ...shadow.control,
-        }}
+        collapsable={false}
+        style={{ width: width + 4, height: height + 4 }}
       >
-        <Text
-          style={{
-            ...type.bodyStrong,
-            fontWeight: "800",
-            color: "#FFFFFF",
-          }}
-        >
-          {label}
-        </Text>
-        {sublabel ? (
-          <Text
-            style={{
-              ...type.caption,
-              fontSize: 11,
-              fontWeight: "600",
-              color: "#FFFFFF",
-              opacity: 0.9,
-            }}
+        <Svg width={width + 4} height={height + 4}>
+          <Rect
+            x={0}
+            y={0}
+            width={width + 4}
+            height={height + 4}
+            rx={(height + 4) / 2}
+            fill="#FFFFFF"
+          />
+          <Rect
+            x={2}
+            y={2}
+            width={width}
+            height={height}
+            rx={height / 2}
+            fill={colors.primary}
+          />
+          <SvgText
+            x={(width + 4) / 2}
+            y={sublabel ? (height + 4) / 2 - 7 : (height + 4) / 2}
+            fill="#FFFFFF"
+            fontSize={15}
+            fontWeight="bold"
+            textAnchor="middle"
+            alignmentBaseline="central"
           >
-            {sublabel}
-          </Text>
-        ) : null}
+            {label}
+          </SvgText>
+          {sublabel ? (
+            <SvgText
+              x={(width + 4) / 2}
+              y={(height + 4) / 2 + 9}
+              fill="#FFFFFF"
+              fontSize={10.5}
+              fontWeight="600"
+              opacity={0.92}
+              textAnchor="middle"
+              alignmentBaseline="central"
+            >
+              {sublabel}
+            </SvgText>
+          ) : null}
+        </Svg>
       </View>
     </Marker>
   );

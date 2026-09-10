@@ -8,11 +8,12 @@ export interface UserProfile {
   fullName: string | null;
   name: string | null;
   surname: string | null;
-  email: string;
   phoneNumber: string | null;
   /** Prefer this one; `avatarThumbUrl` is the fallback. */
   avatarUrl: string | null;
   avatarThumbUrl: string | null;
+  /** Manually verified by an admin. */
+  isVerifiedRealtor: boolean;
   createdAt: string;
   /** Their ACTIVE listings only — drafts and archives stay with the owner. */
   listings: Listing[];

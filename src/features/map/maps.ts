@@ -47,6 +47,18 @@ export const toPosition = ({ latitude, longitude }: LatLng): [number, number] =>
 export const ringToLatLngs = (ring: [number, number][]): LatLng[] =>
   ring.map(toLatLng);
 
+/**
+ * Whether a GeoJSON ring is safe to hand MapKit. AIRMapPolygon copies the ring
+ * straight into a stack array sized from its length and builds an MKPolygon
+ * with no validation, so a missing or under-length ring reaches the renderer
+ * and faults there — on the next draw, which is to say the next zoom, not at
+ * the point the bad data arrived. Rings come off the API, so they are checked
+ * rather than trusted.
+ */
+export const isDrawableRing = (
+  ring: [number, number][] | undefined,
+): ring is [number, number][] => Array.isArray(ring) && ring.length >= 3;
+
 export function bboxToRegion(bbox: BBox): Region {
   return {
     latitude: (bbox.south + bbox.north) / 2,

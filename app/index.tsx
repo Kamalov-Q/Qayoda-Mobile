@@ -1,13 +1,13 @@
 // app/index.tsx
 import { Redirect } from "expo-router";
-import { useAuthStore } from "../src/features/auth/store/auth.store";
+import { usePreferences } from "../src/lib/preferences";
 
 export default function Index() {
-  const status = useAuthStore((s) => s.status);
-  // status can't be 'loading' here — root layout gates rendering until bootstrap finishes
-  return (
-    <Redirect
-      href={status === "authenticated" ? "/(tabs)/home" : "/(auth)/welcome"}
-    />
-  );
+  const introSeen = usePreferences((s) => s.introSeen);
+  // The very first open — guest or not — walks the intro once; the flag
+  // persists, so every later visit lands straight on the tabs. (A user who
+  // somehow skips it, e.g. an old install, still gets it after first login —
+  // goHomeAfterAuth checks the same flag.)
+  if (!introSeen) return <Redirect href="/intro" />;
+  return <Redirect href="/(tabs)/home" />;
 }

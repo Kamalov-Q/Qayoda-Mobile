@@ -9,9 +9,26 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
 
 export default ({ config }: ConfigContext): ExpoConfig => {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  // Reversed iOS client id, e.g. com.googleusercontent.apps.1234-abcd. The
+  // config plugin exists only to register it as a URL scheme so Google can
+  // return to the app; Android needs no plugin (package name + SHA-1 in Google
+  // Cloud is the whole setup). Unset → no plugin, and iOS Google sign-in stays
+  // hidden rather than failing at prebuild.
+  const googleIosScheme = process.env.GOOGLE_IOS_URL_SCHEME;
 
   return {
     ...(config as ExpoConfig),
+    plugins: [
+      ...(config.plugins ?? []),
+      ...(googleIosScheme
+        ? [
+            [
+              "@react-native-google-signin/google-signin",
+              { iosUrlScheme: googleIosScheme },
+            ] as [string, object],
+          ]
+        : []),
+    ],
     ios: {
       ...config.ios,
       config: {

@@ -1,6 +1,5 @@
 import { memo, type ReactNode } from "react";
 import { Modal, View, Text, Pressable, ScrollView } from "react-native";
-import Animated, { FadeIn, SlideInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { spacing, radii, sizing, type } from "../../theme/tokens";
@@ -33,18 +32,20 @@ export function FilterSheet({
   const insets = useSafeAreaInsets();
   const t = useT();
 
-  if (!visible) return null;
-
   return (
     <Modal
-      visible
+      visible={visible}
       transparent
-      animationType="none" // reanimated drives it; the native slide double-animates
+      // Kept MOUNTED and driven by `visible` — unmounting a transparent modal
+      // mid-dismissal is an iOS race that leaves the dead modal host eating
+      // touches (unresponsive back buttons after a few open/close cycles).
+      // Native fade replaces the reanimated entering animations for the same
+      // reason: with a persistent mount they would only ever fire once.
+      animationType="fade"
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      <Animated.View
-        entering={FadeIn.duration(140)}
+      <View
         style={{
           flex: 1,
           justifyContent: "flex-end",
@@ -58,8 +59,7 @@ export function FilterSheet({
           onPress={onClose}
         />
 
-        <Animated.View
-          entering={SlideInDown.duration(240).springify().damping(22)}
+        <View
           accessibilityViewIsModal
           style={{
             // Never taller than the screen: with every group expanded the body
@@ -130,8 +130,8 @@ export function FilterSheet({
           >
             <Button title={t("common.done")} onPress={onClose} />
           </View>
-        </Animated.View>
-      </Animated.View>
+        </View>
+      </View>
     </Modal>
   );
 }

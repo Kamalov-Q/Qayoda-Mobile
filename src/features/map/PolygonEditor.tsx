@@ -8,10 +8,10 @@ import MapView, {
   Marker,
   Polygon,
   Polyline,
-  PROVIDER_GOOGLE,
   type MapPressEvent,
   type MarkerDragStartEndEvent,
 } from "react-native-maps";
+import { MAP_PROVIDER } from "./provider";
 import { Button } from "../../components/ui";
 import { toast } from "../../components/ui/Toast";
 import { spacing, radii, sizing, type } from "../../theme/tokens";
@@ -147,7 +147,7 @@ export const PolygonEditor = memo(function PolygonEditor({
       <MapView
         ref={mapRef}
         style={{ flex: 1 }}
-        provider={PROVIDER_GOOGLE}
+        provider={MAP_PROVIDER}
         mapType="hybrid"
         initialRegion={parcelRegion(center ?? DEFAULT_CENTER)}
         onPress={addVertex}
@@ -283,6 +283,7 @@ const VertexMarker = memo(function VertexMarker({
           target is unhittable. */}
       <View
         onLayout={tracking.onLayout}
+        collapsable={false}
         style={{
           width: 36,
           height: 36,

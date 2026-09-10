@@ -6,6 +6,28 @@ import { spacing } from "../../../theme/tokens";
 import { useTheme } from "../../../theme/useTheme";
 import { toast } from "../../../components/ui/Toast";
 
+/**
+ * The device has one earpiece, so one clip sounds at a time. Each bubble owns
+ * its own Audio.Sound and there is no shared parent to hang this off — the list
+ * renders them as independent rows — so the current player is tracked at module
+ * scope: whoever starts playing pauses whoever was.
+ *
+ * Paused, not rewound: coming back to a half-heard message should resume it,
+ * which is what tapping the same bubble twice already does.
+ */
+let activePlayer: (() => Promise<void>) | null = null;
+
+/** Silences the previous player, then takes ownership. */
+async function claimPlayback(pauseSelf: () => Promise<void>) {
+  if (activePlayer && activePlayer !== pauseSelf) await activePlayer();
+  activePlayer = pauseSelf;
+}
+
+/** Gives up ownership, but only if it is still ours to give up. */
+function releasePlayback(pauseSelf: () => Promise<void>) {
+  if (activePlayer === pauseSelf) activePlayer = null;
+}
+
 interface Props {
   url: string;
   waveform: number[] | null;
@@ -26,11 +48,25 @@ export const VoiceMessage = memo(function VoiceMessage({
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0); // 0..1
 
+  // Stable for the component's lifetime — it closes over nothing that changes
+  // (a ref and a setState are both fixed identities), so it doubles as this
+  // instance's key in the registry above.
+  const pauseSelf = useRef(async () => {
+    // Swallowed: pausing a clip that has already been unloaded throws, and
+    // this runs on behalf of the *next* bubble — letting it reject there would
+    // mean a stale sound stops the new one from ever starting.
+    await sound.current?.pauseAsync().catch(() => {});
+    setPlaying(false);
+  }).current;
+
   useEffect(
     () => () => {
+      // Scrolling a playing message out of the list windows it away; leaving it
+      // registered would let an unmounted bubble own the audio channel.
+      releasePlayback(pauseSelf);
       void sound.current?.unloadAsync();
     },
-    [],
+    [pauseSelf],
   );
 
   const toggle = async () => {
@@ -41,8 +77,8 @@ export const VoiceMessage = memo(function VoiceMessage({
     if (loading) return;
 
     if (playing) {
-      await sound.current?.pauseAsync();
-      setPlaying(false);
+      await pauseSelf();
+      releasePlayback(pauseSelf);
       return;
     }
 
@@ -62,6 +98,7 @@ export const VoiceMessage = memo(function VoiceMessage({
             if (st.didJustFinish) {
               setPlaying(false);
               setProgress(0);
+              releasePlayback(pauseSelf);
               void s.setPositionAsync(0);
             }
           },
@@ -75,6 +112,8 @@ export const VoiceMessage = memo(function VoiceMessage({
       }
     }
 
+    // Before playAsync, so the two clips never overlap even for a frame.
+    await claimPlayback(pauseSelf);
     await sound.current.playAsync();
     setPlaying(true);
   };

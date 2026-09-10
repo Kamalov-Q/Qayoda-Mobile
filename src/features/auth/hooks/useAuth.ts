@@ -1,30 +1,69 @@
 // src/features/auth/hooks/useAuth.ts
+import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { authApi, SessionResponse } from "../api/auth.api";
+import { Linking } from "react-native";
+import { authApi, SessionResponse, TelegramStart } from "../api/auth.api";
 import { useAuthStore } from "../store/auth.store";
+import { useAuthFlowStore } from "../store/auth-flow.store";
+import { getGoogleIdToken } from "../google";
 import { secureSession } from "../../../lib/secure-session";
-import { refreshSession } from "../../../lib/api-client";
+import { ApiError, refreshSession } from "../../../lib/api-client";
 import { queryClient } from "../../../lib/query-client";
 import { disconnectChatSocket } from "../../../lib/chat-socket";
-import { OtpPurpose, useAuthFlowStore } from "../store/auth-flow.store";
+import { usePreferences } from "../../../lib/preferences";
 import { toast } from "../../../components/ui/Toast";
+import { t } from "../../../i18n";
+
+/** The device language rides along on every sign-in so a new account and its SMS match the UI. */
+const lang = () => usePreferences.getState().language;
+
+/**
+ * Where "done with auth" lands: the intro carousel exactly once — after the
+ * FIRST login on this device, and after any required steps (profile,
+ * password) — then home forever after.
+ */
+export function goHomeAfterAuth() {
+  if (!usePreferences.getState().introSeen) {
+    router.replace("/intro");
+    return;
+  }
+  router.replace("/(tabs)/home");
+}
 
 async function establishSession(session: SessionResponse) {
   await secureSession.saveRefreshToken(session.refreshToken);
   useAuthStore.getState().setSession(session.accessToken, session.user);
   useAuthFlowStore.getState().reset();
-  router.replace("/(tabs)/home");
+
+  // A new account that arrived without a full name (phone sign-ups always,
+  // Telegram/Google when the provider had none) must finish onboarding
+  // before anything else — otherwise every listing and chat would show an
+  // anonymous owner. replace(), not push(): there is nothing to go back to.
+  if (session.isNew && (!session.user.name || !session.user.surname)) {
+    router.replace("/onboarding");
+    toast.successKey("auth.welcomeNew");
+    return;
+  }
+  // A phone account without a password sets one now — that password is the
+  // next sign-in. (Telegram/Google-only accounts have no phone to log into.)
+  if (session.user.phoneNumber && !session.user.hasPassword) {
+    router.replace("/set-password");
+    toast.successKey("auth.loggedIn");
+    return;
+  }
+  goHomeAfterAuth();
   toast.successKey("auth.loggedIn");
 }
 
+// ---------------------------------------------------------------- phone
+
 export function useRequestOtp() {
-  const setRequestId = useAuthFlowStore((s) => s.setRequestId);
+  const setPhone = useAuthFlowStore((s) => s.setPhone);
   return useMutation({
-    mutationFn: (args: { email: string; purpose: OtpPurpose }) =>
-      authApi.requestOtp(args.email, args.purpose),
-    onSuccess: (data) => {
-      setRequestId(data.requestId);
+    mutationFn: (phone: string) => authApi.requestOtp(phone, lang()),
+    onSuccess: (_data, phone) => {
+      setPhone(phone);
       router.push("/(auth)/verify-otp");
       toast.successKey("auth.otpSent");
     },
@@ -32,64 +71,181 @@ export function useRequestOtp() {
 }
 
 export function useResendOtp() {
-  const setRequestId = useAuthFlowStore((s) => s.setRequestId);
+  const phone = useAuthFlowStore((s) => s.phone);
   return useMutation({
-    mutationFn: (args: { email: string; purpose: OtpPurpose }) =>
-      authApi.requestOtp(args.email, args.purpose),
-    onSuccess: (data) => setRequestId(data.requestId),
+    mutationFn: () => authApi.requestOtp(phone, lang()),
   });
 }
 
 export function useVerifyOtp() {
-  const { requestId, purpose, setVerificationToken } = useAuthFlowStore();
-
+  const phone = useAuthFlowStore((s) => s.phone);
   return useMutation({
-    mutationFn: async (code: string) => {
-      const { verificationToken } = await authApi.verifyOtp(requestId!, code);
-      setVerificationToken(verificationToken);
+    mutationFn: (args: { code: string }) =>
+      authApi.verifyOtp(phone, args.code, lang()),
+    onSuccess: establishSession,
+  });
+}
 
-      if (purpose === "LOGIN") {
-        const session = await authApi.loginWithOtp(verificationToken);
-        await establishSession(session);
-        return { done: true as const };
+export function usePhoneLogin() {
+  return useMutation({
+    mutationFn: (args: { phone: string; password: string }) =>
+      authApi.phoneLogin(args.phone, args.password),
+    onSuccess: establishSession,
+  });
+}
+
+export function useSetPassword() {
+  return useMutation({
+    mutationFn: (password: string) => authApi.setPassword(password),
+    onSuccess: () => {
+      // The session user drives the "must set a password" routing — flip the
+      // flag or the next establishSession would bounce back here.
+      const { accessToken, user, setSession } = useAuthStore.getState();
+      if (accessToken && user) {
+        setSession(accessToken, { ...user, hasPassword: true });
       }
-      return { done: false as const };
-    },
-    onSuccess: (result) => {
-      if (!result.done) router.push("/(auth)/register-details");
+      toast.successKey("auth.passwordSet");
+      goHomeAfterAuth();
     },
   });
 }
 
-export function useRegister() {
-  const verificationToken = useAuthFlowStore((s) => s.verificationToken);
+/** Same request as login OTPs — the reset screen just points elsewhere. */
+export function useRequestReset() {
+  const setPhone = useAuthFlowStore((s) => s.setPhone);
   return useMutation({
-    mutationFn: (args: { name: string; surname: string; password: string }) =>
-      authApi.register(
-        verificationToken!,
-        args.name,
-        args.surname,
-        args.password,
-      ),
+    mutationFn: (phone: string) => authApi.requestOtp(phone, lang()),
+    onSuccess: (_data, phone) => {
+      setPhone(phone);
+      router.push("/(auth)/reset-password");
+      toast.successKey("auth.otpSent");
+    },
+  });
+}
+
+export function useResetPassword() {
+  const phone = useAuthFlowStore((s) => s.phone);
+  return useMutation({
+    mutationFn: (args: { code: string; password: string }) =>
+      authApi.resetPassword(phone, args.code, args.password),
     onSuccess: establishSession,
   });
 }
 
-export function useLoginWithPassword() {
+// ---------------------------------------------------------------- google
+
+export function useGoogleSignIn() {
   return useMutation({
-    mutationFn: (args: { email: string; password: string }) =>
-      authApi.loginWithPassword(args.email, args.password),
-    onSuccess: establishSession,
+    mutationFn: async () => {
+      const g = await getGoogleIdToken();
+      if (g.type === "unavailable") throw new Error(t("auth.googleUnavailable"));
+      if (g.type === "cancelled") return null;
+      return authApi.googleSignIn(g.idToken, lang());
+    },
+    onSuccess: (session) => {
+      if (session) return establishSession(session);
+    },
   });
 }
+
+// ---------------------------------------------------------------- telegram
+
+export type TelegramPhase = "starting" | "waiting" | "expired" | "error";
+
+const POLL_MS = 2000;
+
+/**
+ * Drives the whole Telegram handshake: start a session, hand the deep link to
+ * the OS, poll until the bot confirms. `linking` swaps the start endpoint for
+ * the link one; the poll then resolves to LINKED instead of a session.
+ */
+export function useTelegramSignIn(linking = false) {
+  const [phase, setPhase] = useState<TelegramPhase>("starting");
+  const [session, setSession] = useState<TelegramStart | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const alive = useRef(true);
+
+  const stop = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  };
+
+  const poll = (token: string) => {
+    timer.current = setTimeout(async () => {
+      if (!alive.current) return;
+      try {
+        const res = await authApi.telegramPoll(token);
+        if (!alive.current) return;
+        if (res.status === "PENDING") return poll(token);
+        if (res.status === "EXPIRED") return setPhase("expired");
+        if (res.status === "LINKED") {
+          queryClient.invalidateQueries({ queryKey: ["auth", "identities"] });
+          toast.successKey("auth.telegramLinked");
+          router.back();
+          return;
+        }
+        await establishSession(res);
+      } catch (e) {
+        if (!alive.current) return;
+        // A consumed/unknown session means this token is spent; anything
+        // else (offline blip) is worth another try.
+        if (e instanceof ApiError && (e.status === 401 || e.status === 404)) {
+          setPhase("expired");
+        } else if (e instanceof ApiError) {
+          setError(e);
+          setPhase("error");
+        } else {
+          poll(token);
+        }
+      }
+    }, POLL_MS);
+  };
+
+  const start = async () => {
+    stop();
+    setPhase("starting");
+    setError(null);
+    try {
+      const s = linking
+        ? await authApi.linkTelegram()
+        : await authApi.telegramStart();
+      if (!alive.current) return;
+      setSession(s);
+      setPhase("waiting");
+      Linking.openURL(s.deepLink).catch(() => undefined);
+      poll(s.token);
+    } catch (e) {
+      setError(e);
+      setPhase("error");
+    }
+  };
+
+  useEffect(() => {
+    alive.current = true;
+    start();
+    return () => {
+      alive.current = false;
+      stop();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const openTelegram = () => {
+    if (session) Linking.openURL(session.deepLink).catch(() => undefined);
+  };
+
+  return { phase, session, error, restart: start, openTelegram };
+}
+
+// ---------------------------------------------------------------- session
 
 export function useLogout() {
   return useMutation({
     mutationFn: async () => {
       // Must run before the store is cleared: the request is authorised with
       // the access token still held there. A failure here is not fatal to the
-      // local logout — the device is signed out either way — so it stays
-      // swallowed, but it is no longer expected to fail.
+      // local logout — the device is signed out either way.
       await authApi.logout().catch(() => {});
       // Before the store is cleared, and before the query cache is: the socket
       // authenticates with the access token held there and reconnects on its
@@ -98,10 +254,11 @@ export function useLogout() {
       disconnectChatSocket();
       await secureSession.clear();
       useAuthStore.getState().clear();
-      queryClient.clear(); // wipe cached personal data on logout — cheap and prevents cross-account leaks
+      queryClient.clear(); // wipe cached personal data — prevents cross-account leaks
     },
     onSuccess: () => {
-      router.replace("/(auth)/welcome");
+      // Signed out ≠ locked out: browsing is public, so land on the feed.
+      router.replace("/(tabs)/home");
       toast.successKey("auth.loggedOut");
     },
   });

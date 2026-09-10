@@ -7,9 +7,12 @@ import { getLocales } from "expo-localization";
 import { LANGUAGES, type Language } from "../i18n/types";
 
 export type ThemeMode = "system" | "light" | "dark";
+export type Currency = "USD" | "UZS";
 
 const LANGUAGE_KEY = "prefs.language";
 const THEME_KEY = "prefs.themeMode";
+const CURRENCY_KEY = "prefs.currency";
+const INTRO_KEY = "prefs.introSeen";
 
 function isLanguage(v: unknown): v is Language {
   return LANGUAGES.includes(v as Language);
@@ -17,6 +20,10 @@ function isLanguage(v: unknown): v is Language {
 
 function isThemeMode(v: unknown): v is ThemeMode {
   return v === "system" || v === "light" || v === "dark";
+}
+
+function isCurrency(v: unknown): v is Currency {
+  return v === "USD" || v === "UZS";
 }
 
 /**
@@ -36,13 +43,22 @@ function deviceLanguage(): Language {
 interface PreferencesState {
   language: Language;
   themeMode: ThemeMode;
+  /** What every price on screen is shown in — conversion is client-side. */
+  currency: Currency;
+  /** First-launch intro carousel: shown until finished, then never again. */
+  introSeen: boolean;
   setLanguage: (language: Language) => void;
   setThemeMode: (mode: ThemeMode) => void;
+  setCurrency: (currency: Currency) => void;
+  setIntroSeen: () => void;
 }
 
 export const usePreferences = create<PreferencesState>((set) => ({
   language: deviceLanguage(),
   themeMode: "system",
+  // USD is how this market quotes real estate, whatever the wallet holds.
+  currency: "USD",
+  introSeen: false,
 
   setLanguage: (language) => {
     set({ language });
@@ -53,6 +69,16 @@ export const usePreferences = create<PreferencesState>((set) => ({
     set({ themeMode });
     AsyncStorage.setItem(THEME_KEY, themeMode).catch(() => {});
   },
+
+  setCurrency: (currency) => {
+    set({ currency });
+    AsyncStorage.setItem(CURRENCY_KEY, currency).catch(() => {});
+  },
+
+  setIntroSeen: () => {
+    set({ introSeen: true });
+    AsyncStorage.setItem(INTRO_KEY, "1").catch(() => {});
+  },
 }));
 
 /**
@@ -62,14 +88,25 @@ export const usePreferences = create<PreferencesState>((set) => ({
  */
 export async function hydratePreferences(): Promise<void> {
   try {
-    const [[, storedLanguage], [, storedTheme]] =
-      await AsyncStorage.multiGet([LANGUAGE_KEY, THEME_KEY]);
+    const [
+      [, storedLanguage],
+      [, storedTheme],
+      [, storedCurrency],
+      [, storedIntro],
+    ] = await AsyncStorage.multiGet([
+      LANGUAGE_KEY,
+      THEME_KEY,
+      CURRENCY_KEY,
+      INTRO_KEY,
+    ]);
 
     usePreferences.setState({
       // A stored value wins; anything unrecognised (older build, manual edit)
       // falls back to the same default a fresh install would pick.
       language: isLanguage(storedLanguage) ? storedLanguage : deviceLanguage(),
       themeMode: isThemeMode(storedTheme) ? storedTheme : "system",
+      currency: isCurrency(storedCurrency) ? storedCurrency : "USD",
+      introSeen: storedIntro === "1",
     });
   } catch {
     // Storage unavailable — the device-derived defaults already in the store

@@ -5,7 +5,7 @@ import { memo, useEffect } from "react";
 import { View, Text, Pressable, Platform } from "react-native";
 import { create } from "zustand";
 import { Ionicons } from "@expo/vector-icons";
-import Animated, { FadeInUp, FadeOutUp, LinearTransition } from "react-native-reanimated";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { spacing, radii, type } from "../../theme/tokens";
@@ -92,7 +92,11 @@ export function ToastHost() {
     <View
       style={{
         position: "absolute",
-        top: insets.top + spacing.sm,
+        // Bottom, not top: the top strip is where the navigation header's
+        // back button lives, and a toast there sat exactly on top of it —
+        // every action that fired a toast (archive, save, errors) made the
+        // back button swallow taps for the toast's lifetime.
+        bottom: insets.bottom + 76,
         left: spacing.md,
         right: spacing.md,
         gap: spacing.sm,
@@ -139,11 +143,12 @@ const ToastCard = memo(function ToastCard({ toast: item }: { toast: ToastItem })
       : t(item.content.key, item.content.params);
 
   return (
-    <Animated.View
-      entering={FadeInUp.springify().damping(18)}
-      exiting={FadeOutUp.duration(180)}
-      layout={LinearTransition.springify().damping(18)}
-    >
+    // Entering only. The exiting/layout animations this carried are the
+    // documented reanimated ghost-view trap: an exit interrupted by the host
+    // unmounting (last toast dismissed) can leave an invisible native view
+    // that keeps swallowing touches where the toast was — which is how the
+    // header back button went dead after an archive or a few minutes of use.
+    <Animated.View entering={FadeInDown.springify().damping(18)}>
       <Pressable
         onPress={() => dismiss(item.id)}
         accessibilityRole="alert"

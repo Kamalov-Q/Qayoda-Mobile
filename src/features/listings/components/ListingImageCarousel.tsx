@@ -28,6 +28,11 @@ export const ListingImageCarousel = memo(function ListingImageCarousel({
 
   return (
     <FlatList
+      // Keep at most the visible photo and its neighbours decoded.
+      initialNumToRender={1}
+      maxToRenderPerBatch={2}
+      windowSize={3}
+      removeClippedSubviews
       data={sorted}
       keyExtractor={(item) => item.id}
       horizontal
@@ -38,7 +43,12 @@ export const ListingImageCarousel = memo(function ListingImageCarousel({
           source={{ uri: resolveMediaUrl(item.url) }}
           style={{ width, height: 260 }}
           contentFit="cover"
-          cachePolicy="memory-disk"
+          // "disk", NOT "memory-disk": these are full-resolution originals —
+          // a handful of them in expo-image's RAM cache is exactly the kind
+          // of load iOS jetsams Expo Go for. Disk cache keeps swipes fast
+          // without pinning decoded megapixels in memory.
+          cachePolicy="disk"
+          recyclingKey={item.id}
           transition={150}
         />
       )}

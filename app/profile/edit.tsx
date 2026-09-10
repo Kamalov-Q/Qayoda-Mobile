@@ -34,21 +34,10 @@ import { useAuthStore } from "../../src/features/auth/store/auth.store";
  *  and thumbnails it anyway, so shipping a full camera frame is pure waste. */
 const AVATAR_EDGE = 1024;
 
-/** Strips the separators people type; the backend does the same before its
- *  +998XXXXXXXXX check, so validating the stripped form matches its rule. */
-const normalizePhone = (v: string) => v.replace(/[\s()-]/g, "");
-const PHONE = /^\+998\d{9}$/;
-
 const makeSchema = (t: ReturnType<typeof useT>) =>
   z.object({
     name: z.string().trim().min(2, t("validation.minChars", { count: 2 })),
     surname: z.string().trim().min(2, t("validation.minChars", { count: 2 })),
-    phoneNumber: z
-      .string()
-      .refine(
-        (v) => !normalizePhone(v) || PHONE.test(normalizePhone(v)),
-        t("validation.phoneInvalid"),
-      ),
   });
 
 type FormData = z.infer<ReturnType<typeof makeSchema>>;
@@ -63,7 +52,6 @@ export default function EditProfileScreen() {
   const removeAvatar = useRemoveAvatar();
 
   const surnameRef = useRef<TextInput>(null);
-  const phoneRef = useRef<TextInput>(null);
   const { text, colors } = useTheme();
   const t = useT();
 
@@ -75,29 +63,19 @@ export default function EditProfileScreen() {
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { name: "", surname: "", phoneNumber: "" },
+    defaultValues: { name: "", surname: "" },
     // Re-syncs whenever the query resolves (or a mutation writes fresh data),
     // so the form never shows stale values after a cold navigation here.
     values: profile
-      ? {
-          name: profile.name ?? "",
-          surname: profile.surname ?? "",
-          phoneNumber: profile.phoneNumber ?? "",
-        }
+      ? { name: profile.name ?? "", surname: profile.surname ?? "" }
       : sessionUser
-        ? { name: sessionUser.name, surname: sessionUser.surname, phoneNumber: "" }
+        ? { name: sessionUser.name ?? "", surname: sessionUser.surname ?? "" }
         : undefined,
   });
 
   const onSubmit = handleSubmit((d) =>
     update.mutate(
-      {
-        name: d.name.trim(),
-        surname: d.surname.trim(),
-        // null clears the number server-side; an empty string would fail the
-        // DTO's format check.
-        phoneNumber: normalizePhone(d.phoneNumber) || null,
-      },
+      { name: d.name.trim(), surname: d.surname.trim() },
       { onSuccess: () => router.back() },
     ),
   );
@@ -250,8 +228,8 @@ export default function EditProfileScreen() {
                 label={t("auth.surname")}
                 placeholder={t("auth.surnamePlaceholder")}
                 autoComplete="family-name"
-                returnKeyType="next"
-                onSubmitEditing={() => phoneRef.current?.focus()}
+                returnKeyType="done"
+                onSubmitEditing={onSubmit}
                 value={value}
                 onChangeText={onChange}
                 onBlur={onBlur}
@@ -259,32 +237,17 @@ export default function EditProfileScreen() {
               />
             )}
           />
-          <Controller
-            control={control}
-            name="phoneNumber"
-            render={({ field: { value, onChange, onBlur } }) => (
-              <TextField
-                ref={phoneRef}
-                label={t("profile.phone")}
-                placeholder={t("add.phonePlaceholder")}
-                icon="call-outline"
-                keyboardType="phone-pad"
-                autoComplete="tel"
-                returnKeyType="done"
-                onSubmitEditing={onSubmit}
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={errors.phoneNumber?.message}
-              />
-            )}
-          />
-
-          {/* The email is fixed server-side (it is the account identity), so
-              it renders as context rather than a field. */}
-          <Text style={text.caption}>
-            {profile?.email ?? sessionUser?.email}
-          </Text>
+          {/* Phone and email are set by the sign-in method that verified
+              them (SMS code, Google), so they render as context, not fields. */}
+          <View style={{ gap: spacing.xs }}>
+            <Text style={{ ...text.label, color: colors.textMuted }}>
+              {t("profile.phone")}
+            </Text>
+            <Text style={text.body}>
+              {profile?.phoneNumber ?? sessionUser?.phoneNumber ?? "—"}
+            </Text>
+            <Text style={text.caption}>{t("profile.contactHint")}</Text>
+          </View>
 
           {/* A failed load matters here too: the save button stays disabled
               until the profile arrives, and a silent blank form reads as a

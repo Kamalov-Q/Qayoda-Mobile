@@ -26,10 +26,17 @@ interface Props extends TextInputProps {
   icon?: keyof typeof Ionicons.glyphMap;
   /** Trailing static text, e.g. a unit or currency. */
   suffix?: string;
+  /** Leading static text, e.g. a country code the user does not type. */
+  prefix?: string;
+  /** Muted line under the field when there is no error to show instead. */
+  hint?: string;
 }
 
 export const TextField = forwardRef<TextInput, Props>(
-  ({ label, error, icon, suffix, secureTextEntry, onFocus, onBlur, ...inputProps }, ref) => {
+  (
+    { label, error, icon, suffix, prefix, hint, secureTextEntry, onFocus, onBlur, ...inputProps },
+    ref,
+  ) => {
     const { colors } = useTheme();
     const t = useT();
     const [focused, setFocused] = useState(false);
@@ -76,6 +83,10 @@ export const TextField = forwardRef<TextInput, Props>(
               size={18}
               color={focused ? colors.primary : colors.textFaint}
             />
+          ) : null}
+
+          {prefix ? (
+            <Text style={{ ...type.body, color: colors.textMuted }}>{prefix}</Text>
           ) : null}
 
           <TextInput
@@ -127,6 +138,10 @@ export const TextField = forwardRef<TextInput, Props>(
             </Pressable>
           )}
         </View>
+
+        {!error && hint ? (
+          <Text style={{ ...type.caption, color: colors.textMuted }}>{hint}</Text>
+        ) : null}
 
         {error && (
           <View

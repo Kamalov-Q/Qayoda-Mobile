@@ -1,8 +1,7 @@
 // app/(tabs)/_layout.tsx
-import { Tabs, Redirect } from "expo-router";
+import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useAuthStore } from "../../src/features/auth/store/auth.store";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT } from "../../src/i18n";
 import { useChatSocket } from "@/src/features/chat/hooks/useChatSocket";
@@ -13,8 +12,6 @@ import { useUnreadTotal } from "@/src/features/chat/hooks/useConversations";
 const ICONS = {
   home: ["home", "home-outline"],
   sotuv: ["pricetag", "pricetag-outline"],
-  places: ["business", "business-outline"],
-  saved: ["heart", "heart-outline"],
   chat: ["chatbubble", "chatbubble-outline"],
   about: ["information-circle", "information-circle-outline"],
   account: ["person-circle", "person-circle-outline"],
@@ -27,18 +24,16 @@ const ICONS = {
 const BAR_HEIGHT = 58;
 
 // Only scales the glyph inside that fixed 28pt wrapper; it has no effect on
-// whether the label fits.
-const ICON_SIZE = 24;
+// whether the label fits. 28 fills the wrapper exactly — past that the glyph
+// overflows it (nothing clips, but it starts crowding the label 2pt below).
+const ICON_SIZE = 28;
 
 export default function TabsLayout() {
   useChatSocket();
   const unread = useUnreadTotal();
-  const status = useAuthStore((s) => s.status);
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const t = useT();
-
-  if (status === "unauthenticated") return <Redirect href="/(auth)/welcome" />;
 
   return (
     <Tabs
@@ -92,19 +87,6 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="places"
-        options={{
-          title: t("tabs.myListings"),
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={ICONS.places[focused ? 0 : 1]}
-              color={color}
-              size={ICON_SIZE}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="chat"
         options={{
           title: t("tabs.chat"),
@@ -118,32 +100,15 @@ export default function TabsLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="saved"
-        options={{
-          title: t("tabs.saved"),
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={ICONS.saved[focused ? 0 : 1]}
-              color={color}
-              size={ICON_SIZE}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="about"
-        options={{
-          title: t("tabs.about"),
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={ICONS.about[focused ? 0 : 1]}
-              color={color}
-              size={ICON_SIZE}
-            />
-          ),
-        }}
-      />
+      {/* Off the bar, but still routes: Home and Account both push into these,
+          so the screens stay mounted-on-demand rather than deleted. Every file
+          under (tabs) becomes a tab unless it says otherwise, hence href:null
+          rather than simply omitting them. */}
+      <Tabs.Screen name="places" options={{ href: null }} />
+      <Tabs.Screen name="saved" options={{ href: null }} />
+      {/* Reached from Settings and the profile quick links, not the bar —
+          the bar keeps the four things people actually live in. */}
+      <Tabs.Screen name="about" options={{ href: null }} />
       <Tabs.Screen
         name="account"
         options={{

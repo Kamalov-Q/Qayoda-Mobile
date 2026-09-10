@@ -2,13 +2,31 @@ import { api } from "@/src/lib/api-client";
 
 export type OfferPurpose = "SALE" | "RENT_MONTHLY" | "RENT_DAILY";
 
+/** Amenity keys — mirror of the server catalog; labels live in i18n. */
+export const LISTING_PROPERTY_KEYS = [
+  "REPAIRED",
+  "FURNISHED",
+  "AC",
+  "HEATING",
+  "PARKING",
+  "GARAGE",
+  "BALCONY",
+  "ELEVATOR",
+  "INTERNET",
+  "SECURITY",
+  "POOL",
+  "GARDEN",
+] as const;
+export type ListingPropertyKey = (typeof LISTING_PROPERTY_KEYS)[number];
+
 export type PropertyCategory =
   | "APARTMENT"
   | "NON_RESIDENTIAL"
   | "HOUSE"
   | "LAND"
   | "BUILDING"
-  | "DACHA";
+  | "DACHA"
+  | "HOTEL";
 
 export interface Offer {
   id: string;
@@ -41,9 +59,14 @@ export interface Listing {
   floor: number | null;
   totalFloors: number | null;
   address: string | null;
+  /** Amenity keys; render via `props.*` i18n labels. */
+  properties: string[] | null;
   contactPhone: string | null;
   offers: Offer[];
   images: ListingImage[];
+  /** The drawn boundary, GeoJSON — rings of [lng, lat]. */
+  geom: { type: "Polygon"; coordinates: [number, number][][] } | null;
+  centroid: { type: "Point"; coordinates: [number, number] } | null;
   createdAt: string;
   publishedAt: string | null;
 }
@@ -58,7 +81,8 @@ export interface MapPointFeature {
 
 export interface MapPolygonFeature {
   id: string;
-  geom: { type: "Polygon"; coordinates: [number, number][][] };
+  /** Null for PIN listings — only the price bubble is drawn then. */
+  geom: { type: "Polygon"; coordinates: [number, number][][] } | null;
   centroid: { type: "Point"; coordinates: [number, number] } | null;
   title: string | null;
   rooms: number | null;
@@ -99,12 +123,17 @@ export interface CreateListingInput {
   title?: string;
   descriptionHtml?: string;
   rooms?: number;
-  areaM2?: number;
   floor?: number;
   totalFloors?: number;
   address?: string;
+  properties?: string[];
   contactPhone?: string;
+  /** Drawn boundary. Exactly one of `coordinates` or `point` must be sent. */
   coordinates?: [number, number][][];
+  /** Dropped pin, [lng, lat]. */
+  point?: [number, number];
+  /** PIN listings only — polygon listings derive it from the boundary. */
+  areaM2?: number;
   offers: {
     purpose: OfferPurpose;
     price: number;
@@ -117,9 +146,38 @@ export interface CreateListingInput {
 export interface ViewportFilters {
   /** Case-insensitive substring match on the listing address. */
   address?: string;
+  category?: PropertyCategory;
+  /** USD bounds; either side may be open. */
+  priceMin?: number;
+  priceMax?: number;
+}
+
+export interface FeedFilters {
+  purpose: OfferPurpose;
+  category?: PropertyCategory;
+  priceMin?: number;
+  priceMax?: number;
+  /** Searches title and address. */
+  q?: string;
+  sort?: "newest" | "priceAsc" | "priceDesc";
 }
 
 export const listingApi = {
+  /** The browsable feed — ALL active listings, not just the map viewport. */
+  getFeed: (filters: FeedFilters, limit = 20, offset = 0) => {
+    const params = new URLSearchParams({
+      purpose: filters.purpose,
+      limit: String(limit),
+      offset: String(offset),
+    });
+    if (filters.category) params.set("category", filters.category);
+    if (filters.priceMin != null) params.set("priceMin", String(filters.priceMin));
+    if (filters.priceMax != null) params.set("priceMax", String(filters.priceMax));
+    if (filters.q?.trim()) params.set("q", filters.q.trim());
+    if (filters.sort) params.set("sort", filters.sort);
+    return api<Listing[]>(`/listings?${params}`, { auth: false });
+  },
+
   getViewport: (
     bbox: BBox,
     zoom: number,
@@ -135,10 +193,27 @@ export const listingApi = {
       purpose,
     });
     if (filters.address?.trim()) params.set("address", filters.address.trim());
+    if (filters.category) params.set("category", filters.category);
+    if (filters.priceMin != null) params.set("priceMin", String(filters.priceMin));
+    if (filters.priceMax != null) params.set("priceMax", String(filters.priceMax));
     return api<ViewportResponse>(`/listings/map?${params}`, { auth: false });
   },
 
   getById: (id: string) => api<Listing>(`/listings/${id}`, { auth: false }),
+
+  /** Same category, nearest first — the detail page's "more like this". */
+  getSimilar: (id: string, limit = 6) =>
+    api<Listing[]>(`/listings/${id}/similar?limit=${limit}`, { auth: false }),
+
+  /** CBU's daily USD/UZS rate, cached server-side. Public. */
+  getRates: () =>
+    api<{ usdToUzs: number; updatedAt: string | null }>("/rates", {
+      auth: false,
+    }),
+
+  /** Newest ACTIVE listings, for the Home strip. Public. */
+  getLatest: (limit = 10) =>
+    api<Listing[]>(`/listings/latest?limit=${limit}`, { auth: false }),
 
   getMine: () => api<Listing[]>(`/listings/mine`),
 

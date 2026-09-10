@@ -1,8 +1,7 @@
 // app/(tabs)/account.tsx
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Text, View, Pressable } from "react-native";
 import { router, type Href } from "expo-router";
-import Constants from "expo-constants";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -10,19 +9,17 @@ import {
   Button,
   Card,
   Section,
-  OptionList,
   ImageViewer,
   TAB_EDGES,
-  type Option,
 } from "../../src/components/ui";
 import { spacing, radii, type } from "../../src/theme/tokens";
-import { useTheme, useThemeMode } from "../../src/theme/useTheme";
-import { usePreferences, type ThemeMode } from "../../src/lib/preferences";
-import { useT, type Language, type TranslationKey } from "../../src/i18n";
+import { useTheme } from "../../src/theme/useTheme";
+import { useT, type TranslationKey } from "../../src/i18n";
 import { confirm } from "../../src/lib/alerts";
-import { MiniLocationMap } from "../../src/features/map/MiniLocationMap";
 import { useAuthStore } from "../../src/features/auth/store/auth.store";
 import { useLogout } from "../../src/features/auth/hooks/useAuth";
+import { useIsAuthed } from "../../src/features/auth/guest";
+import { GuestPrompt } from "../../src/features/auth/components/GuestPrompt";
 import { useProfile } from "../../src/features/profile/hooks/useProfile";
 import { resolveMediaUrl } from "../../src/lib/media-url";
 import { useMyListings } from "../../src/features/listings/hooks/useMyListings";
@@ -61,10 +58,6 @@ export default function AccountScreen() {
   const { text, colors, shadow } = useTheme();
   const t = useT();
 
-  const [themeMode, setThemeMode] = useThemeMode();
-  const language = usePreferences((s) => s.language);
-  const setLanguage = usePreferences((s) => s.setLanguage);
-
   // Counts reuse the queries the other tabs already keep warm, so this screen
   // costs no extra requests once either has been visited.
   const { data: mine } = useMyListings();
@@ -82,28 +75,43 @@ export default function AccountScreen() {
   const [viewingAvatar, setViewingAvatar] = useState(false);
   const activeCount = mine?.filter((l) => l.status === "ACTIVE").length;
 
-  const themeOptions = useMemo<Option<ThemeMode>[]>(
-    () => [
-      {
-        value: "system",
-        label: t("settings.themeSystem"),
-        icon: "phone-portrait-outline",
-      },
-      { value: "light", label: t("settings.themeLight"), icon: "sunny-outline" },
-      { value: "dark", label: t("settings.themeDark"), icon: "moon-outline" },
-    ],
-    [t],
-  );
 
   // Each language is written in itself — someone who has the app stuck in a
   // language they can't read needs to recognise their own on this list.
-  const languageOptions = useMemo<Option<Language>[]>(
-    () => [
-      { value: "uz", label: "O'zbekcha", icon: "language-outline" },
-      { value: "ru", label: "Русский", icon: "language-outline" },
-    ],
-    [],
-  );
+
+  const authed = useIsAuthed();
+
+  // Theme and language are device preferences, not account ones, so a guest
+  // keeps them; everything personal collapses into the sign-in prompt.
+  if (!authed) {
+    return (
+      <Screen style={{ paddingTop: spacing.md }} edges={TAB_EDGES}>
+        <View style={{ gap: spacing.xl }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <Text style={text.display}>{t("tabs.profile")}</Text>
+          {/* App-shaped things (sign-in methods, location, theme, language,
+              about) live behind the gear, like the platform convention. */}
+          <Pressable
+            onPress={() => router.push("/settings")}
+            accessibilityRole="button"
+            accessibilityLabel={t("settings.title")}
+            hitSlop={8}
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+          >
+            <Ionicons name="settings-outline" size={24} color={colors.text} />
+          </Pressable>
+        </View>
+          <GuestPrompt />
+        </View>
+      </Screen>
+    );
+  }
 
   const initials = [user?.name, user?.surname]
     .filter(Boolean)
@@ -122,7 +130,26 @@ export default function AccountScreen() {
   return (
     <Screen style={{ paddingTop: spacing.md }} edges={TAB_EDGES}>
       <View style={{ gap: spacing.xl }}>
-        <Text style={text.display}>{t("tabs.profile")}</Text>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <Text style={text.display}>{t("tabs.profile")}</Text>
+          {/* App-shaped things (sign-in methods, location, theme, language,
+              about) live behind the gear, like the platform convention. */}
+          <Pressable
+            onPress={() => router.push("/settings")}
+            accessibilityRole="button"
+            accessibilityLabel={t("settings.title")}
+            hitSlop={8}
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+          >
+            <Ionicons name="settings-outline" size={24} color={colors.text} />
+          </Pressable>
+        </View>
 
         {/* Identity block reads as a banner rather than a list row: it is the
             only content on this screen that is about the person, not a setting.
@@ -215,7 +242,7 @@ export default function AccountScreen() {
                 {user?.name} {user?.surname}
               </Text>
               <Text style={text.caption} numberOfLines={1}>
-                {user?.email}
+                {user?.phoneNumber ?? user?.email}
               </Text>
             </View>
           </View>
@@ -281,34 +308,6 @@ export default function AccountScreen() {
           </Card>
         </Section>
 
-        {/* Above the settings groups: it is about the person, like the
-            identity card, rather than about how the app behaves. */}
-        <Section title={t("location.title")}>
-          <Card flush>
-            <MiniLocationMap />
-          </Card>
-        </Section>
-
-        <Section title={t("settings.appearance")}>
-          <Card flush>
-            <OptionList
-              options={themeOptions}
-              value={themeMode}
-              onChange={setThemeMode}
-            />
-          </Card>
-        </Section>
-
-        <Section title={t("settings.language")}>
-          <Card flush>
-            <OptionList
-              options={languageOptions}
-              value={language}
-              onChange={setLanguage}
-            />
-          </Card>
-        </Section>
-
         <Button
           title={t("auth.logout")}
           icon="log-out-outline"
@@ -317,11 +316,6 @@ export default function AccountScreen() {
           loading={logout.isPending}
         />
 
-        <Text style={{ ...text.caption, textAlign: "center" }}>
-          {t("about.version", {
-            version: Constants.expoConfig?.version ?? "1.0.0",
-          })}
-        </Text>
       </View>
 
       {/* Mounted only while open, so a dismissed viewer cannot hold the last

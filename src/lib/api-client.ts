@@ -7,6 +7,10 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    /** The server's machine-readable `code` (OTP_INVALID, …), when it sent one. */
+    public code?: string,
+    /** Seconds to wait, on 429s that say so. */
+    public retryAfter?: number,
   ) {
     super(message);
   }
@@ -23,26 +27,48 @@ interface RequestOptions extends Omit<RequestInit, "body"> {
 // revokes the family on reuse — parallel refreshes would log the user out.
 let refreshPromise: Promise<boolean> | null = null;
 
+// Cold start awaits this refresh before the first screen paints, so an
+// unreachable API used to hold the app on a blank boot screen for as long as
+// the platform's default socket timeout (a minute on iOS, longer if the
+// connection half-opens). Bounded here instead: a device that can't reach the
+// server drops to the login screen quickly rather than appearing to hang.
+const REFRESH_TIMEOUT_MS = 8000;
+
 async function doRefresh(): Promise<boolean> {
   const refreshToken = await secureSession.getRefreshToken();
   if (!refreshToken) return false;
+
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), REFRESH_TIMEOUT_MS);
 
   try {
     const res = await fetch(`${API_URL}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken }),
+      signal: abort.signal,
     });
-    if (!res.ok) throw new Error();
+    // A server that answers and rejects the token means the session really is
+    // over — the token is dead server-side, so drop it.
+    if (!res.ok) {
+      await secureSession.clear();
+      useAuthStore.getState().clear();
+      return false;
+    }
 
     const data = await res.json();
     await secureSession.saveRefreshToken(data.refreshToken); // rotation — persist the NEW token, always
     useAuthStore.getState().setSession(data.accessToken, data.user);
     return true;
   } catch {
-    await secureSession.clear();
-    useAuthStore.getState().clear();
+    // Never got an answer (offline, timed out, bad host): the refresh token is
+    // most likely still valid, so it stays on the device and the next cold
+    // start retries. Clearing it here would turn a dropped signal into a real
+    // re-login.
+    useAuthStore.getState().setUnauthenticated();
     return false;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -86,8 +112,13 @@ export async function api<T>(
       Array.isArray(err.message)
         ? err.message[0]
         : (err.message ?? "Request failed"),
+      typeof err.code === "string" ? err.code : undefined,
+      typeof err.retryAfter === "number" ? err.retryAfter : undefined,
     );
   }
 
-  return res.json();
+  // 204 (logout) and any other empty reply: res.json() would throw on "".
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }

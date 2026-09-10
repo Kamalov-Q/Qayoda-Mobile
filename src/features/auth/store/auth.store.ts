@@ -1,11 +1,19 @@
-// src/features/auth/store/auth.store.ts
 import { create } from "zustand";
 
+/** Mirror of the `user` object every session response carries. */
 export interface SessionUser {
   id: string;
-  email: string;
-  name: string;
-  surname: string;
+  name: string | null;
+  surname: string | null;
+  /** Set only by passing an SMS code — never typed in. */
+  phoneNumber: string | null;
+  /** Set only by a Google-verified address. */
+  email: string | null;
+  avatarUrl: string | null;
+  language: "uz" | "ru";
+  role: string;
+  isVerifiedRealtor: boolean;
+  /** Whether phone+password login works for this account. */
   hasPassword: boolean;
 }
 
@@ -32,6 +40,5 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ accessToken: null, user: null, status: "unauthenticated" }),
 }));
 
-// Perf: components must subscribe narrowly —
-//   const user = useAuthStore((s) => s.user)        ✅ re-renders only when user changes
-//   const store = useAuthStore()                     ❌ re-renders on every token refresh
+// Subscribe narrowly — `useAuthStore((s) => s.user)` — never `useAuthStore()`,
+// or every token refresh re-renders the caller.

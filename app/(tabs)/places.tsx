@@ -46,6 +46,7 @@ const CATEGORIES = [
   "NON_RESIDENTIAL",
   "BUILDING",
   "DACHA",
+  "HOTEL",
 ] as const satisfies readonly PropertyCategory[];
 
 const ALL = "ALL";

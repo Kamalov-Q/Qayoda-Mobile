@@ -15,16 +15,22 @@ import {
   ErrorBanner,
   HEADER_EDGES,
   type SelectGridOption,
+  SegmentedControl,
+  Chip,
 } from "../../src/components/ui";
 import { spacing } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
+import * as Location from "expo-location";
 import { useT } from "../../src/i18n";
+import { useIsAuthed } from "../../src/features/auth/guest";
+import { GuestPrompt } from "../../src/features/auth/components/GuestPrompt";
 import { notify } from "../../src/lib/alerts";
 import { errorMessage } from "../../src/lib/api-error";
 import { useCreateListing } from "../../src/features/listings/hooks/useCreateListing";
 import { useImageUpload } from "../../src/features/listings/hooks/useImageUpload";
 import { ImagePickerGrid } from "../../src/features/listings/components/ImagePickerGrid";
 import { PolygonPickerModal } from "../../src/features/map/PolygonPickerModal";
+import { PinPickerModal } from "../../src/features/map/PinPickerModal";
 import { textToHtml } from "../../src/features/listings/utils/format";
 import {
   MIN_POLYGON_POINTS,
@@ -33,6 +39,7 @@ import {
   polygonAreaM2,
 } from "../../src/features/listings/utils/geo";
 import {
+  LISTING_PROPERTY_KEYS,
   PropertyCategory,
   OfferPurpose,
 } from "../../src/features/listings/api/listings.api";
@@ -47,6 +54,7 @@ const CATEGORY_ICONS = {
   NON_RESIDENTIAL: "storefront-outline",
   BUILDING: "business-outline",
   DACHA: "leaf-outline",
+  HOTEL: "bed-outline",
 } as const satisfies Record<PropertyCategory, keyof typeof Ionicons.glyphMap>;
 
 const PURPOSE_ICONS = {
@@ -63,6 +71,7 @@ const CATEGORIES = [
   "NON_RESIDENTIAL",
   "BUILDING",
   "DACHA",
+  "HOTEL",
 ] as const satisfies readonly PropertyCategory[];
 
 const PURPOSES = [
@@ -78,6 +87,8 @@ const PURPOSES = [
 const FLOOR_CATEGORIES = [
   "APARTMENT",
   "BUILDING",
+  "NON_RESIDENTIAL",
+  "HOTEL",
 ] as const satisfies readonly PropertyCategory[];
 
 const canHaveFloors = (category: PropertyCategory) =>
@@ -112,10 +123,6 @@ const makeSchema = (t: ReturnType<typeof useT>) =>
       .string()
       .regex(/^\d*$/, t("validation.numbersOnly"))
       .optional(),
-    areaM2: z
-      .string()
-      .regex(/^\d*\.?\d*$/, t("validation.numbersOnly"))
-      .optional(),
     hasFloors: z.enum(FLOOR_CHOICES),
     floor: z.string().regex(/^\d*$/, t("validation.numbersOnly")).optional(),
     totalFloors: z
@@ -128,6 +135,10 @@ const makeSchema = (t: ReturnType<typeof useT>) =>
       // "0" passes the digits test but is not a price.
       .refine((v) => Number(v) > 0, t("validation.priceRequired")),
     address: z.string().trim().optional(),
+    areaM2: z
+      .string()
+      .regex(/^\d*\.?\d*$/, t("validation.numbersOnly"))
+      .optional(),
     phone: z
       .string()
       .trim()
@@ -175,9 +186,20 @@ const makeSchema = (t: ReturnType<typeof useT>) =>
 type FormData = z.infer<ReturnType<typeof makeSchema>>;
 
 export default function AddListingScreen() {
+  // Gated at the screen, not at every entry point: however a guest gets here
+  // (home quick action, tab, deep link), they meet the same prompt.
+  const authed = useIsAuthed();
+
   const [category, setCategory] = useState<PropertyCategory>("APARTMENT");
   const [purpose, setPurpose] = useState<OfferPurpose>("SALE");
   const [drawing, setDrawing] = useState(false);
+  // POLYGON = drawn boundary (precise, derives area); PIN = one dropped point
+  // (honest for an apartment in a block). Exactly one ships with the listing.
+  const [locMode, setLocMode] = useState<"POLYGON" | "PIN">("POLYGON");
+  const [pin, setPin] = useState<[number, number] | null>(null);
+  const [pinPicking, setPinPicking] = useState(false);
+  const [properties, setProperties] = useState<string[]>([]);
+  const [offerCurrency, setOfferCurrency] = useState<"USD" | "UZS">("USD");
   const [polygon, setPolygon] = useState<[number, number][]>([]);
 
   // Only the title chains: number-pad keyboards have no "next" key, so the
@@ -198,6 +220,7 @@ export default function AddListingScreen() {
   const t = useT();
 
   const schema = useMemo(() => makeSchema(t), [t]);
+
   const categoryOptions = useMemo<SelectGridOption<PropertyCategory>[]>(
     () =>
       CATEGORIES.map((value) => ({
@@ -239,7 +262,6 @@ export default function AddListingScreen() {
     defaultValues: {
       title: "",
       rooms: "",
-      areaM2: "",
       price: "",
       // The default category is APARTMENT, and an apartment in a block is the
       // common case here — so the two fields start open rather than behind a
@@ -248,6 +270,7 @@ export default function AddListingScreen() {
       floor: "",
       totalFloors: "",
       address: "",
+      areaM2: "",
       phone: "",
       description: "",
     },
@@ -276,27 +299,37 @@ export default function AddListingScreen() {
   };
 
   const hasBoundary = polygon.length >= MIN_POLYGON_POINTS;
+  const hasLocation = locMode === "POLYGON" ? hasBoundary : pin !== null;
 
   /**
-   * The drawn boundary already is the area, to the metre — retyping it from
-   * the header of the map sheet is busywork. It fills the field on save, but
-   * only while the field is empty or still holds the last value this put
-   * there, so a number typed by hand is never overwritten.
+   * The address comes from the map, not the keyboard: reverse-geocode the
+   * boundary's centre whenever it is (re)drawn. Best effort — a geocoder
+   * miss just leaves the field blank, and the server stores whatever came.
    */
-  const autoArea = useRef<string | null>(null);
-  const fillAreaFrom = (points: [number, number][]) => {
-    if (points.length < MIN_POLYGON_POINTS) return;
-    const current = getValues("areaM2") ?? "";
-    if (current && current !== autoArea.current) return;
+  const fillAddressAt = async (longitude: number, latitude: number) => {
+    try {
+      // Suggest, never overwrite: a typed address survives map edits.
+      if (getValues("address")?.trim()) return;
+      const [place] = await Location.reverseGeocodeAsync({ latitude, longitude });
+      const line = [place?.street ?? place?.name, place?.district, place?.city]
+        .filter(Boolean)
+        .join(", ");
+      if (line) setValue("address", line, { shouldValidate: true });
+    } catch {
+      // Offline or geocoder refused — the field just stays empty.
+    }
+  };
 
-    const measured = String(Math.round(polygonAreaM2(points)));
-    autoArea.current = measured;
-    setValue("areaM2", measured, { shouldValidate: true });
+  const fillAddressFrom = (points: [number, number][]) => {
+    if (points.length < MIN_POLYGON_POINTS) return;
+    const latitude = points.reduce((a, p) => a + p[1], 0) / points.length;
+    const longitude = points.reduce((a, p) => a + p[0], 0) / points.length;
+    return fillAddressAt(longitude, latitude);
   };
 
   const onSubmit = (d: FormData) => {
-    if (!hasBoundary) {
-      notify("add.missingBoundaryTitle", "add.missingBoundaryMessage");
+    if (!hasLocation) {
+      notify("add.missingLocationTitle", "add.missingLocationMessage");
       return;
     }
     // A listing with no photo is a listing nobody opens, so the API's optional
@@ -317,21 +350,35 @@ export default function AddListingScreen() {
       category,
       title: d.title.trim(),
       rooms: d.rooms ? Number(d.rooms) : undefined,
-      areaM2: d.areaM2 ? Number(d.areaM2) : undefined,
       // Both stay off the payload unless the category can carry them AND the
       // owner said it does — the server rejects a floor on anything else.
       floor: sendFloors && d.floor ? Number(d.floor) : undefined,
       totalFloors:
         sendFloors && d.totalFloors ? Number(d.totalFloors) : undefined,
       address: d.address?.trim() || undefined,
+      ...(properties.length ? { properties } : {}),
       contactPhone: d.phone?.trim() || undefined,
       descriptionHtml: description ? textToHtml(description) : undefined,
-      coordinates: [closeRing(polygon)],
-      offers: [{ purpose, price: Number(d.price), currency: "USD" }],
+      ...(locMode === "POLYGON"
+        ? { coordinates: [closeRing(polygon)] }
+        : {
+            point: pin!,
+            // A pin has no boundary to measure, so the typed m² is the only
+            // source; the server refuses it on polygon listings anyway.
+            ...(d.areaM2 ? { areaM2: Number(d.areaM2) } : {}),
+          }),
+      offers: [{ purpose, price: Number(d.price), currency: offerCurrency }],
       images: toPayload(),
     });
   };
 
+  if (!authed) {
+    return (
+      <Screen centered>
+        <GuestPrompt subtitle={t("auth.guestAddSubtitle")} />
+      </Screen>
+    );
+  }
   return (
     <Screen edges={HEADER_EDGES}>
       <View style={{ gap: spacing.lg, paddingBottom: spacing.lg }}>
@@ -368,6 +415,16 @@ export default function AddListingScreen() {
             />
           )}
         />
+        {/* The seller quotes in whichever currency they think in; viewers see
+            it converted to their own preference either way. */}
+        <SegmentedControl
+          segments={[
+            { value: "USD", label: "USD" },
+            { value: "UZS", label: "UZS" },
+          ]}
+          value={offerCurrency}
+          onChange={setOfferCurrency}
+        />
         <Controller
           control={control}
           name="price"
@@ -377,7 +434,7 @@ export default function AddListingScreen() {
               label={t("add.price")}
               placeholder={t("add.pricePlaceholder")}
               keyboardType="number-pad"
-              suffix="$"
+              suffix={offerCurrency === "USD" ? "$" : t("listings.som")}
               value={value}
               onChangeText={onChange}
               onBlur={onBlur}
@@ -400,22 +457,35 @@ export default function AddListingScreen() {
             />
           )}
         />
-        <Controller
-          control={control}
-          name="areaM2"
-          render={({ field: { value, onChange, onBlur } }) => (
-            <TextField
-              label={t("add.area")}
-              placeholder={t("add.areaPlaceholder")}
-              keyboardType="decimal-pad"
-              suffix="m²"
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              error={errors.areaM2?.message}
-            />
-          )}
-        />
+        {/* Two sources, one field: a boundary measures itself (read-only),
+            a pin knows nothing about size, so the owner types it. */}
+        {locMode === "POLYGON" ? (
+          <TextField
+            label={t("add.area")}
+            placeholder="—"
+            suffix="m²"
+            editable={false}
+            value={hasBoundary ? String(Math.round(polygonAreaM2(polygon))) : ""}
+            hint={t("add.areaAuto")}
+          />
+        ) : (
+          <Controller
+            control={control}
+            name="areaM2"
+            render={({ field: { value, onChange, onBlur } }) => (
+              <TextField
+                label={t("add.area")}
+                placeholder={t("add.areaPlaceholder")}
+                suffix="m²"
+                keyboardType="decimal-pad"
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                error={errors.areaM2?.message}
+              />
+            )}
+          />
+        )}
         {showFloors ? (
           <Section title={t("add.floors")}>
             <View style={{ gap: spacing.md }}>
@@ -489,6 +559,8 @@ export default function AddListingScreen() {
           </Section>
         ) : null}
 
+        {/* Seeded by the map when a boundary/pin lands, but the owner has
+            the last word — geocoders miss half the mahallas here. */}
         <Controller
           control={control}
           name="address"
@@ -539,23 +611,65 @@ export default function AddListingScreen() {
           )}
         />
 
-        <Section title={t("add.boundary")}>
+        <Section title={t("add.propertiesTitle")}>
+          <View
+            style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}
+          >
+            {LISTING_PROPERTY_KEYS.map((key) => (
+              <Chip
+                key={key}
+                label={t(`props.${key}`)}
+                selected={properties.includes(key)}
+                onPress={() =>
+                  setProperties((current) =>
+                    current.includes(key)
+                      ? current.filter((k) => k !== key)
+                      : [...current, key],
+                  )
+                }
+              />
+            ))}
+          </View>
+        </Section>
+
+        <Section title={t("add.location")}>
           <Card>
             <View style={{ gap: spacing.md }}>
+              {/* Icons only — the Russian labels truncated both segments;
+                  the summary line right below says the same in words. */}
+              <SegmentedControl
+                segments={[
+                  { value: "POLYGON", icon: "analytics-outline" },
+                  { value: "PIN", icon: "pin-outline" },
+                ]}
+                value={locMode}
+                onChange={setLocMode}
+              />
+              <Text style={text.caption}>
+                {t(locMode === "POLYGON" ? "add.locationPolygon" : "add.locationPin")}
+              </Text>
               <Text style={text.body}>
-                {hasBoundary
-                  ? t("add.boundarySummary", {
-                      count: polygon.length,
-                      area: formatAreaM2(polygonAreaM2(polygon)),
-                    })
-                  : t("add.noBoundary")}
+                {locMode === "POLYGON"
+                  ? hasBoundary
+                    ? t("add.boundarySummary", {
+                        count: polygon.length,
+                        area: formatAreaM2(polygonAreaM2(polygon)),
+                      })
+                    : t("add.noBoundary")
+                  : pin
+                    ? t("add.pinSet")
+                    : t("add.noPin")}
               </Text>
               <Button
-                title={t("add.drawOnMap")}
-                icon="map-outline"
+                title={
+                  locMode === "POLYGON" ? t("add.drawOnMap") : t("add.dropPin")
+                }
+                icon={locMode === "POLYGON" ? "map-outline" : "pin-outline"}
                 variant="secondary"
                 size="sm"
-                onPress={() => setDrawing(true)}
+                onPress={() =>
+                  locMode === "POLYGON" ? setDrawing(true) : setPinPicking(true)
+                }
               />
             </View>
           </Card>
@@ -584,6 +698,19 @@ export default function AddListingScreen() {
       {/* Mounted only while open: the sheet seeds its draft ring from `initial`
           on mount, so a permanently mounted one would reopen holding the points
           from a cancelled session. */}
+      {pinPicking ? (
+        <PinPickerModal
+          visible
+          initial={pin}
+          onCancel={() => setPinPicking(false)}
+          onSave={(p) => {
+            setPin(p);
+            void fillAddressAt(p[0], p[1]);
+            setPinPicking(false);
+          }}
+        />
+      ) : null}
+
       {drawing ? (
         <PolygonPickerModal
           visible
@@ -591,7 +718,7 @@ export default function AddListingScreen() {
           onCancel={() => setDrawing(false)}
           onSave={(points) => {
             setPolygon(points);
-            fillAreaFrom(points);
+            void fillAddressFrom(points);
             setDrawing(false);
           }}
         />

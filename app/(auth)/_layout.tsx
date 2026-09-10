@@ -5,7 +5,7 @@ import { useTheme } from "../../src/theme/useTheme";
 export default function AuthLayout() {
   const status = useAuthStore((s) => s.status);
   const { colors } = useTheme();
-  if (status === "authenticated") return <Redirect href="/(tabs)/sotuv" />;
+  if (status === "authenticated") return <Redirect href="/(tabs)/home" />;
 
   return (
     <Stack

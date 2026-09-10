@@ -3,7 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import { chatApi, ChatMessage } from "../api/chat.api";
 import { queryClient } from "@/src/lib/query-client";
 
-export function useMessages(conversationId: string) {
+export function useMessages(conversationId: string, enabled = true) {
   const [loadingMore, setLoadingMore] = useState(false);
   const exhausted = useRef(false);
 
@@ -11,6 +11,7 @@ export function useMessages(conversationId: string) {
     queryKey: ["chat", "messages", conversationId],
     queryFn: () => chatApi.listMessages(conversationId),
     staleTime: Infinity,
+    enabled,
   });
 
   const loadOlder = useCallback(async () => {

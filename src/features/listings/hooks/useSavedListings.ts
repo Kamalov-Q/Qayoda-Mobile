@@ -18,10 +18,22 @@ export function useSavedListings() {
   });
 }
 
-/** Whether this listing is in the saved set, from the cached saved feed. */
+/**
+ * Whether this listing is in the saved set. Its own query subscription with
+ * `select`, NOT `useSavedListings().data.some(...)`: the naive version made
+ * every heart on the feed re-render (and the screen stutter) whenever ANY
+ * save changed, because each subscribed to the whole array. `select` narrows
+ * the subscription to one boolean — only the toggled heart repaints.
+ */
 export function useIsSaved(listingId: string): boolean {
-  const { data } = useSavedListings();
-  return !!data?.some((l) => l.id === listingId);
+  const authed = useAuthStore((s) => s.status === "authenticated");
+  const { data } = useQuery({
+    queryKey: SAVED_KEY,
+    queryFn: listingApi.getSaved,
+    enabled: authed,
+    select: (listings) => listings.some((l) => l.id === listingId),
+  });
+  return !!data;
 }
 
 interface ToggleSaveInput {

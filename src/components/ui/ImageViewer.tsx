@@ -190,20 +190,26 @@ export function ImageViewer({
     ],
   }));
 
-  if (!uri) return null;
-
   return (
-    <Modal visible transparent statusBarTranslucent onRequestClose={close}>
+    // Mounted permanently, shown via `visible` — dismissing a transparent
+    // modal by unmounting it is an iOS race that leaves the dead modal host
+    // eating touches (unresponsive back buttons after viewing a photo).
+    <Modal
+      visible={uri !== null}
+      transparent
+      statusBarTranslucent
+      onRequestClose={close}
+    >
       {/* A Modal is its own native view tree: on Android the gestures inside
           it are dead unless the content has its own root. */}
       <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#000" }}>
         <GestureDetector gesture={gesture}>
           <Animated.View style={[{ flex: 1 }, style]}>
             <Image
-              source={{ uri }}
+              source={uri ? { uri } : undefined}
               style={{ width, height }}
               contentFit="contain"
-              cachePolicy="memory-disk"
+              cachePolicy="disk"
               transition={120}
             />
           </Animated.View>

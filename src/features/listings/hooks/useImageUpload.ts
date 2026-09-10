@@ -18,7 +18,7 @@ export interface ManagedImage {
   remote?: UploadedImage;
 }
 
-export const MAX_IMAGES = 15;
+export const MAX_IMAGES = 30;
 
 // Long edge the originals are downscaled to before upload. A modern phone
 // photo is 8–12 MB; this lands around 300 KB with no visible loss at the sizes

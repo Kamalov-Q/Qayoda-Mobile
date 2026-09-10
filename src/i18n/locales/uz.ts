@@ -31,6 +31,23 @@ export const uz = {
     profile: "Profil",
   },
 
+  intro: {
+    s1Title: "Uy — xaritada, chegarasi bilan",
+    s1Text:
+      "Har bir e'lon xaritada aniq turadi: hovli va yerlar — chizilgan chegarasi bilan, kvartiralar — nuqta bilan. Qayerdaligini taxmin qilish shart emas.",
+    s2Title: "E'lon joylash — bir necha daqiqa",
+    s2Text:
+      "Chegarani chizing yoki nuqta qo'ying — manzil va maydon avtomatik aniqlanadi. Narxni dollar yoki so'mda kiriting.",
+    s3Title: "Egasi bilan to'g'ridan-to'g'ri",
+    s3Text:
+      "Vositachisiz yozishing: chat ilovaning ichida, telefon raqami esa har bir e'londa.",
+    s4Title: "O'zingizga moslang",
+    s4Text:
+      "Narxlarni USD yoki so'mda ko'ring, yoqqanini saqlang, o'xshash e'lonlarni bir joyda toping.",
+    next: "Keyingisi",
+    start: "Boshlash",
+  },
+
   home: {
     greeting: "Assalomu alaykum!",
     greetingName: "Assalomu alaykum, {{name}}!",
@@ -39,6 +56,8 @@ export const uz = {
     heroSubtitle:
       "Har bir e'lon xaritada o'z chegarasi bilan turadi — qayerda ekanini taxmin qilish shart emas.",
     heroCta: "E'lonlarni ko'rish",
+    latestTitle: "Yangi e'lonlar",
+    seeAll: "Hammasini ko'rish",
     quickTitle: "Tezkor amallar",
     actionBrowse: "Sotuvdagi e'lonlar",
     actionAdd: "E'lon joylash",
@@ -86,41 +105,82 @@ export const uz = {
   },
 
   auth: {
-    login: "Kirish",
-    register: "Ro'yxatdan o'tish",
     welcomeTitle: "Xush kelibsiz",
-    welcomeSubtitle: "Hisobingizga kirish uchun email manzilingizni kiriting.",
-    registerTitle: "Hisob yarating",
-    registerSubtitle: "Boshlash uchun email manzilingizni kiriting.",
-    email: "Email",
-    emailPlaceholder: "email@example.com",
-    password: "Parol",
-    passwordPlaceholder: "••••••••",
-    loginWithPassword: "Parol bilan kirish",
-    loginWithPasswordTitle: "Parol bilan kirish",
-    loginWithPasswordSubtitle: "Email va parolingizni kiriting.",
+    welcomeSubtitle:
+      "Telefon raqamingizni kiriting — kod SMS orqali keladi. Hisob yo'q bo'lsa, o'zi yaratiladi.",
+    phone: "Telefon raqami",
+    phonePlaceholder: "90 123 45 67",
+    sendCode: "Kod yuborish",
+    orContinueWith: "yoki",
+    continueWithGoogle: "Google orqali kirish",
+    continueWithTelegram: "Telegram orqali kirish",
     showPassword: "Parolni ko'rsatish",
     hidePassword: "Parolni yashirish",
 
-    emailNotFound:
-      "Bu email bilan hisob topilmadi. Avval ro'yxatdan o'ting.",
-    emailTaken:
-      "Bu email allaqachon ro'yxatdan o'tgan. Kirish bo'limidan foydalaning.",
+    password: "Parol",
+    passwordPlaceholder: "••••••••",
+    changeNumber: "Raqamni o'zgartirish",
+    loginWithPasswordSubtitle: "Parolingizni kiriting.",
+    passwordRepeat: "Parolni takrorlang",
+    login: "Kirish",
+    forgotPassword: "Parolni unutdingizmi?",
+    changePassword: "Parolni o'zgartirish",
+    currentPassword: "Joriy parol",
+    passwordChanged: "Parol o'zgartirildi",
+    setPasswordTitle: "Parol o'rnating",
+    setPasswordSubtitle:
+      "Keyingi safar telefon raqamingiz va shu parol bilan kirasiz.",
+    passwordSet: "Parol saqlandi",
+    resetTitle: "Parolni tiklash",
+    resetSubtitle: "{{phone}} raqamiga kod yubordik. Kodni va yangi parolni kiriting.",
 
     otpTitle: "Kodni kiriting",
-    otpSubtitle: "{{email}} manziliga 6 xonali kod yubordik.",
+    otpSubtitle: "{{phone}} raqamiga 6 xonali kod yubordik.",
     otpResend: "Kodni qayta yuborish",
     otpResendIn: "Qayta yuborish ({{seconds}}s)",
     otpResent: "Yangi kod yuborildi",
-    otpSent: "Kod emailingizga yuborildi",
-
-    detailsTitle: "Ma'lumotlaringiz",
-    detailsSubtitle: "Hisobingizni yakunlash uchun quyidagilarni to'ldiring.",
+    otpSent: "Kod SMS orqali yuborildi",
     name: "Ism",
     namePlaceholder: "Ismingiz",
     surname: "Familiya",
     surnamePlaceholder: "Familiyangiz",
+
+    telegramTitle: "Telegramda tasdiqlang",
+    telegramSubtitle:
+      "Telegram ochiladi — botda «Start» tugmasini bosing. Kodni solishtiring:",
+    telegramOpen: "Telegramni ochish",
+    telegramWaiting: "Tasdiqlashni kutmoqdamiz…",
+    telegramExpired: "Havola eskirdi. Qaytadan urinib ko'ring.",
+    telegramLinked: "Telegram hisobga bog'landi",
+    googleCancelled: "Google orqali kirish bekor qilindi",
+    googleUnavailable: "Google orqali kirish bu qurilmada mavjud emas",
+
+    methods: "Kirish usullari",
+    methodPhone: "Telefon raqami",
+    methodGoogle: "Google",
+    methodTelegram: "Telegram",
+    linked: "Bog'langan",
+    notLinked: "Bog'lanmagan",
+    link: "Bog'lash",
+    unlink: "Uzish",
+    unlinkConfirmTitle: "Kirish usulini uzish",
+    unlinkConfirmMessage:
+      "Bu usul orqali endi kira olmaysiz. Davom etasizmi?",
+    unlinked: "Kirish usuli uzildi",
+    googleLinked: "Google hisobga bog'landi",
+
+    welcomeNew: "Xush kelibsiz!",
+    completeTitle: "O'zingiz haqingizda",
+    completeSubtitle:
+      "E'lonlar va suhbatlarda ko'rinadigan ism-familiyangizni kiriting.",
     finish: "Yakunlash",
+    signInRequired: "Buning uchun tizimga kirish kerak",
+    guestTitle: "Hisobingizga kiring",
+    guestSubtitle:
+      "E'lonlarni ko'rish uchun hisob shart emas. Saqlash, yozish va e'lon joylash uchun kiring.",
+    signIn: "Kirish",
+    guestChatSubtitle: "Xabarlashish uchun tizimga kiring.",
+    guestAddSubtitle: "E'lon joylash uchun tizimga kiring.",
 
     loggedIn: "Tizimga kirdingiz",
     loggedOut: "Hisobdan chiqdingiz",
@@ -129,8 +189,24 @@ export const uz = {
     logoutConfirmMessage: "Hisobingizdan chiqmoqchimisiz?",
   },
 
+  props: {
+    REPAIRED: "Ta'mirlangan",
+    FURNISHED: "Mebel bilan",
+    AC: "Konditsioner",
+    HEATING: "Isitish tizimi",
+    PARKING: "Avtoturargoh",
+    GARAGE: "Garaj",
+    BALCONY: "Balkon",
+    ELEVATOR: "Lift",
+    INTERNET: "Internet",
+    SECURITY: "Qo'riqlanadi",
+    POOL: "Basseyn",
+    GARDEN: "Bog'",
+  },
+
   validation: {
     emailInvalid: "Noto'g'ri email format",
+    passwordMismatch: "Parollar mos emas",
     passwordRequired: "Parolni kiriting",
     minChars: "Kamida {{count}} ta belgi",
     maxChars: "Ko'pi bilan {{count}} ta belgi",
@@ -149,6 +225,14 @@ export const uz = {
     newListing: "E'lon", // sits next to a "+" icon, so no plus in the string
     addListing: "E'lon qo'shish",
     emptyMine: "Sizda hali e'lonlar yo'q",
+    today: "Bugun",
+    daysAgo: "{{count}} kun oldin",
+    monthsAgo: "{{count}} oy oldin",
+    searchPlaceholder: "Qidirish — nom yoki manzil",
+    foundShort: "Topildi: {{count}}",
+    propertiesTitle: "Xususiyatlar",
+    som: "so'm",
+    similarTitle: "O'xshash e'lonlar",
     countFound: "{{count}} ta e'lon topildi",
     emptyFeed: "Bu hududda e'lonlar topilmadi",
     loadError: "Yuklashda xatolik",
@@ -191,6 +275,7 @@ export const uz = {
     NON_RESIDENTIAL: "Noturar joy",
     BUILDING: "Bino",
     DACHA: "Dacha",
+    HOTEL: "Mehmonxona",
   },
 
   purposes: {
@@ -205,11 +290,24 @@ export const uz = {
     purpose: "Maqsad",
     listingTitle: "Sarlavha",
     listingTitlePlaceholder: "Chilonzorda 3 xonali kvartira",
-    price: "Narx (USD)",
+    price: "Narx",
     pricePlaceholder: "50000",
     rooms: "Xonalar soni",
     roomsPlaceholder: "3",
     area: "Maydon (m²)",
+    propertiesTitle: "Qo'shimcha xususiyatlar",
+    location: "Joylashuv",
+    locationPolygon: "Chegara chizish",
+    locationPin: "Nuqta qo'yish",
+    pinTitle: "Joylashuvni belgilang",
+    pinHint: "Xaritaga bosib nuqta qo'ying",
+    dropPin: "Xaritada belgilash",
+    pinSet: "Nuqta qo'yildi",
+    noPin: "Nuqta hali qo'yilmagan",
+    missingLocationTitle: "Joylashuv belgilanmagan",
+    missingLocationMessage:
+      "E'lonni joylashdan oldin chegara chizing yoki xaritaga nuqta qo'ying.",
+    areaAuto: "Xaritada chizilgan chegaradan avtomatik hisoblanadi",
     areaPlaceholder: "80",
     floors: "Qavatlar",
     hasFloors: "Qavati bor",
@@ -255,10 +353,12 @@ export const uz = {
     purpose: "Maqsad",
     status: "Holati",
     category: "Turi",
+    categoryPill: "Ko'chmas mulk turi",
+    allTypes: "Barcha turlar",
     sort: "Saralash",
     address: "Manzil",
     addressPlaceholder: "Masalan: Chilonzor",
-    price: "Narx (USD)",
+    price: "Narx",
     priceFrom: "Dan",
     priceTo: "Gacha",
     sortDefault: "Standart",
@@ -305,6 +405,8 @@ export const uz = {
   },
 
   map: {
+    grid: "Katak",
+    clusterLabel: "{{count}} ta e'lon",
     zoomIn: "Yaqinlashtirish",
     zoomOut: "Uzoqlashtirish",
     expand: "Xaritani butun ekranga ochish",
@@ -337,6 +439,8 @@ export const uz = {
     linkAbout: "Ilova haqida",
     edit: "Profilni tahrirlash",
     phone: "Telefon raqami",
+    email: "Email",
+    contactHint: "Raqam SMS-kod bilan tasdiqlangan va bu yerda o'zgartirilmaydi.",
     changePhoto: "Rasm tanlash",
     viewPhoto: "Rasmni ochish",
     removePhoto: "Rasmni o'chirish",
@@ -348,6 +452,9 @@ export const uz = {
 
   settings: {
     title: "Sozlamalar",
+    currency: "Valyuta",
+    currencyUsd: "AQSH dollari (USD)",
+    currencyUzs: "O'zbek so'mi (UZS)",
     appearance: "Ko'rinish",
     theme: "Mavzu",
     themeSystem: "Tizim",
@@ -390,11 +497,34 @@ export const uz = {
     galleryPermissionMessage:
       "Rasmni saqlash uchun galereyaga ruxsat berishingiz kerak",
     // Guest-side entry point on the listing detail screen.
+    draftHint: "Xabar hali yuborilmadi — matnni xohlagancha tahrirlab, yuboring.",
+    composeTitle: "Xabar yuborish",
+    sendMessage: "Yuborish",
+    starterTemplate:
+      "Assalomu alaykum! \"{{title}}\" e'loningiz haqida yozyapman. Hali dolzarbmi?",
     contactOwner: "Xabar yozish",
     starter: "Assalomu alaykum! E'loningiz haqida yozyapman.",
   },
 
   errors: {
+    otpInvalid: "Kod noto'g'ri yoki muddati tugagan",
+    otpLocked: "Ko'p marta xato kiritildi. Yangi kod so'rang.",
+    otpCooldown: "Yangi kodni {{seconds}} soniyadan keyin so'rashingiz mumkin",
+    otpRateLimited:
+      "Bu raqamga juda ko'p kod yuborildi. Bir soatdan keyin urinib ko'ring.",
+    smsFailed: "SMS yuborib bo'lmadi. Keyinroq urinib ko'ring.",
+    googleFailed: "Google orqali kirib bo'lmadi. Qaytadan urinib ko'ring.",
+    telegramExpired: "Telegram sessiyasi eskirgan. Qaytadan boshlang.",
+    accountBanned: "Hisobingiz bloklangan",
+    accountDeleted: "Hisob o'chirilgan",
+    identityTaken: "Bu hisob boshqa foydalanuvchiga bog'langan",
+    providerAlreadyLinked: "Bu usul allaqachon bog'langan",
+    currentPasswordWrong: "Joriy parol noto'g'ri",
+    lastIdentity: "Yagona kirish usulini o'chirib bo'lmaydi",
+    invalidCredentials: "Telefon raqami yoki parol noto'g'ri",
+    passwordNotSet:
+      "Bu hisobga parol o'rnatilmagan. SMS-kod orqali kiring va parol o'rnating.",
+    accountNotFound: "Bu raqam bilan hisob topilmadi",
     network: "Internet aloqasi yo'q. Ulanishni tekshiring.",
     sessionExpired: "Sessiya muddati tugadi. Qaytadan kiring.",
     unauthorized: "Ruxsat berilmadi",

@@ -4,7 +4,8 @@
 // happened to re-render it.
 import { useCallback } from "react";
 import { useT } from "../../../i18n";
-import { formatPrice } from "./geo";
+import { usePreferences } from "../../../lib/preferences";
+import { useRates } from "../hooks/useRates";
 
 /**
  * The description field is plain text but the API column is HTML, so what the
@@ -47,9 +48,16 @@ export function htmlToText(html: string | null | undefined): string {
     .trim();
 }
 
-/** `(price, currency, purpose) => "$1,200/oy"` */
+/**
+ * `(price, currency, purpose) => "$1,200/oy"` — in the VIEWER's currency:
+ * the stored price converts through the CBU rate whenever the seller quoted
+ * in the other one. No rate yet (first boot, offline) → shown as stored.
+ */
 export function usePriceFormatter() {
   const t = useT();
+  const target = usePreferences((s) => s.currency);
+  const { data: rates } = useRates();
+
   return useCallback(
     (price: string | number, currency: string, purpose?: string) => {
       const suffix =
@@ -58,9 +66,24 @@ export function usePriceFormatter() {
           : purpose === "RENT_DAILY"
             ? t("listings.perDay")
             : "";
-      return formatPrice(price, currency, suffix);
+
+      let value = Number(price);
+      let shown = currency;
+      if (currency !== target && rates?.usdToUzs) {
+        value =
+          currency === "USD" ? value * rates.usdToUzs : value / rates.usdToUzs;
+        shown = target;
+      }
+
+      const body =
+        shown === "UZS"
+          ? `${Math.round(value)
+              .toLocaleString("en-US")
+              .replace(/,/g, " ")} ${t("listings.som")}`
+          : `$${Math.round(value).toLocaleString("en-US")}`;
+      return body + suffix;
     },
-    [t],
+    [t, target, rates],
   );
 }
 
@@ -82,6 +105,22 @@ export function useSpecsFormatter() {
       ]
         .filter(Boolean)
         .join(" · "),
+    [t],
+  );
+}
+
+/** "Bugun" / "5 kun oldin" — the freshness stamp on feed cards. */
+export function useRelativeDate() {
+  const t = useT();
+  return useCallback(
+    (iso: string | null) => {
+      if (!iso) return null;
+      const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+      if (!Number.isFinite(days) || days < 0) return null;
+      if (days === 0) return t("listings.today");
+      if (days < 30) return t("listings.daysAgo", { count: days });
+      return t("listings.monthsAgo", { count: Math.floor(days / 30) });
+    },
     [t],
   );
 }

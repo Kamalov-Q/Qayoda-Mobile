@@ -6,8 +6,10 @@ import { useTheme } from "../../theme/useTheme";
 
 interface Segment<T extends string> {
   value: T;
-  label: string;
-  /** Optional glyph before the label — the segment stays centred either way. */
+  /** Omit for an icon-only segment (the icon becomes required reading, so
+   *  pass `accessibilityLabel` semantics through the label anyway when the
+   *  glyph is not universally understood). */
+  label?: string;
   icon?: keyof typeof Ionicons.glyphMap;
 }
 
@@ -87,16 +89,18 @@ function SegmentedControlInner<T extends string>({
                 color={active ? colors.onPrimary : colors.textMuted}
               />
             ) : null}
-            <Text
-              style={{
-                ...type.bodyStrong,
-                fontSize: metrics.font,
-                color: active ? colors.onPrimary : colors.textMuted,
-              }}
-              numberOfLines={1}
-            >
-              {s.label}
-            </Text>
+            {s.label ? (
+              <Text
+                style={{
+                  ...type.bodyStrong,
+                  fontSize: metrics.font,
+                  color: active ? colors.onPrimary : colors.textMuted,
+                }}
+                numberOfLines={1}
+              >
+                {s.label}
+              </Text>
+            ) : null}
           </Pressable>
         );
       })}

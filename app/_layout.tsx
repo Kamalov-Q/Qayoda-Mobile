@@ -15,6 +15,9 @@ import { ToastHost } from "../src/components/ui/Toast";
 import { DialogHost } from "../src/components/ui/Dialog";
 import { useT } from "../src/i18n";
 
+// NOTE: enableFreeze(true) was tried here and reverted — react-freeze hard-
+// froze the map screen on state updates. The lag it targeted is handled by
+// focus-gated queries in sotuv instead.
 SplashScreen.preventAutoHideAsync(); // hold native splash until session resolves — no login-screen flash
 
 export default function RootLayout() {
@@ -59,8 +62,20 @@ export default function RootLayout() {
             {/* Groups render their own chrome — tabs have a tab bar, auth has
                 in-screen BackButtons — so the stack header stays off there. */}
             <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="intro" options={{ headerShown: false }} />
             <Stack.Screen name="(auth)" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            {/* Draws its own BackButton like the auth screens; sits outside
+                (auth) because linking Telegram happens while signed in, and
+                that group redirects signed-in users away. */}
+            <Stack.Screen name="telegram" options={{ headerShown: false }} />
+            {/* No header on purpose: onboarding is the one screen a brand-new
+                account must finish, so it offers no way back. */}
+            <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+            <Stack.Screen
+              name="set-password"
+              options={{ headerShown: false }}
+            />
 
             {/* These two were unreachable-back before: with <Slot /> there was
                 no stack header and no gesture, so a push into them stranded
@@ -79,6 +94,14 @@ export default function RootLayout() {
             <Stack.Screen
               name="listing/[id]/edit-images"
               options={{ title: t("listings.editImages") }}
+            />
+            <Stack.Screen
+              name="settings"
+              options={{ title: t("settings.title") }}
+            />
+            <Stack.Screen
+              name="change-password"
+              options={{ title: t("auth.changePassword") }}
             />
             <Stack.Screen
               name="profile/edit"

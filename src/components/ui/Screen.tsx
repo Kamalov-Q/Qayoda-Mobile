@@ -4,7 +4,6 @@ import {
   ViewStyle,
   ScrollView,
   KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 import { spacing } from "../../theme/tokens";
@@ -54,7 +53,10 @@ export function Screen({
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={edges}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        // "padding" on Android too: with edge-to-edge the window stops
+        // resizing for the keyboard, and undefined left bottom fields hidden
+        // behind it (the chat composer bug, everywhere else).
+        behavior="padding"
       >
         {scroll ? (
           <ScrollView
