@@ -5,6 +5,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { radii } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 import { resolveMediaUrl } from "../../lib/media-url";
+import { PulseHalo } from "./PulseHalo";
+
+// Only a large avatar pulses — the one on a profile page. A column of pulsing
+// dots down the inbox would be noise, and a dozen looping animations in a
+// scrolling list is work spent on nothing.
+const PULSE_MIN_SIZE = 64;
 
 interface Props {
   /** Full-size URL, thumb URL, or nothing — first non-null wins. */
@@ -94,12 +100,24 @@ export const Avatar = memo(function Avatar({
             right: 0,
             width: dot,
             height: dot,
-            borderRadius: radii.pill,
-            backgroundColor: colors.success,
-            borderWidth: 2,
-            borderColor: colors.bg,
+            alignItems: "center",
+            justifyContent: "center",
           }}
-        />
+        >
+          {size >= PULSE_MIN_SIZE ? (
+            <PulseHalo size={dot} color={colors.success} />
+          ) : null}
+          <View
+            style={{
+              width: dot,
+              height: dot,
+              borderRadius: radii.pill,
+              backgroundColor: colors.success,
+              borderWidth: 2,
+              borderColor: colors.bg,
+            }}
+          />
+        </View>
       ) : null}
     </View>
   );

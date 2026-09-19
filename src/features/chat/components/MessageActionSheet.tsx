@@ -95,9 +95,7 @@ export function MessageActionSheet({
                 gap: spacing.md,
                 paddingHorizontal: spacing.lg,
                 paddingVertical: spacing.md,
-                backgroundColor: pressed
-                  ? colors.surfaceRaised
-                  : "transparent",
+                backgroundColor: pressed ? colors.surfaceRaised : "transparent",
               })}
             >
               <Ionicons

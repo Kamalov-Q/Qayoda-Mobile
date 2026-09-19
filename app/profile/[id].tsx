@@ -27,6 +27,8 @@ import { resolveMediaUrl } from "../../src/lib/media-url";
 import { useUserProfile } from "../../src/features/users/hooks/useUserProfile";
 import { ListingCard } from "../../src/features/listings/components/ListingCard";
 import type { Listing } from "../../src/features/listings/api/listings.api";
+import { usePresence } from "../../src/features/chat/hooks/usePresence";
+import { PresenceStatus } from "../../src/features/chat/components/PresenceStatus";
 
 export default function UserProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -37,6 +39,7 @@ export default function UserProfileScreen() {
   const { data, isLoading, isError, error, refetch, isRefetching } =
     useUserProfile(id);
   const [viewingAvatar, setViewingAvatar] = useState(false);
+  const presence = usePresence(id);
 
   const photo = data?.avatarUrl ?? data?.avatarThumbUrl ?? null;
 
@@ -63,9 +66,15 @@ export default function UserProfileScreen() {
           accessibilityLabel={t("profile.viewPhoto")}
           style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
         >
-          <Avatar uri={photo} name={data?.fullName} size={104} />
+          <Avatar
+            uri={photo}
+            name={data?.fullName}
+            size={104}
+            online={presence?.online}
+          />
         </Pressable>
         <Text style={{ ...text.display, textAlign: "center" }}>{name}</Text>
+        <PresenceStatus presence={presence} />
         {data ? (
           <Text style={text.caption}>
             {t("userProfile.memberSince", {

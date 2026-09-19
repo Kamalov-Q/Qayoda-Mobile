@@ -10,7 +10,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { router } from "expo-router";
-import { useIsFocused } from "@react-navigation/native";
+import { useIsFocused } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Screen,
@@ -34,6 +34,11 @@ import {
   PropertyCategory,
 } from "../../src/features/listings/api/listings.api";
 import { useDebouncedValue } from "../../src/lib/use-debounced-value";
+import {
+  ALL_ICON,
+  CATEGORY_ICONS,
+  PURPOSE_ICONS,
+} from "../../src/features/listings/utils/icons";
 import { useMapViewport } from "../../src/features/listings/hooks/useMapViewport";
 import { useListingsFeed } from "../../src/features/listings/hooks/useListingsFeed";
 import { useRates } from "../../src/features/listings/hooks/useRates";
@@ -126,6 +131,9 @@ export default function SotuvScreen() {
   const [maxPrice, setMaxPrice] = useState("");
   const [address, setAddress] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // A listing's preview card is up on the map: the floating count steps aside
+  // so it doesn't sit on the card's "view details" link (it's in the header too).
+  const [cardOpen, setCardOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [purposeOpen, setPurposeOpen] = useState(false);
   // One search box drives both worlds: the feed's title+address search, and
@@ -164,7 +172,14 @@ export default function SotuvScreen() {
       priceMin: boundToUsd(debouncedMin),
       priceMax: boundToUsd(debouncedMax),
     }),
-    [debouncedQuery, debouncedAddress, category, debouncedMin, debouncedMax, boundToUsd],
+    [
+      debouncedQuery,
+      debouncedAddress,
+      category,
+      debouncedMin,
+      debouncedMax,
+      boundToUsd,
+    ],
   );
 
   // Unfocused (a listing pushed on top, another tab active) → both queries
@@ -204,16 +219,37 @@ export default function SotuvScreen() {
     view === "map" ? (visible?.features.length ?? 0) : feedItems.length;
 
   const purposeOptions = useMemo(
-    () => PURPOSES.map((value) => ({ value, label: t(`purposes.${value}`) })),
+    () =>
+      PURPOSES.map((value) => ({
+        value,
+        label: t(`purposes.${value}`),
+        icon: PURPOSE_ICONS[value],
+      })),
     [t],
   );
   const sortOptions = useMemo(
     () =>
       [
-        { value: "default", label: t("filters.sortDefault") },
-        { value: "priceAsc", label: t("filters.sortPriceAsc") },
-        { value: "priceDesc", label: t("filters.sortPriceDesc") },
-      ] as const satisfies readonly { value: Sort; label: string }[],
+        {
+          value: "default",
+          label: t("filters.sortDefault"),
+          icon: "time-outline",
+        },
+        {
+          value: "priceAsc",
+          label: t("filters.sortPriceAsc"),
+          icon: "trending-up-outline",
+        },
+        {
+          value: "priceDesc",
+          label: t("filters.sortPriceDesc"),
+          icon: "trending-down-outline",
+        },
+      ] as const satisfies readonly {
+        value: Sort;
+        label: string;
+        icon: keyof typeof Ionicons.glyphMap;
+      }[],
     [t],
   );
 
@@ -237,6 +273,7 @@ export default function SotuvScreen() {
       CATEGORIES.map((c) => ({
         value: c,
         label: c === "ALL" ? t("filters.allTypes") : t(`categories.${c}`),
+        icon: c === "ALL" ? ALL_ICON : CATEGORY_ICONS[c],
       })),
     [t],
   );
@@ -363,7 +400,11 @@ export default function SotuvScreen() {
             backgroundColor: pressed ? colors.surfaceRaised : colors.surface,
           })}
         >
-          <Ionicons name="navigate-outline" size={19} color={colors.textMuted} />
+          <Ionicons
+            name="navigate-outline"
+            size={19}
+            color={colors.textMuted}
+          />
         </Pressable>
       </View>
 
@@ -405,7 +446,7 @@ export default function SotuvScreen() {
       <View style={{ flex: 1 }}>
         <View
           style={{
-            ...StyleSheet.absoluteFillObject,
+            ...StyleSheet.absoluteFill,
             borderTopWidth: 1,
             borderColor: colors.border,
             backgroundColor: colors.surfaceSunken,
@@ -416,13 +457,14 @@ export default function SotuvScreen() {
             onRegionChange={onRegionChange}
             onPressListing={onPressItem}
             bottomInset={SWITCH_CLEARANCE}
+            onSelectionChange={setCardOpen}
           />
         </View>
 
         {view !== "map" ? (
           <View
             style={{
-              ...StyleSheet.absoluteFillObject,
+              ...StyleSheet.absoluteFill,
               backgroundColor: colors.bg,
               borderTopWidth: 1,
               borderColor: colors.border,
@@ -508,7 +550,7 @@ export default function SotuvScreen() {
 
         {/* Total count riding above the switch, reference-app style — on the
             map it is the only place the number fits without a header glance. */}
-        {view === "map" && !isLoading && !isError ? (
+        {view === "map" && !isLoading && !isError && !cardOpen ? (
           <View
             pointerEvents="none"
             style={{
@@ -530,7 +572,9 @@ export default function SotuvScreen() {
                 ...shadow.raised,
               }}
             >
-              <Text style={{ ...type.bodyStrong, fontSize: 13, color: colors.text }}>
+              <Text
+                style={{ ...type.bodyStrong, fontSize: 13, color: colors.text }}
+              >
                 {t("listings.foundShort", { count: shownCount })}
               </Text>
             </View>
@@ -553,7 +597,13 @@ export default function SotuvScreen() {
           }}
           pointerEvents="box-none"
         >
-          <View style={{ width: SWITCH_WIDTH, borderRadius: radii.pill, ...shadow.raised }}>
+          <View
+            style={{
+              width: SWITCH_WIDTH,
+              borderRadius: radii.pill,
+              ...shadow.raised,
+            }}
+          >
             <SegmentedControl
               segments={viewOptions}
               value={view}
@@ -611,12 +661,16 @@ export default function SotuvScreen() {
             returnKeyType="search"
           />
         </Section>
-        <Section title={`${t("filters.price")} (${displayCurrency})`}>
+        <Section title={t("filters.price")}>
+          {/* The track's range follows the purpose: a nightly rate and a
+              sale price differ by four orders of magnitude. */}
           <PriceRangeFilter
             min={minPrice}
             max={maxPrice}
             onChangeMin={setMinPrice}
             onChangeMax={setMaxPrice}
+            currency={displayCurrency}
+            scale={purpose}
           />
         </Section>
         <Section title={t("filters.sort")}>
@@ -708,8 +762,9 @@ const FeedRow = memo(function FeedRow({
     ? formatPrice(item.price, item.currency, purpose)
     : null;
   const meta =
-    [item.address, relativeDate(item.publishedAt)].filter(Boolean).join(" · ") ||
-    null;
+    [item.address, relativeDate(item.publishedAt)]
+      .filter(Boolean)
+      .join(" · ") || null;
 
   if (grid) {
     return (
@@ -744,7 +799,11 @@ const FeedRow = memo(function FeedRow({
 /** Save toggle for the card's photo overlay. The feed's row model is too slim
  *  to seed the Saved cache, so the tab itself fills in on the refetch the
  *  toggle kicks off. */
-const SaveHeart = memo(function SaveHeart({ listingId }: { listingId: string }) {
+const SaveHeart = memo(function SaveHeart({
+  listingId,
+}: {
+  listingId: string;
+}) {
   const { colors } = useTheme();
   const t = useT();
   const isSaved = useIsSaved(listingId);

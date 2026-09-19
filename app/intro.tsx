@@ -1,8 +1,8 @@
-// app/intro.tsx — the first-launch story, told once. Four swipes: what makes
-// this app different, then straight into browsing. The flag persists, so a
+// app/intro.tsx — the first-launch story, told once. Four swipes: the brand,
+// then what makes this app different, then straight into browsing. The flag persists, so a
 // returning user never sees it again; there is deliberately no skip — four
 // screens is the whole cost, the way banking apps do it.
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import Animated, { ZoomIn } from "react-native-reanimated";
 import {
   Screen,
   Button,
@@ -23,36 +25,56 @@ import { useTheme } from "../src/theme/useTheme";
 import { useT, type TranslationKey } from "../src/i18n";
 import { usePreferences } from "../src/lib/preferences";
 
-const SLIDES: {
-  icon: keyof typeof Ionicons.glyphMap;
+// The brand poster — its own artwork carries the "GROWEN CITY" wordmark and
+// tagline, so the slide under it only has to say welcome in the UI language.
+const HERO = require("../assets/images/intro-hero.jpg");
+
+type Slide = {
   titleKey: TranslationKey;
   textKey: TranslationKey;
-}[] = [
+} & (
+  | { icon: keyof typeof Ionicons.glyphMap; hero?: never }
+  | { hero: number; icon?: never }
+);
+
+const SLIDES: Slide[] = [
+  { hero: HERO, titleKey: "intro.welcomeTitle", textKey: "intro.welcomeText" },
   { icon: "map-outline", titleKey: "intro.s1Title", textKey: "intro.s1Text" },
-  { icon: "create-outline", titleKey: "intro.s2Title", textKey: "intro.s2Text" },
+  {
+    icon: "create-outline",
+    titleKey: "intro.s2Title",
+    textKey: "intro.s2Text",
+  },
   {
     icon: "chatbubbles-outline",
     titleKey: "intro.s3Title",
     textKey: "intro.s3Text",
   },
-  { icon: "options-outline", titleKey: "intro.s4Title", textKey: "intro.s4Text" },
 ];
 
 export default function IntroScreen() {
   const [page, setPage] = useState(0);
   const listRef = useRef<FlatList>(null);
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  // Square poster, as large as fits: never wider than the slide's padded
+  // width, and capped by height so the title and text still fit on a small
+  // phone (iPhone SE) under the header and above the button.
+  const heroSize = Math.min(width - spacing.xl * 2, height * 0.42);
   const { colors, text } = useTheme();
   const setIntroSeen = usePreferences((s) => s.setIntroSeen);
   const t = useT();
 
   const last = page === SLIDES.length - 1;
 
-  const onViewableItemsChanged = useRef(
+  // FlatList throws if this callback changes identity between renders, so it
+  // must be created once. useCallback with no deps does that without reading
+  // a ref during render (which makes the React Compiler skip the screen).
+  const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       const first = viewableItems[0];
       if (first?.index != null) setPage(first.index);
     },
+    [],
   );
 
   const advance = () => {
@@ -88,7 +110,7 @@ export default function IntroScreen() {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        onViewableItemsChanged={onViewableItemsChanged.current}
+        onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
         renderItem={({ item }) => (
           <View
@@ -100,20 +122,37 @@ export default function IntroScreen() {
               gap: spacing.lg,
             }}
           >
-            <View
-              style={{
-                width: 112,
-                height: 112,
-                borderRadius: radii.pill,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: colors.primarySoft,
-                borderWidth: 1,
-                borderColor: colors.primaryBorder,
-              }}
-            >
-              <Ionicons name={item.icon} size={52} color={colors.primary} />
-            </View>
+            {item.hero ? (
+              // The first thing a new user sees — it settles in rather than
+              // snapping on.
+              <Animated.View entering={ZoomIn.duration(500)}>
+                <Image
+                  source={item.hero}
+                  accessibilityLabel="Growen City"
+                  style={{
+                    width: heroSize,
+                    height: heroSize,
+                    borderRadius: radii.xl,
+                  }}
+                  contentFit="cover"
+                />
+              </Animated.View>
+            ) : (
+              <View
+                style={{
+                  width: 112,
+                  height: 112,
+                  borderRadius: radii.pill,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: colors.primarySoft,
+                  borderWidth: 1,
+                  borderColor: colors.primaryBorder,
+                }}
+              >
+                <Ionicons name={item.icon} size={52} color={colors.primary} />
+              </View>
+            )}
             <Text style={{ ...text.display, textAlign: "center" }}>
               {t(item.titleKey)}
             </Text>
@@ -139,14 +178,20 @@ export default function IntroScreen() {
             gap: spacing.sm,
           }}
         >
+          {/* The active dot stretches and recolours as the page changes (a
+              CSS transition), so the indicator travels with the swipe
+              instead of jumping. */}
           {SLIDES.map((s, i) => (
-            <View
+            <Animated.View
               key={s.titleKey}
               style={{
                 width: i === page ? 22 : 8,
                 height: 8,
                 borderRadius: radii.pill,
                 backgroundColor: i === page ? colors.primary : colors.border,
+                transitionProperty: ["width", "backgroundColor"],
+                transitionDuration: 250,
+                transitionTimingFunction: "ease-out",
               }}
             />
           ))}

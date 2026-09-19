@@ -165,6 +165,12 @@ export function useTelegramSignIn(linking = false) {
   const [error, setError] = useState<unknown>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const alive = useRef(true);
+  // The session this screen is currently waiting on. Retry starts a new one,
+  // but a poll for the old token may still be in flight — clearing the timer
+  // can't cancel a request already sent. Every step checks it still owns the
+  // screen, so a stale loop can't flip a fresh session to "expired" or keep
+  // polling a token nobody is looking at.
+  const activeToken = useRef<string | null>(null);
 
   const stop = () => {
     if (timer.current) clearTimeout(timer.current);
@@ -172,11 +178,12 @@ export function useTelegramSignIn(linking = false) {
   };
 
   const poll = (token: string) => {
+    const current = () => alive.current && activeToken.current === token;
     timer.current = setTimeout(async () => {
-      if (!alive.current) return;
+      if (!current()) return;
       try {
         const res = await authApi.telegramPoll(token);
-        if (!alive.current) return;
+        if (!current()) return;
         if (res.status === "PENDING") return poll(token);
         if (res.status === "EXPIRED") return setPhase("expired");
         if (res.status === "LINKED") {
@@ -187,7 +194,7 @@ export function useTelegramSignIn(linking = false) {
         }
         await establishSession(res);
       } catch (e) {
-        if (!alive.current) return;
+        if (!current()) return;
         // A consumed/unknown session means this token is spent; anything
         // else (offline blip) is worth another try.
         if (e instanceof ApiError && (e.status === 401 || e.status === 404)) {
@@ -204,6 +211,7 @@ export function useTelegramSignIn(linking = false) {
 
   const start = async () => {
     stop();
+    activeToken.current = null;
     setPhase("starting");
     setError(null);
     try {
@@ -211,11 +219,13 @@ export function useTelegramSignIn(linking = false) {
         ? await authApi.linkTelegram()
         : await authApi.telegramStart();
       if (!alive.current) return;
+      activeToken.current = s.token;
       setSession(s);
       setPhase("waiting");
       Linking.openURL(s.deepLink).catch(() => undefined);
       poll(s.token);
     } catch (e) {
+      if (!alive.current) return;
       setError(e);
       setPhase("error");
     }

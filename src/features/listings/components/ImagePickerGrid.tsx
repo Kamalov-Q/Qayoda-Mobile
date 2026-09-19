@@ -82,6 +82,7 @@ export const ImagePickerGrid = memo(function ImagePickerGrid({
     return from < 0 ? images : move(images, from, hover);
   }, [images, dragKey, hover]);
 
+  const addSlot = slotOf(images.length, cols, tile);
   const rows = Math.ceil((images.length + (canAdd ? 1 : 0)) / cols);
   const height = rows > 0 ? rows * (tile + GAP) - GAP : 0;
 
@@ -159,7 +160,12 @@ export const ImagePickerGrid = memo(function ImagePickerGrid({
             accessibilityLabel={t("images.add")}
             style={({ pressed }) => ({
               position: "absolute",
-              ...slotOf(images.length, cols, tile),
+              // slotOf gives {x, y} for the tiles' animated translate; spread
+              // straight into a style those keys are silently ignored, which
+              // parked this tile at the origin — under the first photo, so
+              // there was no way to add a second one.
+              left: addSlot.x,
+              top: addSlot.y,
               width: tile,
               height: tile,
               borderRadius: radii.md,

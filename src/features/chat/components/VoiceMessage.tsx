@@ -1,6 +1,11 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
-import { Audio, type AVPlaybackStatus } from "expo-av";
+import {
+  createAudioPlayer,
+  setAudioModeAsync,
+  type AudioPlayer,
+  type AudioStatus,
+} from "expo-audio";
 import { Ionicons } from "@expo/vector-icons";
 import { spacing } from "../../../theme/tokens";
 import { useTheme } from "../../../theme/useTheme";
@@ -43,7 +48,7 @@ export const VoiceMessage = memo(function VoiceMessage({
   mine,
 }: Props) {
   const { colors } = useTheme();
-  const sound = useRef<Audio.Sound | null>(null);
+  const player = useRef<AudioPlayer | null>(null);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0); // 0..1
@@ -52,10 +57,14 @@ export const VoiceMessage = memo(function VoiceMessage({
   // (a ref and a setState are both fixed identities), so it doubles as this
   // instance's key in the registry above.
   const pauseSelf = useRef(async () => {
-    // Swallowed: pausing a clip that has already been unloaded throws, and
+    // Swallowed: pausing a clip that has already been released throws, and
     // this runs on behalf of the *next* bubble — letting it reject there would
-    // mean a stale sound stops the new one from ever starting.
-    await sound.current?.pauseAsync().catch(() => {});
+    // mean a stale player stops the new one from ever starting.
+    try {
+      player.current?.pause();
+    } catch {
+      // released
+    }
     setPlaying(false);
   }).current;
 
@@ -64,57 +73,61 @@ export const VoiceMessage = memo(function VoiceMessage({
       // Scrolling a playing message out of the list windows it away; leaving it
       // registered would let an unmounted bubble own the audio channel.
       releasePlayback(pauseSelf);
-      void sound.current?.unloadAsync();
+      try {
+        player.current?.remove();
+      } catch {
+        // already released
+      }
     },
     [pauseSelf],
   );
 
   const toggle = async () => {
-    // The first tap has to fetch the whole clip before it can play, and a
-    // second tap during that gap used to start a second download — two sounds
-    // loaded, two playing over each other, and the first one leaked because
-    // the ref only holds the last.
-    if (loading) return;
-
     if (playing) {
       await pauseSelf();
       releasePlayback(pauseSelf);
       return;
     }
 
-    if (!sound.current) {
-      setLoading(true);
+    if (!player.current) {
       try {
-        const { sound: s } = await Audio.Sound.createAsync(
-          { uri: url },
-          {},
-          (st: AVPlaybackStatus) => {
-            if (!st.isLoaded) return;
-            setProgress(
-              st.durationMillis
-                ? (st.positionMillis ?? 0) / st.durationMillis
-                : 0,
-            );
-            if (st.didJustFinish) {
-              setPlaying(false);
-              setProgress(0);
-              releasePlayback(pauseSelf);
-              void s.setPositionAsync(0);
-            }
-          },
-        );
-        sound.current = s;
+        // Voice notes should sound through the mute switch, like every
+        // messenger — and this also resets the mode after a recording.
+        void setAudioModeAsync({ playsInSilentMode: true });
+        const p = createAudioPlayer({ uri: url });
+        setLoading(true);
+        // The event API exists at runtime (AudioPlayer is a SharedObject
+        // EventEmitter) but its types resolve through expo's nested
+        // expo-modules-core copy, which tsc can't see from here.
+        (
+          p as AudioPlayer & {
+            addListener(
+              event: "playbackStatusUpdate",
+              listener: (status: AudioStatus) => void,
+            ): void;
+          }
+        ).addListener("playbackStatusUpdate", (st: AudioStatus) => {
+          if (st.isLoaded) setLoading(false);
+          setProgress(st.duration ? st.currentTime / st.duration : 0);
+          if (st.didJustFinish) {
+            setPlaying(false);
+            setProgress(0);
+            releasePlayback(pauseSelf);
+            p.pause();
+            void p.seekTo(0);
+          }
+        });
+        player.current = p;
       } catch {
+        setLoading(false);
         toast.errorKey("chat.voiceLoadError");
         return;
-      } finally {
-        setLoading(false);
       }
     }
 
-    // Before playAsync, so the two clips never overlap even for a frame.
+    // Before play, so the two clips never overlap even for a frame.
     await claimPlayback(pauseSelf);
-    await sound.current.playAsync();
+    player.current.play();
     setPlaying(true);
   };
 

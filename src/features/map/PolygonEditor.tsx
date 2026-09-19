@@ -17,10 +17,7 @@ import { toast } from "../../components/ui/Toast";
 import { spacing, radii, sizing, type } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 import { useT } from "../../i18n";
-import {
-  insertionIndexFor,
-  ringSelfIntersects,
-} from "../listings/utils/geo";
+import { insertionIndexFor, ringSelfIntersects } from "../listings/utils/geo";
 import {
   DEFAULT_CENTER,
   parcelRegion,

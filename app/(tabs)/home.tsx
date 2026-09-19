@@ -19,6 +19,7 @@ import {
   Card,
   Section,
   BrandMark,
+  Rise,
   TAB_EDGES,
 } from "../../src/components/ui";
 import { spacing, radii, type } from "../../src/theme/tokens";
@@ -32,6 +33,7 @@ import {
   useSpecsFormatter,
 } from "../../src/features/listings/utils/format";
 import type { Listing } from "../../src/features/listings/api/listings.api";
+import { ConnectionBadge } from "../../src/features/chat/components/ConnectionBadge";
 
 const ACTIONS = [
   {
@@ -104,127 +106,161 @@ export default function HomeScreen() {
         }}
       >
         {/* Greeting */}
-        <View style={{ gap: spacing.sm }}>
-          <BrandMark />
-          <View style={{ gap: 2 }}>
-            <Text style={text.display}>
-              {name ? t("home.greetingName", { name }) : t("home.greeting")}
-            </Text>
-            <Text style={text.caption}>{t("home.tagline")}</Text>
+        <Rise index={0}>
+          <View style={{ gap: spacing.sm }}>
+            {/* Logo left, your own online status right — the first thing on
+              screen, so a dropped connection is noticed before a message
+              goes unanswered. */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <BrandMark />
+              <ConnectionBadge />
+            </View>
+            <View style={{ gap: 2 }}>
+              <Text style={text.display}>
+                {name ? t("home.greetingName", { name }) : t("home.greeting")}
+              </Text>
+              <Text style={text.caption}>{t("home.tagline")}</Text>
+            </View>
           </View>
-        </View>
+        </Rise>
 
         {/* Hero — the one thing a first-time user should do */}
-        <Card
-          style={{
-            backgroundColor: colors.primarySoft,
-            borderColor: colors.primaryBorder,
-          }}
-        >
-          <View style={{ gap: spacing.md }}>
-            <Ionicons name="location" size={28} color={colors.primary} />
-            <View style={{ gap: spacing.xs }}>
-              <Text style={text.heading}>{t("home.heroTitle")}</Text>
-              <Text style={{ ...text.body, color: colors.textMuted }}>
-                {t("home.heroSubtitle")}
-              </Text>
+        <Rise index={1}>
+          <Card
+            style={{
+              backgroundColor: colors.primarySoft,
+              borderColor: colors.primaryBorder,
+            }}
+          >
+            <View style={{ gap: spacing.md }}>
+              <Ionicons name="location" size={28} color={colors.primary} />
+              <View style={{ gap: spacing.xs }}>
+                <Text style={text.heading}>{t("home.heroTitle")}</Text>
+                <Text style={{ ...text.body, color: colors.textMuted }}>
+                  {t("home.heroSubtitle")}
+                </Text>
+              </View>
+              <Button
+                title={t("home.heroCta")}
+                icon="map-outline"
+                onPress={() => router.push("/(tabs)/sotuv")}
+              />
             </View>
-            <Button
-              title={t("home.heroCta")}
-              icon="map-outline"
-              onPress={() => router.push("/(tabs)/sotuv")}
-            />
-          </View>
-        </Card>
+          </Card>
+        </Rise>
 
         {/* Fresh listings — real content above the fold, not just doors to
             it. Joymee opens on a wall of promoted cards; this is the honest
             version: the newest things actually posted, horizontally, with
             the full feed one tap away. */}
-        <LatestStrip />
+        <Rise index={2}>
+          <LatestStrip />
+        </Rise>
 
         {/* Quick actions */}
-        <Section title={t("home.quickTitle")}>
-          <View style={{ flexDirection: "row", gap: spacing.sm }}>
-            {ACTIONS.map((action) => (
-              <Pressable
-                key={action.key}
-                onPress={() => router.push(action.href)}
-                accessibilityRole="button"
-                accessibilityLabel={t(action.labelKey)}
-                style={({ pressed }) => ({
-                  flex: 1,
-                  minHeight: 86,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: spacing.xs,
-                  padding: spacing.sm,
-                  borderRadius: radii.lg,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  backgroundColor: pressed
-                    ? colors.surfaceRaised
-                    : colors.surface,
-                  transform: [{ scale: pressed ? 0.98 : 1 }],
-                })}
-              >
-                <Ionicons
-                  name={action.icon}
-                  size={22}
-                  color={colors.primary}
-                />
-                <Text
-                  style={{ ...type.caption, color: colors.text, textAlign: "center" }}
-                  numberOfLines={2}
-                >
-                  {t(action.labelKey)}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </Section>
-
-        {/* Promo swiper — one full-width banner at a time, auto-rotating */}
-        <Section title={t("home.adsTitle")}>
-          <PromoSwiper ads={ADS} />
-        </Section>
-
-        {/* How it works */}
-        <Section title={t("home.howTitle")}>
-          <Card flush>
-            {STEPS.map((step, index) => (
-              <View
-                key={step}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: spacing.md,
-                  padding: spacing.md,
-                  borderTopWidth: index === 0 ? 0 : 1,
-                  borderTopColor: colors.border,
-                }}
-              >
-                <View
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: radii.pill,
+        <Rise index={3}>
+          <Section title={t("home.quickTitle")}>
+            <View style={{ flexDirection: "row", gap: spacing.sm }}>
+              {ACTIONS.map((action) => (
+                <Pressable
+                  key={action.key}
+                  onPress={() => router.push(action.href)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t(action.labelKey)}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    minHeight: 86,
                     alignItems: "center",
                     justifyContent: "center",
-                    backgroundColor: colors.primarySoft,
+                    gap: spacing.xs,
+                    padding: spacing.sm,
+                    borderRadius: radii.lg,
                     borderWidth: 1,
-                    borderColor: colors.primaryBorder,
+                    borderColor: colors.border,
+                    backgroundColor: pressed
+                      ? colors.surfaceRaised
+                      : colors.surface,
+                    transform: [{ scale: pressed ? 0.98 : 1 }],
+                  })}
+                >
+                  <Ionicons
+                    name={action.icon}
+                    size={22}
+                    color={colors.primary}
+                  />
+                  <Text
+                    style={{
+                      ...type.caption,
+                      color: colors.text,
+                      textAlign: "center",
+                    }}
+                    numberOfLines={2}
+                  >
+                    {t(action.labelKey)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </Section>
+        </Rise>
+
+        {/* Promo swiper — one full-width banner at a time, auto-rotating */}
+        <Rise index={4}>
+          <Section title={t("home.adsTitle")}>
+            <PromoSwiper ads={ADS} />
+          </Section>
+        </Rise>
+
+        {/* How it works */}
+        <Rise index={5}>
+          <Section title={t("home.howTitle")}>
+            <Card flush>
+              {STEPS.map((step, index) => (
+                <View
+                  key={step}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: spacing.md,
+                    padding: spacing.md,
+                    borderTopWidth: index === 0 ? 0 : 1,
+                    borderTopColor: colors.border,
                   }}
                 >
-                  <Text style={{ ...type.caption, fontWeight: "700", color: colors.primary }}>
-                    {index + 1}
-                  </Text>
+                  <View
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: radii.pill,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: colors.primarySoft,
+                      borderWidth: 1,
+                      borderColor: colors.primaryBorder,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        ...type.caption,
+                        fontWeight: "700",
+                        color: colors.primary,
+                      }}
+                    >
+                      {index + 1}
+                    </Text>
+                  </View>
+                  <Text style={{ ...text.body, flex: 1 }}>{t(step)}</Text>
                 </View>
-                <Text style={{ ...text.body, flex: 1 }}>{t(step)}</Text>
-              </View>
-            ))}
-          </Card>
-        </Section>
+              ))}
+            </Card>
+          </Section>
+        </Rise>
       </View>
     </Screen>
   );
@@ -246,7 +282,9 @@ function LatestStrip() {
 
   const priceOf = (l: Listing) => {
     const offer = l.offers.find((o) => o.isActive) ?? l.offers[0];
-    return offer ? formatPrice(offer.price, offer.currency, offer.purpose) : null;
+    return offer
+      ? formatPrice(offer.price, offer.currency, offer.purpose)
+      : null;
   };
   const thumbOf = (l: Listing) =>
     (l.images.find((i) => i.isPrimary) ?? l.images[0])?.thumbUrl ?? null;
@@ -472,7 +510,8 @@ function PromoSwiper({ ads }: { ads: readonly Ad[] }) {
               width: i === index ? 18 : 6,
               height: 6,
               borderRadius: radii.pill,
-              backgroundColor: i === index ? colors.primary : colors.borderStrong,
+              backgroundColor:
+                i === index ? colors.primary : colors.borderStrong,
             }}
           />
         ))}

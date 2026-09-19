@@ -32,6 +32,9 @@ export const uz = {
   },
 
   intro: {
+    welcomeTitle: "Growen City'ga xush kelibsiz",
+    welcomeText:
+      "Uylar. Orzular. Yangi hayot. Sotish, sotib olish va ijara — bitta ishonchli platformada.",
     s1Title: "Uy — xaritada, chegarasi bilan",
     s1Text:
       "Har bir e'lon xaritada aniq turadi: hovli va yerlar — chizilgan chegarasi bilan, kvartiralar — nuqta bilan. Qayerdaligini taxmin qilish shart emas.",
@@ -40,10 +43,7 @@ export const uz = {
       "Chegarani chizing yoki nuqta qo'ying — manzil va maydon avtomatik aniqlanadi. Narxni dollar yoki so'mda kiriting.",
     s3Title: "Egasi bilan to'g'ridan-to'g'ri",
     s3Text:
-      "Vositachisiz yozishing: chat ilovaning ichida, telefon raqami esa har bir e'londa.",
-    s4Title: "O'zingizga moslang",
-    s4Text:
-      "Narxlarni USD yoki so'mda ko'ring, yoqqanini saqlang, o'xshash e'lonlarni bir joyda toping.",
+      "Vositachisiz yozing: chat ilovaning ichida, telefon raqami esa har bir e'londa.",
     next: "Keyingisi",
     start: "Boshlash",
   },
@@ -91,9 +91,9 @@ export const uz = {
   about: {
     title: "Ilova haqida",
     version: "Versiya {{version}}",
-    descriptionTitle: "uyNest nima?",
+    descriptionTitle: "Growen City nima?",
     description:
-      "uyNest — ko'chmas mulkni xaritada izlash ilovasi. E'lonlar shunchaki ro'yxat emas: har bir mulk o'z chegarasi bilan xaritada turadi, narxi va rasmlari bilan. Bu matn — namuna, keyinroq haqiqiy tavsif bilan almashtiriladi.",
+      "Growen City — ko'chmas mulkni xaritada izlash ilovasi. E'lonlar shunchaki ro'yxat emas: har bir mulk o'z chegarasi bilan xaritada turadi, narxi va rasmlari bilan. Bu matn — namuna, keyinroq haqiqiy tavsif bilan almashtiriladi.",
     contactTitle: "Bog'lanish",
     contactEmail: "Email",
     contactPhone: "Telefon",
@@ -217,10 +217,15 @@ export const uz = {
     required: "Bu maydonni to'ldiring",
     positiveNumber: "0 dan katta bo'lsin",
     floorAboveTotal: "Qavat binodagi qavatlardan ko'p bo'lmasin",
+    priceMin: "Narx juda past — kamida {{min}}",
+    priceMax: "Narx juda yuqori — ko'pi bilan {{max}}",
+    range: "{{min}} dan {{max}} gacha bo'lsin",
+    decimalPlaces: "Ko'pi bilan 2 ta kasr raqam",
   },
 
   listings: {
     saleTitle: "Sotuv",
+    seller: "Sotuvchi",
     myListingsTitle: "Mening e'lonlarim",
     newListing: "E'lon", // sits next to a "+" icon, so no plus in the string
     addListing: "E'lon qo'shish",
@@ -286,6 +291,24 @@ export const uz = {
 
   add: {
     title: "Yangi e'lon",
+    // Short on purpose: three of these share one segmented track.
+    tabs: {
+      SALE: "Sotish",
+      RENT_MONTHLY: "Oylik",
+      RENT_DAILY: "Kunlik",
+    },
+    tabHints: {
+      SALE: "Mulkni sotish — narx butun mulk uchun.",
+      RENT_MONTHLY: "Uzoq muddatli ijara — narx bir oy uchun.",
+      RENT_DAILY: "Qisqa muddatli ijara — narx bir kecha-kunduz uchun.",
+    },
+    priceLabels: {
+      SALE: "Sotuv narxi",
+      RENT_MONTHLY: "Oylik ijara haqi",
+      RENT_DAILY: "Kunlik ijara haqi",
+    },
+    perMonth: "oyiga",
+    perDay: "kuniga",
     category: "Turi",
     purpose: "Maqsad",
     listingTitle: "Sarlavha",
@@ -307,7 +330,7 @@ export const uz = {
     missingLocationTitle: "Joylashuv belgilanmagan",
     missingLocationMessage:
       "E'lonni joylashdan oldin chegara chizing yoki xaritaga nuqta qo'ying.",
-    areaAuto: "Xaritada chizilgan chegaradan avtomatik hisoblanadi",
+    areaFromBoundary: "Chegaradan hisoblandi: {{area}} m² — kerak bo'lsa o'zgartiring",
     areaPlaceholder: "80",
     floors: "Qavatlar",
     hasFloors: "Qavati bor",
@@ -361,6 +384,7 @@ export const uz = {
     price: "Narx",
     priceFrom: "Dan",
     priceTo: "Gacha",
+    anyPrice: "Istalgan narx",
     sortDefault: "Standart",
     sortPriceAsc: "Avval arzoni",
     sortPriceDesc: "Avval qimmati",
@@ -473,6 +497,8 @@ export const uz = {
     emptyHint: "E'lon egasiga yozing — suhbat shu yerda paydo bo'ladi",
     unknownUser: "Foydalanuvchi",
     online: "onlayn",
+    offline: "oflayn",
+    connecting: "ulanmoqda…",
     lastSeen: "oxirgi faollik: {{when}}",
     typing: "yozmoqda",
     typingVoice: "ovozli xabar yozilmoqda",

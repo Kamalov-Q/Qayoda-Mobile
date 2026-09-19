@@ -37,6 +37,8 @@ import { OfferBadge } from "../../../src/features/listings/components/OfferBadge
 import { htmlToText } from "../../../src/features/listings/utils/format";
 import { useAuthStore } from "../../../src/features/auth/store/auth.store";
 import { requireAuth } from "../../../src/features/auth/guest";
+import { usePresence } from "../../../src/features/chat/hooks/usePresence";
+import { PresenceStatus } from "../../../src/features/chat/components/PresenceStatus";
 
 export default function ListingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -52,6 +54,11 @@ export default function ListingDetailScreen() {
   // of drafting a duplicate — the server would merge them on send anyway, but
   // reopening shows the history immediately.
   const { data: conversations } = useConversations();
+  // Called before the early returns (hooks can't be conditional); an owner
+  // looking at their own listing doesn't need to be told they're online.
+  const ownerPresence = usePresence(
+    listing && listing.ownerId !== userId ? listing.ownerId : undefined,
+  );
 
   if (isLoading) {
     return (
@@ -147,7 +154,11 @@ export default function ListingDetailScreen() {
           {userId ? (
             <Pressable
               onPress={() =>
-                toggleSave.mutate({ listingId: listing.id, listing, next: !isSaved })
+                toggleSave.mutate({
+                  listingId: listing.id,
+                  listing,
+                  next: !isSaved,
+                })
               }
               disabled={toggleSave.isPending}
               hitSlop={8}
@@ -251,7 +262,11 @@ export default function ListingDetailScreen() {
                 >
                   <Text style={text.caption}>{t(row.key)}</Text>
                   <Text
-                    style={{ ...text.bodyStrong, flexShrink: 1, textAlign: "right" }}
+                    style={{
+                      ...text.bodyStrong,
+                      flexShrink: 1,
+                      textAlign: "right",
+                    }}
                   >
                     {row.value}
                   </Text>
@@ -323,7 +338,9 @@ export default function ListingDetailScreen() {
                   listings still open from "my listings", which is where the
                   way back has to live. */}
               <Button
-                title={t(isArchived ? "listings.unarchive" : "listings.archive")}
+                title={t(
+                  isArchived ? "listings.unarchive" : "listings.archive",
+                )}
                 icon={isArchived ? "arrow-undo-outline" : "archive-outline"}
                 variant={isArchived ? "secondary" : "danger"}
                 loading={archive.isPending || restore.isPending}
@@ -331,34 +348,42 @@ export default function ListingDetailScreen() {
               />
             </View>
           ) : (
-            // The way in for everyone else — guests included: the tap routes
-            // through requireAuth, so a signed-out user lands on the login
-            // flow instead of a silent 401. Sending the opener is what creates
-            // the conversation, so the first message is written for them.
-            <Button
-              title={t("chat.contactOwner")}
-              icon="chatbubble-ellipses-outline"
-              // Opens the thread in DRAFT mode: composer prefilled, nothing
-              // sent until the buyer presses send themselves.
-              onPress={() =>
-                requireAuth(() => {
-                  const existing = conversations?.find(
-                    (c) => c.listingId === listing.id && c.role === "guest",
-                  );
-                  if (existing) {
+            <View style={{ gap: spacing.sm }}>
+              {/* Tells the buyer whether a message is likely to be read now. */}
+              <PresenceStatus
+                presence={ownerPresence}
+                prefix={t("listings.seller")}
+              />
+              {/* The way in for everyone else — guests included: the tap routes
+                through requireAuth, so a signed-out user lands on the login
+                flow instead of a silent 401. Sending the opener is what
+                creates the conversation, so the first message is written for
+                them. */}
+              <Button
+                title={t("chat.contactOwner")}
+                icon="chatbubble-ellipses-outline"
+                // Opens the thread in DRAFT mode: composer prefilled, nothing
+                // sent until the buyer presses send themselves.
+                onPress={() =>
+                  requireAuth(() => {
+                    const existing = conversations?.find(
+                      (c) => c.listingId === listing.id && c.role === "guest",
+                    );
+                    if (existing) {
+                      router.push({
+                        pathname: "/chat/[id]",
+                        params: { id: existing.id, prefill: "1" },
+                      });
+                      return;
+                    }
                     router.push({
                       pathname: "/chat/[id]",
-                      params: { id: existing.id, prefill: "1" },
+                      params: { id: "new", listingId: listing.id },
                     });
-                    return;
-                  }
-                  router.push({
-                    pathname: "/chat/[id]",
-                    params: { id: "new", listingId: listing.id },
-                  });
-                })
-              }
-            />
+                  })
+                }
+              />
+            </View>
           )}
 
           <SimilarListings

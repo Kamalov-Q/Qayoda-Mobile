@@ -1,6 +1,7 @@
 import {
   memo,
-  useCallback, useMemo,
+  useCallback,
+  useMemo,
   useRef,
   useState,
   forwardRef,
@@ -54,6 +55,12 @@ interface Props {
    * bottom edge (the preview card, the locate button) is lifted by it.
    */
   bottomInset?: number;
+  /**
+   * Whether a listing's preview card is open. The screen floats its own
+   * chrome over the same bottom strip (the "Topildi" count), which covered the
+   * card's "view details" link — so it needs to know to step aside.
+   */
+  onSelectionChange?: (open: boolean) => void;
 }
 
 // Height of the preview card, so the locate button can clear it.
@@ -181,7 +188,13 @@ function clusterPoints(
 
 export const ListingsMap = memo(
   forwardRef<ListingsMapHandle, Props>(function ListingsMap(
-    { data, onRegionChange, onPressListing, bottomInset = 0 },
+    {
+      data,
+      onRegionChange,
+      onPressListing,
+      bottomInset = 0,
+      onSelectionChange,
+    },
     ref,
   ) {
     const mapRef = useRef<MapView>(null);
@@ -207,17 +220,23 @@ export const ListingsMap = memo(
       },
     }));
 
-    const selectFeature = useCallback((feature: MapPolygonFeature) => {
-      overlayPressedAt.current = Date.now();
-      setSelected(feature);
-    }, []);
+    const selectFeature = useCallback(
+      (feature: MapPolygonFeature) => {
+        overlayPressedAt.current = Date.now();
+        setSelected(feature);
+        onSelectionChange?.(true);
+      },
+      [onSelectionChange],
+    );
 
     /** Dismisses the preview — unless the "dismiss" is the tail of the tap
      *  that just opened it. */
     const clearSelection = useCallback(() => {
-      if (Date.now() - overlayPressedAt.current < OVERLAY_PRESS_GRACE_MS) return;
+      if (Date.now() - overlayPressedAt.current < OVERLAY_PRESS_GRACE_MS)
+        return;
       setSelected(null);
-    }, []);
+      onSelectionChange?.(false);
+    }, [onSelectionChange]);
 
     const handleRegionChangeComplete = useCallback(
       (region: Region) => {
@@ -284,7 +303,7 @@ export const ListingsMap = memo(
       <View style={{ flex: 1 }}>
         <MapView
           ref={mapRef}
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
           provider={MAP_PROVIDER}
           initialRegion={TASHKENT_REGION}
           mapType="hybrid"
@@ -292,7 +311,7 @@ export const ListingsMap = memo(
           onPress={clearSelection}
           showsUserLocation
           showsMyLocationButton={false}
-          showsPointsOfInterest={false}
+          showsPointsOfInterests={false}
           toolbarEnabled={false}
           // Android recentres on a marker press by default, which settles into
           // onRegionChangeComplete a beat later — another route to the card
@@ -300,31 +319,35 @@ export const ListingsMap = memo(
           moveOnMarkerPress={false}
         >
           {data?.mode === "polygons" &&
-            data.features.slice(0, MAX_RENDERED_FEATURES).map((f) => (
-              <PolygonWithLabel
-                key={f.id}
-                feature={f}
-                onPress={() => selectFeature(f)}
-              />
-            ))}
+            data.features
+              .slice(0, MAX_RENDERED_FEATURES)
+              .map((f) => (
+                <PolygonWithLabel
+                  key={f.id}
+                  feature={f}
+                  onPress={() => selectFeature(f)}
+                />
+              ))}
 
           {data?.mode === "points" &&
-            clusters.slice(0, MAX_RENDERED_FEATURES).map((c) =>
-              c.single ? (
-                <PriceMarker
-                  key={c.single.listingId}
-                  coordinate={toLatLng(c.single.centroid.coordinates)}
-                  label={formatPrice(c.single.price, c.single.currency)}
-                  onPress={() => onPressListing(c.single!.listingId)}
-                />
-              ) : (
-                <ClusterMarker
-                  key={c.key}
-                  cluster={c}
-                  onPress={() => zoomToCluster(c)}
-                />
-              ),
-            )}
+            clusters
+              .slice(0, MAX_RENDERED_FEATURES)
+              .map((c) =>
+                c.single ? (
+                  <PriceMarker
+                    key={c.single.listingId}
+                    coordinate={toLatLng(c.single.centroid.coordinates)}
+                    label={formatPrice(c.single.price, c.single.currency)}
+                    onPress={() => onPressListing(c.single!.listingId)}
+                  />
+                ) : (
+                  <ClusterMarker
+                    key={c.key}
+                    cluster={c}
+                    onPress={() => zoomToCluster(c)}
+                  />
+                ),
+              )}
         </MapView>
 
         {/* Zoom pair, top-right. The locate button keeps the bottom corner —

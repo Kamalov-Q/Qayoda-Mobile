@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { File } from "expo-file-system";
 import { useAuthStore } from "../features/auth/store/auth.store";
 import { ApiError, refreshSession } from "./api-client";
 import { API_URL } from "./env";
@@ -17,10 +18,10 @@ export interface BatchUploadResult {
 }
 
 /**
- * React Native's FormData recognises a file part by its `uri` field; the object
- * used to carry `url`, so every part went out empty and the server saw no
- * files. On web there is no such object form at all — the local URI has to be
- * read into a Blob first.
+ * SDK 57's global fetch is WinterCG-compliant and only takes real Blob parts —
+ * the old RN `{ uri, name, type }` object form throws "Unsupported
+ * FormDataPart implementation". expo-file-system's File wraps a local URI as a
+ * Blob. On web there is no expo File; the URI is read into a Blob instead.
  */
 async function appendFile(form: FormData, uri: string, index: number) {
   const name = `photo-${index}.jpg`;
@@ -31,11 +32,7 @@ async function appendFile(form: FormData, uri: string, index: number) {
     return;
   }
 
-  form.append("files", {
-    uri,
-    name,
-    type: "image/jpeg",
-  } as unknown as Blob);
+  form.append("files", new File(uri), name);
 }
 
 export async function uploadImages(

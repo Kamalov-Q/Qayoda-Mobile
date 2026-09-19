@@ -18,6 +18,18 @@ import { DEFAULT_BBOX } from "../listings/utils/geo";
  */
 export const isNativeMapAvailable = Platform.OS !== "web";
 
+/**
+ * MAP_STYLE_RULE — never put view-level props (pointerEvents, opacity,
+ * transform, …) on a <MapView>; put them on a wrapping <View>.
+ *
+ * iOS recycles native map views. When react-native-maps reuses one it resets
+ * its record of the previous props to defaults (RNMapsMapView prepareMapView)
+ * before React Native diffs the base view props, so a value set on the old
+ * map never gets undone on the new one. `pointerEvents: "none"` on the static
+ * listing preview left the next map anywhere in the app ignoring every touch.
+ */
+
+
 /** Tashkent centre — camera default until the user's location is wired up. */
 export const DEFAULT_CENTER: [number, number] = [69.28, 41.32];
 

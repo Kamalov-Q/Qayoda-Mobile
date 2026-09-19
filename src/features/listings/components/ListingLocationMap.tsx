@@ -88,9 +88,7 @@ export function ListingLocationMap({ coordinates, centroid, address }: Props) {
       fillColor={colors.primary + "33"}
     />
   ) : (
-    <Marker
-      coordinate={{ latitude: centroid![1], longitude: centroid![0] }}
-    />
+    <Marker coordinate={{ latitude: centroid![1], longitude: centroid![0] }} />
   );
 
   return (
@@ -109,23 +107,33 @@ export function ListingLocationMap({ coordinates, centroid, address }: Props) {
         accessibilityLabel={t("map.expand")}
         style={{ height: PREVIEW_HEIGHT }}
       >
-        <MapView
-          // A picture, not a widget: touches fall through to the Pressable
-          // that opens the real map. (Style form — the prop is deprecated.)
-          style={{ flex: 1, pointerEvents: "none" }}
-          provider={MAP_PROVIDER}
-          // Same as the location card: the preview is a picture, not a widget.
-          cacheEnabled
-          initialRegion={region}
-          scrollEnabled={false}
-          zoomEnabled={false}
-          rotateEnabled={false}
-          pitchEnabled={false}
-          toolbarEnabled={false}
-          showsPointsOfInterest={false}
-        >
-          {overlay}
-        </MapView>
+        {/* Touches are blocked by THIS wrapper, never by a pointerEvents on
+              the MapView itself. iOS recycles native map views, and
+              react-native-maps resets its props record to defaults when it
+              reuses one (RNMapsMapView prepareMapView), so React Native never
+              sees pointerEvents change back and the next map created
+              anywhere — the location pickers after posting — inherited
+              userInteractionEnabled = NO and ignored every touch. A plain
+              View recycles cleanly. See MAP_STYLE_RULE in maps.ts. */}
+        <View style={{ flex: 1, pointerEvents: "none" }}>
+          <MapView
+            // A picture, not a widget: touches fall through (via the wrapper
+            // above) to the Pressable that opens the real map.
+            style={{ flex: 1 }}
+            provider={MAP_PROVIDER}
+            // Same as the location card: the preview is a picture, not a widget.
+            cacheEnabled
+            initialRegion={region}
+            scrollEnabled={false}
+            zoomEnabled={false}
+            rotateEnabled={false}
+            pitchEnabled={false}
+            toolbarEnabled={false}
+            showsPointsOfInterests={false}
+          >
+            {overlay}
+          </MapView>
+        </View>
 
         <View
           pointerEvents="none"
@@ -236,17 +244,31 @@ function FullListingMap({
             borderBottomColor: colors.border,
           }}
         >
-          <Text style={{ ...text.heading, flex: 1 }} numberOfLines={1}>
-            {title}
-          </Text>
+          {/* Close on the LEFT, as a filled disc: on the right it sat under
+              Expo Go's floating dev bubble, which swallowed the tap — the map
+              looked like it had no way out. Same placement as the pickers. */}
           <Pressable
             onPress={onClose}
             hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel={t("common.close")}
+            style={({ pressed }) => ({
+              width: 40,
+              height: 40,
+              borderRadius: radii.pill,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.border,
+              opacity: pressed ? 0.6 : 1,
+            })}
           >
-            <Ionicons name="close" size={24} color={colors.text} />
+            <Ionicons name="close" size={22} color={colors.text} />
           </Pressable>
+          <Text style={{ ...text.heading, flex: 1 }} numberOfLines={1}>
+            {title}
+          </Text>
         </View>
 
         <View style={{ flex: 1 }}>
@@ -265,7 +287,7 @@ function FullListingMap({
               // from me" — the whole reason to open the full map.
               showsUserLocation
               showsMyLocationButton={false}
-              showsPointsOfInterest={false}
+              showsPointsOfInterests={false}
               toolbarEnabled={false}
             >
               {polygon}

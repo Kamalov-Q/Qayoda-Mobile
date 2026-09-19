@@ -78,6 +78,31 @@ export async function refreshSession(): Promise<boolean> {
 }
 // --------------------------------------------------------------------------
 
+/**
+ * Without a bound, a request to a server that has gone dark hangs until the
+ * OS gives up — about a minute on iOS — with every spinner in the app stuck
+ * for that long. A timeout is surfaced as a TypeError, the same shape fetch
+ * uses for "never reached the server", so errorMessage() shows the network
+ * message and retry loops (Telegram polling) treat it as a transient blip.
+ */
+const REQUEST_TIMEOUT_MS = 20_000;
+
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  // A caller that brings its own signal owns cancellation; don't second-guess it.
+  if (init.signal) return fetch(url, init);
+
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: abort.signal });
+  } catch (e) {
+    if (abort.signal.aborted) throw new TypeError("Network request timed out");
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function api<T>(
   path: string,
   options: RequestOptions = {},
@@ -95,14 +120,13 @@ export async function api<T>(
     },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
-  
 
-  let res = await fetch(`${API_URL}${path}`, buildInit());
+  let res = await fetchWithTimeout(`${API_URL}${path}`, buildInit());
 
   if (res.status === 401 && auth) {
     const refreshed = await refreshSession();
     if (!refreshed) throw new ApiError(401, "Session expired");
-    res = await fetch(`${API_URL}${path}`, buildInit());
+    res = await fetchWithTimeout(`${API_URL}${path}`, buildInit());
   }
 
   if (!res.ok) {

@@ -6,7 +6,10 @@ import { Modal, View, Text, Pressable } from "react-native";
 import MapView, { Marker, Region } from "react-native-maps";
 import { MAP_PROVIDER } from "./provider";
 import * as Location from "expo-location";
-import { useSafeAreaInsets, type EdgeInsets } from "react-native-safe-area-context";
+import {
+  useSafeAreaInsets,
+  type EdgeInsets,
+} from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { radii, spacing, type } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
@@ -105,31 +108,40 @@ export function MiniLocationMap() {
         accessibilityHint={t("location.tapToOpen")}
         style={{ height: PREVIEW_HEIGHT }}
       >
-        <MapView
-          // The preview is a picture: pointer events off (in style — the prop
-          // form is deprecated in RN 0.81) so the settings list keeps its
-          // scroll and every touch falls through to the Pressable that opens
-          // the real, fully interactive map.
-          style={{ flex: 1, pointerEvents: "none" }}
-          provider={MAP_PROVIDER}
-          // iOS: render once and hand back a bitmap — a live map is wasted
-          // on a non-interactive 150pt preview.
-          cacheEnabled
-          region={{
-            latitude: coords.latitude,
-            longitude: coords.longitude,
-            latitudeDelta: PREVIEW_SPAN,
-            longitudeDelta: PREVIEW_SPAN,
-          }}
-          scrollEnabled={false}
-          zoomEnabled={false}
-          rotateEnabled={false}
-          pitchEnabled={false}
-          toolbarEnabled={false}
-          showsPointsOfInterest={false}
-        >
-          <LocationDot coords={coords} />
-        </MapView>
+        {/* Touches are blocked by THIS wrapper, never by a pointerEvents on
+              the MapView itself. iOS recycles native map views, and
+              react-native-maps resets its props record to defaults when it
+              reuses one (RNMapsMapView prepareMapView), so React Native never
+              sees pointerEvents change back and the next map created
+              anywhere — the location pickers after posting — inherited
+              userInteractionEnabled = NO and ignored every touch. A plain
+              View recycles cleanly. See MAP_STYLE_RULE in maps.ts. */}
+        <View style={{ flex: 1, pointerEvents: "none" }}>
+          <MapView
+            // The preview is a picture: the wrapper above turns touches off, so
+            // the settings list keeps its scroll and every touch falls through
+            // to the Pressable that opens the real, fully interactive map.
+            style={{ flex: 1 }}
+            provider={MAP_PROVIDER}
+            // iOS: render once and hand back a bitmap — a live map is wasted
+            // on a non-interactive 150pt preview.
+            cacheEnabled
+            region={{
+              latitude: coords.latitude,
+              longitude: coords.longitude,
+              latitudeDelta: PREVIEW_SPAN,
+              longitudeDelta: PREVIEW_SPAN,
+            }}
+            scrollEnabled={false}
+            zoomEnabled={false}
+            rotateEnabled={false}
+            pitchEnabled={false}
+            toolbarEnabled={false}
+            showsPointsOfInterests={false}
+          >
+            <LocationDot coords={coords} />
+          </MapView>
+        </View>
 
         {/* Expand affordance — says "this opens" without stealing the tap. */}
         <View
@@ -237,10 +249,7 @@ function FullMap({
 
   const recenter = () => {
     onRelocate();
-    mapRef.current?.animateToRegion(
-      { ...initialRegion, ...coords },
-      400,
-    );
+    mapRef.current?.animateToRegion({ ...initialRegion, ...coords }, 400);
   };
 
   return (
@@ -264,21 +273,38 @@ function FullMap({
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
+            gap: spacing.md,
             paddingHorizontal: spacing.lg,
             paddingVertical: spacing.md,
             borderBottomWidth: 1,
             borderBottomColor: colors.border,
           }}
         >
-          <Text style={text.heading}>{t("location.myLocation")}</Text>
+          {/* Close on the LEFT, as a filled disc: on the right it sat under
+              Expo Go's floating dev bubble, which swallowed the tap — the map
+              looked like it had no way out. Same placement as the pickers. */}
           <Pressable
             onPress={onClose}
             hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel={t("common.close")}
+            style={({ pressed }) => ({
+              width: 40,
+              height: 40,
+              borderRadius: radii.pill,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.border,
+              opacity: pressed ? 0.6 : 1,
+            })}
           >
-            <Ionicons name="close" size={24} color={colors.text} />
+            <Ionicons name="close" size={22} color={colors.text} />
           </Pressable>
+          <Text style={{ ...text.heading, flex: 1 }} numberOfLines={1}>
+            {t("location.myLocation")}
+          </Text>
         </View>
 
         <View style={{ flex: 1 }}>
@@ -297,7 +323,7 @@ function FullMap({
               }}
               showsUserLocation
               showsMyLocationButton={false}
-              showsPointsOfInterest={false}
+              showsPointsOfInterests={false}
               toolbarEnabled={false}
             >
               <LocationDot coords={coords} />

@@ -13,7 +13,7 @@ import { router, useLocalSearchParams, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useHeaderHeight } from "@react-navigation/elements";
+import { useHeaderHeight } from "expo-router/react-navigation";
 import { Avatar, ImageViewer } from "../../src/components/ui";
 import { spacing, radii } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
@@ -27,6 +27,7 @@ import {
 } from "../../src/features/chat/api/chat.api";
 import { clearUnread } from "../../src/features/chat/utils/cache";
 import { useMessages } from "../../src/features/chat/hooks/useMessages";
+import { formatPresence } from "../../src/features/chat/hooks/usePresence";
 import { useSendMessage } from "../../src/features/chat/hooks/useSendMessage";
 import { MessageBubble } from "../../src/features/chat/components/MessageBubble";
 import { TypingIndicator } from "../../src/features/chat/components/TypingIndicator";
@@ -200,17 +201,9 @@ export default function ChatThreadScreen() {
     if (target) router.push(`/profile/${target}`);
   };
 
-  const lastSeenLabel = (other: Conversation["other"]): string => {
-    if (other.online) return t("chat.online");
-    if (!other.lastSeenAt) return "";
-    const d = new Date(other.lastSeenAt);
-    const isToday = new Date().toDateString() === d.toDateString();
-    return t("chat.lastSeen", {
-      when: isToday
-        ? d.toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" })
-        : d.toLocaleDateString(language),
-    });
-  };
+  // Same wording as the profile and listing screens, from one formatter.
+  const lastSeenLabel = (other: Conversation["other"]): string =>
+    formatPresence(other, language);
 
   return (
     // Not <Screen>: the thread owns its own keyboard handling, which under a

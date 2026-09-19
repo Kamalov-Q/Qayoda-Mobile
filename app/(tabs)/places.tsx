@@ -32,12 +32,23 @@ import {
 } from "../../src/features/listings/utils/offers";
 import { useMyListings } from "../../src/features/listings/hooks/useMyListings";
 import { ListingCard } from "../../src/features/listings/components/ListingCard";
+import type { Ionicons } from "@expo/vector-icons";
+import {
+  ALL_ICON,
+  CATEGORY_ICONS,
+} from "../../src/features/listings/utils/icons";
 
 // Both filters run over the already-fetched list: /listings/mine returns the
 // user's own listings whole, so filtering client-side costs no request and
 // keeps working offline from the cache.
 const STATUSES = ["ACTIVE", "DRAFT", "ARCHIVED"] as const;
 type Status = (typeof STATUSES)[number];
+
+const STATUS_ICONS = {
+  ACTIVE: "checkmark-circle-outline",
+  DRAFT: "create-outline",
+  ARCHIVED: "archive-outline",
+} as const satisfies Record<Status, keyof typeof Ionicons.glyphMap>;
 
 const CATEGORIES = [
   "APARTMENT",
@@ -54,7 +65,11 @@ type StatusFilter = typeof ALL | Status;
 type CategoryFilter = typeof ALL | PropertyCategory;
 
 /** Chip option; named locally because `Option` collides with the DOM global. */
-type Choice<T extends string> = { value: T; label: string };
+type Choice<T extends string> = {
+  value: T;
+  label: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+};
 
 export default function PlacesScreen() {
   const { text, colors } = useTheme();
@@ -69,19 +84,30 @@ export default function PlacesScreen() {
   const [address, setAddress] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const onPress = useCallback((id: string) => router.push(`/listing/${id}`), []);
+  const onPress = useCallback(
+    (id: string) => router.push(`/listing/${id}`),
+    [],
+  );
 
   const statusOptions = useMemo<Choice<StatusFilter>[]>(
     () => [
-      { value: ALL, label: t("filters.all") },
-      ...STATUSES.map((value) => ({ value, label: t(`statuses.${value}`) })),
+      { value: ALL, label: t("filters.all"), icon: ALL_ICON },
+      ...STATUSES.map((value) => ({
+        value,
+        label: t(`statuses.${value}`),
+        icon: STATUS_ICONS[value],
+      })),
     ],
     [t],
   );
   const categoryOptions = useMemo<Choice<CategoryFilter>[]>(
     () => [
-      { value: ALL, label: t("filters.all") },
-      ...CATEGORIES.map((value) => ({ value, label: t(`categories.${value}`) })),
+      { value: ALL, label: t("filters.all"), icon: ALL_ICON },
+      ...CATEGORIES.map((value) => ({
+        value,
+        label: t(`categories.${value}`),
+        icon: CATEGORY_ICONS[value],
+      })),
     ],
     [t],
   );

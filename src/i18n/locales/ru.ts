@@ -33,6 +33,9 @@ export const ru: Dictionary = {
   },
 
   intro: {
+    welcomeTitle: "Добро пожаловать в Growen City",
+    welcomeText:
+      "Дома. Мечты. Новая жизнь. Продажа, покупка и аренда — на одной надёжной платформе.",
     s1Title: "Дом — на карте, с границей",
     s1Text:
       "Каждое объявление стоит на карте точно: дома и участки — с нарисованной границей, квартиры — точкой. Не нужно угадывать, где это.",
@@ -42,9 +45,6 @@ export const ru: Dictionary = {
     s3Title: "Напрямую с владельцем",
     s3Text:
       "Без посредников: чат внутри приложения, а номер телефона — в каждом объявлении.",
-    s4Title: "Настройте под себя",
-    s4Text:
-      "Смотрите цены в USD или сумах, сохраняйте понравившееся, находите похожие объявления рядом.",
     next: "Далее",
     start: "Начать",
   },
@@ -91,9 +91,9 @@ export const ru: Dictionary = {
   about: {
     title: "О приложении",
     version: "Версия {{version}}",
-    descriptionTitle: "Что такое uyNest?",
+    descriptionTitle: "Что такое Growen City?",
     description:
-      "uyNest — приложение для поиска недвижимости на карте. Объявления — не просто список: каждый объект стоит на карте со своими границами, ценой и фотографиями. Этот текст — заглушка, позже здесь будет настоящее описание.",
+      "Growen City — приложение для поиска недвижимости на карте. Объявления — не просто список: каждый объект стоит на карте со своими границами, ценой и фотографиями. Этот текст — заглушка, позже здесь будет настоящее описание.",
     contactTitle: "Контакты",
     contactEmail: "Email",
     contactPhone: "Телефон",
@@ -217,9 +217,14 @@ export const ru: Dictionary = {
     required: "Заполните это поле",
     positiveNumber: "Должно быть больше 0",
     floorAboveTotal: "Этаж не может быть больше этажности дома",
+    priceMin: "Слишком низкая цена — минимум {{min}}",
+    priceMax: "Слишком высокая цена — максимум {{max}}",
+    range: "Должно быть от {{min}} до {{max}}",
+    decimalPlaces: "Не больше 2 знаков после запятой",
   },
 
   listings: {
+    seller: "Продавец",
     saleTitle: "Продажа",
     myListingsTitle: "Мои объявления",
     newListing: "Объявление",
@@ -284,6 +289,24 @@ export const ru: Dictionary = {
 
   add: {
     title: "Новое объявление",
+    // Short on purpose: three of these share one segmented track.
+    tabs: {
+      SALE: "Продажа",
+      RENT_MONTHLY: "Помесячно",
+      RENT_DAILY: "Посуточно",
+    },
+    tabHints: {
+      SALE: "Продажа объекта — цена за весь объект.",
+      RENT_MONTHLY: "Долгосрочная аренда — цена за месяц.",
+      RENT_DAILY: "Краткосрочная аренда — цена за сутки.",
+    },
+    priceLabels: {
+      SALE: "Цена продажи",
+      RENT_MONTHLY: "Аренда в месяц",
+      RENT_DAILY: "Аренда в сутки",
+    },
+    perMonth: "в мес.",
+    perDay: "в сутки",
     category: "Тип",
     purpose: "Цель",
     listingTitle: "Заголовок",
@@ -305,7 +328,7 @@ export const ru: Dictionary = {
     missingLocationTitle: "Расположение не указано",
     missingLocationMessage:
       "Перед публикацией нарисуйте границу или поставьте точку на карте.",
-    areaAuto: "Считается автоматически по границе, нарисованной на карте",
+    areaFromBoundary: "По границе: {{area}} м² — при необходимости исправьте",
     areaPlaceholder: "80",
     floors: "Этажность",
     hasFloors: "С этажом",
@@ -359,6 +382,7 @@ export const ru: Dictionary = {
     price: "Цена",
     priceFrom: "От",
     priceTo: "До",
+    anyPrice: "Любая цена",
     sortDefault: "По умолчанию",
     sortPriceAsc: "Сначала дешёвые",
     sortPriceDesc: "Сначала дорогие",
@@ -471,6 +495,8 @@ export const ru: Dictionary = {
     emptyHint: "Напишите владельцу объявления — переписка появится здесь",
     unknownUser: "Пользователь",
     online: "в сети",
+    offline: "не в сети",
+    connecting: "подключение…",
     lastSeen: "был(а) в сети: {{when}}",
     typing: "печатает",
     typingVoice: "записывает голосовое",

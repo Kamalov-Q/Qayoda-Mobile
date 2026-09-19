@@ -1,12 +1,19 @@
-import { memo, type ReactNode } from "react";
+import { Children, memo, type ReactNode } from "react";
 import { Modal, View, Text, Pressable, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import Animated, {
+  FadeIn,
+  SlideInDown,
+  ZoomIn,
+  useReducedMotion,
+} from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { spacing, radii, sizing, type } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 import { useT } from "../../i18n";
 import { Button } from "./Button";
-import { TextField } from "./TextField";
+import { Rise } from "./Rise";
 
 interface SheetProps {
   visible: boolean;
@@ -31,6 +38,7 @@ export function FilterSheet({
   const { colors, text, shadow } = useTheme();
   const insets = useSafeAreaInsets();
   const t = useT();
+  const reduceMotion = useReducedMotion();
 
   return (
     <Modal
@@ -39,13 +47,16 @@ export function FilterSheet({
       // Kept MOUNTED and driven by `visible` — unmounting a transparent modal
       // mid-dismissal is an iOS race that leaves the dead modal host eating
       // touches (unresponsive back buttons after a few open/close cycles).
-      // Native fade replaces the reanimated entering animations for the same
-      // reason: with a persistent mount they would only ever fire once.
+      // The dim backdrop uses the native fade; the panel's own spring comes
+      // from remounting it per open (see the key below), since with a
+      // persistent mount an entering animation would only ever fire once.
       animationType="fade"
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      <View
+      {/* A Modal is its own native root: gesture-handler gestures inside it
+          (the price slider) only fire on Android with a root of their own. */}
+      <GestureHandlerRootView
         style={{
           flex: 1,
           justifyContent: "flex-end",
@@ -59,7 +70,16 @@ export function FilterSheet({
           onPress={onClose}
         />
 
-        <View
+        {/* Keyed on `visible`: the Modal stays mounted (see above), so this
+            panel is remounted on every open instead — which is what lets the
+            entering spring and the section stagger play each time, not once. */}
+        <Animated.View
+          key={visible ? "open" : "closed"}
+          entering={
+            visible && !reduceMotion
+              ? SlideInDown.springify().damping(20).stiffness(180)
+              : undefined
+          }
           accessibilityViewIsModal
           style={{
             // Never taller than the screen: with every group expanded the body
@@ -98,11 +118,26 @@ export function FilterSheet({
           >
             <Text style={text.heading}>{t("filters.title")}</Text>
             {onReset ? (
-              <Pressable onPress={onReset} hitSlop={12} accessibilityRole="button">
-                <Text style={{ ...type.bodyStrong, color: colors.primary }}>
-                  {t("filters.reset")}
-                </Text>
-              </Pressable>
+              <Animated.View
+                entering={reduceMotion ? undefined : FadeIn.duration(180)}
+              >
+                <Pressable
+                  onPress={onReset}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  style={({ pressed }) => ({
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: spacing.xs,
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
+                  <Ionicons name="refresh" size={16} color={colors.primary} />
+                  <Text style={{ ...type.bodyStrong, color: colors.primary }}>
+                    {t("filters.reset")}
+                  </Text>
+                </Pressable>
+              </Animated.View>
             ) : null}
           </View>
 
@@ -113,8 +148,16 @@ export function FilterSheet({
               gap: spacing.lg,
             }}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           >
-            {children}
+            {/* Each group rises in after the one above it, on every open. */}
+            {visible
+              ? Children.toArray(children).map((child, i) => (
+                  <Rise key={i} index={i + 1}>
+                    {child}
+                  </Rise>
+                ))
+              : children}
           </ScrollView>
 
           <View
@@ -130,57 +173,14 @@ export function FilterSheet({
           >
             <Button title={t("common.done")} onPress={onClose} />
           </View>
-        </View>
-      </View>
+        </Animated.View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
 
-interface PriceRangeProps {
-  min: string;
-  max: string;
-  onChangeMin: (value: string) => void;
-  onChangeMax: (value: string) => void;
-}
-
-/** Digits only: the bounds are parsed with Number(), and a stray separator
- *  would turn the whole filter into NaN and hide every listing. */
-const digits = (value: string) => value.replace(/[^\d]/g, "");
-
-/** Min/max price pair, sized so the two fields share the sheet's width. */
-export const PriceRangeFilter = memo(function PriceRangeFilter({
-  min,
-  max,
-  onChangeMin,
-  onChangeMax,
-}: PriceRangeProps) {
-  const t = useT();
-
-  return (
-    <View style={{ flexDirection: "row", gap: spacing.md }}>
-      <View style={{ flex: 1 }}>
-        <TextField
-          label={t("filters.priceFrom")}
-          placeholder="0"
-          keyboardType="number-pad"
-          value={min}
-          onChangeText={(v) => onChangeMin(digits(v))}
-          suffix="$"
-        />
-      </View>
-      <View style={{ flex: 1 }}>
-        <TextField
-          label={t("filters.priceTo")}
-          placeholder="100000"
-          keyboardType="number-pad"
-          value={max}
-          onChangeText={(v) => onChangeMax(digits(v))}
-          suffix="$"
-        />
-      </View>
-    </View>
-  );
-});
+/** The range slider, under the name both filter screens already import. */
+export { PriceRangeSlider as PriceRangeFilter } from "./PriceRangeSlider";
 
 interface ButtonProps {
   onPress: () => void;
@@ -228,7 +228,11 @@ export const FilterButton = memo(function FilterButton({
       />
 
       {active ? (
-        <View
+        // Keyed on the count: every change remounts it with a pop, so a filter
+        // taking effect is felt at the button, not just read.
+        <Animated.View
+          key={activeCount}
+          entering={ZoomIn.springify().damping(12)}
           style={{
             position: "absolute",
             top: -2,
@@ -254,7 +258,7 @@ export const FilterButton = memo(function FilterButton({
           >
             {activeCount}
           </Text>
-        </View>
+        </Animated.View>
       ) : null}
     </Pressable>
   );

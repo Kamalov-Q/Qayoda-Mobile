@@ -1,5 +1,6 @@
 import { memo } from "react";
 import { Pressable, Text, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { spacing, radii, type } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
@@ -30,44 +31,60 @@ export const Chip = memo(function Chip({
       onPress={onPress}
       accessibilityRole="radio"
       accessibilityState={{ selected: !!selected }}
-      style={({ pressed }) => ({
-        flexDirection: "row",
-        alignItems: "center",
-        gap: spacing.xs,
-        paddingVertical: 10,
-        paddingHorizontal: spacing.md,
-        borderRadius: radii.pill,
-        borderWidth: 1,
-        backgroundColor: selected
-          ? colors.primary
-          : pressed
-            ? colors.surfaceRaised
-            : colors.surface,
-        borderColor: selected ? colors.primary : colors.border,
-      })}
     >
-      {icon ? (
-        <Ionicons
-          name={icon}
-          size={15}
-          color={selected ? colors.onPrimary : colors.textMuted}
-        />
-      ) : null}
-      <Text
-        style={{
-          ...type.bodyStrong,
-          fontSize: 14,
-          color: selected ? colors.onPrimary : colors.text,
-        }}
-      >
-        {label}
-      </Text>
+      {({ pressed }) => (
+        // The styling lives on an Animated.View so it can transition: picking a
+        // chip washes it to the accent instead of snapping, and a press dips it
+        // a little — feedback that the tap registered before the filter lands.
+        <Animated.View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: spacing.xs,
+            paddingVertical: 10,
+            paddingHorizontal: spacing.md,
+            borderRadius: radii.pill,
+            borderWidth: 1,
+            backgroundColor: selected
+              ? colors.primary
+              : pressed
+                ? colors.surfaceRaised
+                : colors.surface,
+            borderColor: selected ? colors.primary : colors.border,
+            transform: [{ scale: pressed ? 0.95 : 1 }],
+            transitionProperty: ["backgroundColor", "borderColor", "transform"],
+            transitionDuration: 160,
+            transitionTimingFunction: "ease-out",
+          }}
+        >
+          {icon ? (
+            <Ionicons
+              name={icon}
+              size={15}
+              color={selected ? colors.onPrimary : colors.textMuted}
+            />
+          ) : null}
+          <Text
+            style={{
+              ...type.bodyStrong,
+              fontSize: 14,
+              color: selected ? colors.onPrimary : colors.text,
+            }}
+          >
+            {label}
+          </Text>
+        </Animated.View>
+      )}
     </Pressable>
   );
 });
 
 interface ChipGroupProps<T extends string> {
-  options: readonly { value: T; label: string; icon?: keyof typeof Ionicons.glyphMap }[];
+  options: readonly {
+    value: T;
+    label: string;
+    icon?: keyof typeof Ionicons.glyphMap;
+  }[];
   value: T;
   onChange: (value: T) => void;
 }

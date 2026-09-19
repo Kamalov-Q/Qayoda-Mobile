@@ -118,9 +118,7 @@ export const MessageBubble = memo(function MessageBubble({
               reply/edit/delete still reach media messages. */}
           <Pressable
             onPress={() =>
-              m.type === "IMAGE"
-                ? media && onPressImage?.(media)
-                : openMedia()
+              m.type === "IMAGE" ? media && onPressImage?.(media) : openMedia()
             }
             onLongPress={() => onLongPress(m)}
           >

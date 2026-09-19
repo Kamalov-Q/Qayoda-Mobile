@@ -13,6 +13,7 @@ import { useTheme } from "../src/theme/useTheme";
 import { type } from "../src/theme/tokens";
 import { ToastHost } from "../src/components/ui/Toast";
 import { DialogHost } from "../src/components/ui/Dialog";
+import { BrandMark } from "../src/components/ui/BrandMark";
 import { useT } from "../src/i18n";
 
 // NOTE: enableFreeze(true) was tried here and reverted — react-freeze hard-
@@ -86,7 +87,31 @@ export default function RootLayout() {
             {/* Names are file paths relative to this layout, so a nested
                 folder keeps its "/index" — "listing/[id]" matched no route and
                 the screen fell back to an untitled header. */}
-            <Stack.Screen name="add/index" options={{ title: t("add.title") }} />
+            <Stack.Screen
+              name="add/index"
+              options={{ title: t("add.title") }}
+            />
+            {/* The location pickers: ordinary screens that slide up like a
+                sheet. They used to be <Modal>s, and the map inside a Modal
+                took no pan or pinch at all. Their own header carries the
+                close/save controls, and swipe-back is off so a sideways drag
+                pans the map instead of dismissing the page. */}
+            <Stack.Screen
+              name="add/pin"
+              options={{
+                headerShown: false,
+                animation: "slide_from_bottom",
+                gestureEnabled: false,
+              }}
+            />
+            <Stack.Screen
+              name="add/draw"
+              options={{
+                headerShown: false,
+                animation: "slide_from_bottom",
+                gestureEnabled: false,
+              }}
+            />
             <Stack.Screen
               name="listing/[id]/index"
               options={{ title: t("listings.detailsTitle") }}
@@ -116,10 +141,24 @@ export default function RootLayout() {
             />
             {/* The thread replaces the title with the peer's name and presence,
                 so this only sets what it shows before the fetch lands. */}
-            <Stack.Screen name="chat/[id]" options={{ title: t("chat.title") }} />
+            <Stack.Screen
+              name="chat/[id]"
+              options={{ title: t("chat.title") }}
+            />
           </Stack>
         ) : (
-          <View style={{ flex: 1, backgroundColor: colors.bg }} />
+          // Same emblem as the native splash, so the web boot (which has no
+          // native splash) and the hand-off on native show one continuous logo.
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: colors.bg,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <BrandMark size={120} />
+          </View>
         )}
         <DialogHost />
         <ToastHost />

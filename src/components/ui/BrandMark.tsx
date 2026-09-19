@@ -1,42 +1,33 @@
 import { memo } from "react";
-import { View, Text } from "react-native";
+import { Image } from "expo-image";
 import { useTheme } from "../../theme/useTheme";
 
-/**
- * Placeholder wordmark tile — swap the Text for an <Image> once there's a
- * real logo asset. Sized to read as a brand anchor above the auth headline.
- */
+// Cropped from the Growen City brand artwork — the G-leaf emblem with its
+// skyline, square, so the rounded corners here are the only framing it gets.
+// require(), not import: Metro resolves assets this way, and the project has
+// no *.png module declaration for an import to typecheck against.
+const EMBLEM = require("../../../assets/images/brand-emblem.png");
+
+/** The Growen City emblem, drawn as an app-icon tile. */
 export const BrandMark = memo(function BrandMark({
   size = 56,
 }: {
   size?: number;
 }) {
-  const { colors, shadow } = useTheme();
+  const { shadow } = useTheme();
 
   return (
-    <View
+    <Image
+      source={EMBLEM}
+      accessibilityLabel="Growen City"
       style={{
         width: size,
         height: size,
-        // Squircle rather than the old rounded square: closer to the corner
-        // curvature of a real app icon at this size.
-        borderRadius: size * 0.32,
-        backgroundColor: colors.primary,
-        alignItems: "center",
-        justifyContent: "center",
-        ...shadow.control,
+        // Squircle: closer to the corner curvature of a real app icon.
+        borderRadius: size * 0.24,
+        ...shadow.card,
       }}
-    >
-      <Text
-        style={{
-          color: colors.onPrimary,
-          fontSize: size * 0.46,
-          fontWeight: "800",
-          letterSpacing: -1,
-        }}
-      >
-        U
-      </Text>
-    </View>
+      contentFit="cover"
+    />
   );
 });

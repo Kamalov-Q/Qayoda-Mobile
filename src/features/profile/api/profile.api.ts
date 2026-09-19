@@ -1,5 +1,6 @@
 // src/features/profile/api/profile.api.ts
 import { Platform } from "react-native";
+import { File } from "expo-file-system";
 import { api, ApiError, refreshSession } from "../../../lib/api-client";
 import { API_URL } from "../../../lib/env";
 import { useAuthStore } from "../../auth/store/auth.store";
@@ -30,8 +31,9 @@ export interface UpdateProfileInput {
 }
 
 /**
- * Same platform split as upload-client: React Native's FormData needs the
- * `{ uri, name, type }` object form, web needs a real Blob.
+ * Same platform split as upload-client: SDK 57's fetch only takes real Blob
+ * parts, so natives wrap the URI in expo-file-system's File; web reads the
+ * URI into a Blob.
  */
 async function appendAvatar(form: FormData, uri: string) {
   const name = "avatar.jpg";
@@ -42,11 +44,7 @@ async function appendAvatar(form: FormData, uri: string) {
     return;
   }
 
-  form.append("file", {
-    uri,
-    name,
-    type: "image/jpeg",
-  } as unknown as Blob);
+  form.append("file", new File(uri), name);
 }
 
 async function uploadAvatar(uri: string): Promise<Profile> {

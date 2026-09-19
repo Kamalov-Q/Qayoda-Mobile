@@ -1,5 +1,11 @@
 import { memo, useEffect, useRef, useState } from "react";
-import { View, TextInput, Pressable, Text, ActivityIndicator } from "react-native";
+import {
+  View,
+  TextInput,
+  Pressable,
+  Text,
+  ActivityIndicator,
+} from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { Ionicons } from "@expo/vector-icons";

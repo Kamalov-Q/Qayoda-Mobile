@@ -1,6 +1,4 @@
-// Design tokens. Dark-first: the dark palette is the reference design and the
-// light palette is derived to match its contrast relationships, not the other
-// way round. Nothing here reads the current scheme — use useTheme() for that.
+// Design tokens. Nothing here reads the current scheme — use useTheme() for that.
 
 export interface Palette {
   bg: string;
@@ -23,67 +21,79 @@ export interface Palette {
   success: string;
   successSurface: string;
   successBorder: string;
+  /** Payme brand teal, for payment buttons and badges. */
+  payme: string;
+  /** Promoted / VIP listings. */
+  vip: string;
   overlay: string;
   /** Scrim over photography, so white text stays legible on any image. */
   imageScrim: string;
 }
 
+// Brand palette: slate neutrals with an emerald accent. The base values
+// (bg, surface, text, textMuted, border, primary, danger, payme, vip, overlay)
+// are the brand spec; everything else is derived from the same Tailwind
+// slate / emerald / red scales so tints stay in family.
 const dark: Palette = {
   // Backgrounds, from furthest back to most elevated.
-  bg: "#0A0C10",
-  surface: "#13161C", // cards / segmented track
-  surfaceRaised: "#1B1F27", // input fills, pressed segments
-  surfaceSunken: "#070609", // wells behind elevated content
+  bg: "#0F172A",
+  surface: "#1E293B", // cards / segmented track
+  surfaceRaised: "#273449", // input fills, pressed segments
+  surfaceSunken: "#0B1120", // wells behind elevated content
   // Borders
-  border: "#242932",
-  borderStrong: "#333A45",
+  border: "#334155",
+  borderStrong: "#475569",
   // Text
-  text: "#F4F6FA",
-  textMuted: "#98A2B3",
-  textFaint: "#616B7C",
-  // Accent — lifted from the light-mode blue so it stays vivid on near-black.
-  primary: "#4C8DFF",
-  primaryPressed: "#3A79E8",
-  primarySoft: "#152238", // tinted fill behind accents
-  primaryBorder: "#27406B",
+  text: "#F8FAFC",
+  textMuted: "#94A3B8",
+  textFaint: "#64748B",
+  // Accent
+  primary: "#10B981",
+  primaryPressed: "#059669",
+  primarySoft: "#10302D", // tinted fill behind accents
+  primaryBorder: "#065F46",
   onPrimary: "#FFFFFF",
   // Feedback
-  danger: "#FB7185",
-  dangerSurface: "#2A1519",
-  dangerBorder: "#4A2229",
+  danger: "#F87171",
+  dangerSurface: "#2D1A22",
+  dangerBorder: "#5B2A33",
   success: "#4ADE80",
-  successSurface: "#0F2418",
-  successBorder: "#1E4430",
+  successSurface: "#0F2A1E",
+  successBorder: "#1E4D36",
+  // Brand extras
+  payme: "#33CCCC",
+  vip: "#FBBF24",
   // Fixed
-  overlay: "rgba(0,0,0,0.65)",
+  overlay: "rgba(0, 0, 0, 0.7)",
   imageScrim: "rgba(6,8,12,0.55)",
 };
 
 const light: Palette = {
-  // Cards are white and the page behind them is faintly tinted — the inverse
-  // of the dark scheme, where the page is darkest and cards lift off it. A
+  // Cards are white and the page behind them is faintly tinted — a
   // white-on-white version of this UI loses every card edge.
-  bg: "#F5F7FB",
+  bg: "#F8FAFC",
   surface: "#FFFFFF",
-  surfaceRaised: "#F1F4F9", // input fills, pressed states
-  surfaceSunken: "#EAEEF5",
-  border: "#E5EAF2",
+  surfaceRaised: "#F1F5F9", // input fills, pressed states
+  surfaceSunken: "#EDF2F7",
+  border: "#E2E8F0",
   borderStrong: "#CBD5E1",
-  text: "#0B1220",
-  textMuted: "#5A6779",
+  text: "#0F172A",
+  textMuted: "#64748B",
   textFaint: "#94A3B8",
-  primary: "#2E6BFF",
-  primaryPressed: "#1F55D6",
-  primarySoft: "#EDF3FF",
-  primaryBorder: "#C7DAFF",
+  primary: "#059669",
+  primaryPressed: "#047857",
+  primarySoft: "#ECFDF5",
+  primaryBorder: "#A7F3D0",
   onPrimary: "#FFFFFF",
-  danger: "#DC2626",
+  danger: "#EF4444",
   dangerSurface: "#FEF2F2",
   dangerBorder: "#FECACA",
-  success: "#15A34A",
+  success: "#16A34A",
   successSurface: "#F0FDF4",
   successBorder: "#BBF7D0",
-  overlay: "rgba(11,18,32,0.45)",
+  payme: "#33CCCC",
+  vip: "#D97706",
+  overlay: "rgba(0, 0, 0, 0.4)",
   imageScrim: "rgba(6,8,12,0.45)",
 };
 
@@ -104,7 +114,7 @@ export const shadows = {
   light: {
     card: { boxShadow: "0px 1px 2px rgba(11,18,32,0.04), 0px 6px 16px rgba(11,18,32,0.06)" },
     raised: { boxShadow: "0px 2px 6px rgba(11,18,32,0.08), 0px 16px 32px rgba(11,18,32,0.12)" },
-    control: { boxShadow: "0px 2px 8px rgba(46,107,255,0.28)" },
+    control: { boxShadow: "0px 2px 8px rgba(5,150,105,0.28)" },
   },
   dark: {
     card: { boxShadow: "0px 2px 8px rgba(0,0,0,0.35)" },

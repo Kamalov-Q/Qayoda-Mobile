@@ -1,3 +1,4 @@
+import { File } from "expo-file-system";
 import { API_URL } from "../../../lib/env";
 import { ApiError, refreshSession } from "../../../lib/api-client";
 import { useAuthStore } from "../../auth/store/auth.store";
@@ -22,12 +23,9 @@ export async function uploadChatAttachment(
 ): Promise<ChatAttachment> {
   const doUpload = () => {
     const form = new FormData();
-    // RN FormData file shape — never set Content-Type manually (boundary is auto)
-    form.append("file", {
-      uri: localUri,
-      name: fileName,
-      type: mimeType,
-    } as unknown as Blob);
+    // SDK 57 fetch takes only real Blob parts; expo File wraps the local URI.
+    // Never set Content-Type on the request manually (boundary is auto).
+    form.append("file", new File(localUri), fileName);
     return fetch(`${API_URL}/media/chat/upload?kind=${kind}`, {
       method: "POST",
       headers: {
