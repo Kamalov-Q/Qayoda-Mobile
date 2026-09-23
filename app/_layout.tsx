@@ -9,6 +9,8 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "../src/lib/query-client";
 import { bootstrapSession } from "../src/features/auth/hooks/useAuth";
 import { hydratePreferences } from "../src/lib/preferences";
+import { hydrateCategories } from "../src/features/listings/hooks/useCategories";
+import { hydrateAmenities } from "../src/features/listings/hooks/useAmenities";
 import { useTheme } from "../src/theme/useTheme";
 import { type } from "../src/theme/tokens";
 import { ToastHost } from "../src/components/ui/Toast";
@@ -29,7 +31,14 @@ export default function RootLayout() {
   useEffect(() => {
     // Preferences must land before the first paint or the app flashes the
     // wrong theme and language; the session decides which route we land on.
-    Promise.all([hydratePreferences(), bootstrapSession()]).finally(() => {
+    // Categories too: the post form and filters build from them, and the
+    // saved copy lets them open offline with the admin-managed list.
+    Promise.all([
+      hydratePreferences(),
+      hydrateCategories(),
+      hydrateAmenities(),
+      bootstrapSession(),
+    ]).finally(() => {
       setReady(true);
       SplashScreen.hideAsync();
     });

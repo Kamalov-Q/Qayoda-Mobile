@@ -1,6 +1,6 @@
 // app/add/index.tsx
 import { useMemo, useRef, useState } from "react";
-import { Text, View, TextInput } from "react-native";
+import { ActivityIndicator, Text, View, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useForm, useWatch, Controller } from "react-hook-form";
@@ -33,10 +33,8 @@ import { ImagePickerGrid } from "../../src/features/listings/components/ImagePic
 import { router } from "expo-router";
 import { useLocationPicker } from "../../src/features/map/locationPickerStore";
 import { textToHtml } from "../../src/features/listings/utils/format";
-import {
-  CATEGORY_ICONS,
-  PURPOSE_ICONS,
-} from "../../src/features/listings/utils/icons";
+import { PURPOSE_ICONS } from "../../src/features/listings/utils/icons";
+import { useCategories } from "../../src/features/listings/hooks/useCategories";
 import {
   MIN_POLYGON_POINTS,
   closeRing,
@@ -44,41 +42,16 @@ import {
   polygonAreaM2,
 } from "../../src/features/listings/utils/geo";
 import {
-  LISTING_PROPERTY_KEYS,
   PropertyCategory,
   OfferPurpose,
 } from "../../src/features/listings/api/listings.api";
-
-// Order is deliberate: the two most common listings first.
-const CATEGORIES = [
-  "APARTMENT",
-  "HOUSE",
-  "LAND",
-  "NON_RESIDENTIAL",
-  "BUILDING",
-  "DACHA",
-  "HOTEL",
-] as const satisfies readonly PropertyCategory[];
+import { useAmenities } from "../../src/features/listings/hooks/useAmenities";
 
 const PURPOSES = [
   "SALE",
   "RENT_MONTHLY",
   "RENT_DAILY",
 ] as const satisfies readonly OfferPurpose[];
-
-// Mirrors FLOOR_CAPABLE_CATEGORIES on the server, which rejects a floor sent
-// for anything else. A house or a dacha IS the building, and land has no
-// storeys at all — only a unit inside a stack, or the stack itself, can answer
-// "which floor".
-const FLOOR_CATEGORIES = [
-  "APARTMENT",
-  "BUILDING",
-  "NON_RESIDENTIAL",
-  "HOTEL",
-] as const satisfies readonly PropertyCategory[];
-
-const canHaveFloors = (category: PropertyCategory) =>
-  (FLOOR_CATEGORIES as readonly PropertyCategory[]).includes(category);
 
 // Being in a floor-capable category still does not mean the property has
 // floors: a single-storey shop filed as BUILDING, or a ground-level house
@@ -267,7 +240,30 @@ export default function AddListingScreen() {
   // (home quick action, tab, deep link), they meet the same prompt.
   const authed = useIsAuthed();
 
-  const [category, setCategory] = useState<PropertyCategory>("APARTMENT");
+  // Nothing picked yet: the form starts on the first category the server
+  // lists (see selectedCategory), whatever admins have made that.
+  const [category, setCategory] = useState<PropertyCategory | null>(null);
+  // Categories are admin-managed (GET /categories): names, icons, order and
+  // which ones have floors all come from the server. The floor rule mirrors the
+  // server's per-category flag, which rejects a floor sent for anything else —
+  // a house or a dacha IS the building, and land has no storeys at all.
+  const {
+    categories,
+    nameOf,
+    iconOf,
+    hasFloors: canHaveFloors,
+    isLoading: categoriesLoading,
+    refetch: refetchCategories,
+  } = useCategories();
+  const { amenities, nameOf: amenityName } = useAmenities();
+  // The pick only counts while it is still offered: an admin may hide or
+  // delete a category, and posting into one would be refused. Fall back to the
+  // first category rather than send something the server will reject — and to
+  // null when there are none at all (first launch, offline).
+  const selectedCategory =
+    category && categories.some((c) => c.slug === category)
+      ? category
+      : (categories[0]?.slug ?? null);
   // POLYGON = drawn boundary (precise, derives area); PIN = one dropped point
   // (honest for an apartment in a block). Exactly one ships with the listing.
   const [locMode, setLocMode] = useState<"POLYGON" | "PIN">("POLYGON");
@@ -300,12 +296,12 @@ export default function AddListingScreen() {
 
   const categoryOptions = useMemo<SelectGridOption<PropertyCategory>[]>(
     () =>
-      CATEGORIES.map((value) => ({
-        value,
-        label: t(`categories.${value}`),
-        icon: CATEGORY_ICONS[value],
+      categories.map((c) => ({
+        value: c.slug,
+        label: nameOf(c.slug),
+        icon: iconOf(c.slug),
       })),
-    [t],
+    [categories, nameOf, iconOf],
   );
   const purposeTabs = useMemo(
     () =>
@@ -342,9 +338,10 @@ export default function AddListingScreen() {
       title: "",
       rooms: "",
       price: "",
-      // The default category is APARTMENT, and an apartment in a block is the
-      // common case here — so the two fields start open rather than behind a
-      // tap, and only the one nobody has to look up is required.
+      // A flat in a block is the common case here — so when the starting
+      // category has floors, the two fields start open rather than behind a
+      // tap, and only the one nobody has to look up is required. (For a
+      // category without floors the whole section is hidden anyway.)
       hasFloors: "yes",
       floor: "",
       totalFloors: "",
@@ -384,7 +381,7 @@ export default function AddListingScreen() {
         ? ` / ${t("add.perDay")}`
         : "";
 
-  const showFloors = canHaveFloors(category);
+  const showFloors = selectedCategory ? canHaveFloors(selectedCategory) : false;
   const floorsDeclared = useWatch({ control, name: "hasFloors" }) === "yes";
 
   const resetFloorFields = () => {
@@ -509,6 +506,13 @@ export default function AddListingScreen() {
   };
 
   const onSubmit = (d: FormData) => {
+    // Categories come from the server; with none loaded (first launch while
+    // offline) there is no valid category to post into.
+    if (!selectedCategory) {
+      notify("add.noCategoryTitle", "add.noCategoryMessage");
+      void refetchCategories();
+      return;
+    }
     if (!hasLocation) {
       notify("add.missingLocationTitle", "add.missingLocationMessage");
       return;
@@ -528,7 +532,7 @@ export default function AddListingScreen() {
     const sendFloors = showFloors && d.hasFloors === "yes";
 
     create.mutate({
-      category,
+      category: selectedCategory,
       title: d.title.trim(),
       rooms: d.rooms ? Number(d.rooms) : undefined,
       // Both stay off the payload unless the category can carry them AND the
@@ -582,11 +586,27 @@ export default function AddListingScreen() {
         </View>
 
         <Section title={t("add.category")}>
-          <SelectGrid
-            options={categoryOptions}
-            value={category}
-            onChange={changeCategory}
-          />
+          {selectedCategory ? (
+            <SelectGrid
+              options={categoryOptions}
+              value={selectedCategory}
+              onChange={changeCategory}
+            />
+          ) : categoriesLoading ? (
+            <ActivityIndicator />
+          ) : (
+            // No saved copy and the server unreachable: say so, and offer the
+            // one action that can fix it.
+            <View style={{ gap: spacing.sm }}>
+              <Text style={text.caption}>{t("add.noCategoryMessage")}</Text>
+              <Button
+                title={t("common.retry")}
+                variant="secondary"
+                size="sm"
+                onPress={() => void refetchCategories()}
+              />
+            </View>
+          )}
         </Section>
 
         <Controller
@@ -814,10 +834,10 @@ export default function AddListingScreen() {
               gap: spacing.sm,
             }}
           >
-            {LISTING_PROPERTY_KEYS.map((key) => (
+            {amenities.map(({ key }) => (
               <Chip
                 key={key}
-                label={t(`props.${key}`)}
+                label={amenityName(key)}
                 selected={properties.includes(key)}
                 onPress={() =>
                   setProperties((current) =>

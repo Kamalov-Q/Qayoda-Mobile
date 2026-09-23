@@ -2,31 +2,51 @@ import { api } from "@/src/lib/api-client";
 
 export type OfferPurpose = "SALE" | "RENT_MONTHLY" | "RENT_DAILY";
 
-/** Amenity keys — mirror of the server catalog; labels live in i18n. */
-export const LISTING_PROPERTY_KEYS = [
-  "REPAIRED",
-  "FURNISHED",
-  "AC",
-  "HEATING",
-  "PARKING",
-  "GARAGE",
-  "BALCONY",
-  "ELEVATOR",
-  "INTERNET",
-  "SECURITY",
-  "POOL",
-  "GARDEN",
+/**
+ * Why a listing can be reported — fixed moderation policy, so hardcoded on
+ * purpose (unlike categories/amenities). OTHER requires the free-text field.
+ * Labels live in i18n under report.*.
+ */
+export const REPORT_REASONS = [
+  "FRAUD",
+  "WRONG_INFO",
+  "ALREADY_SOLD",
+  "WRONG_PRICE",
+  "DUPLICATE",
+  "INAPPROPRIATE",
+  "OTHER",
 ] as const;
-export type ListingPropertyKey = (typeof LISTING_PROPERTY_KEYS)[number];
+export type ReportReason = (typeof REPORT_REASONS)[number];
 
-export type PropertyCategory =
-  | "APARTMENT"
-  | "NON_RESIDENTIAL"
-  | "HOUSE"
-  | "LAND"
-  | "BUILDING"
-  | "DACHA"
-  | "HOTEL";
+/**
+ * One entry of GET /amenities. Amenities are admin-managed like categories,
+ * so the app carries no hard-coded key list — see useAmenities for labels.
+ */
+export interface Amenity {
+  key: string;
+  nameUz: string;
+  nameRu: string;
+  sortOrder: number;
+}
+
+/**
+ * A category slug ("APARTMENT", "HOTEL", …). Categories are managed by admins
+ * now (GET /categories), so this is any string the server knows rather than a
+ * fixed union — see useCategories for names, icons and the floor rule.
+ */
+export type PropertyCategory = string;
+
+/** One entry of GET /categories. */
+export interface Category {
+  slug: string;
+  nameUz: string;
+  nameRu: string;
+  /** Icon key (CATEGORY_ICON_MAP); unknown keys fall back to a generic glyph. */
+  icon: string;
+  sortOrder: number;
+  /** Whether a listing in it has "floor 4 of 9". */
+  floorCapable: boolean;
+}
 
 export interface Offer {
   id: string;
@@ -69,6 +89,22 @@ export interface Listing {
   centroid: { type: "Point"; coordinates: [number, number] } | null;
   createdAt: string;
   publishedAt: string | null;
+  /**
+   * The seller, as the public listing page shows them. Null when the account
+   * has since been deleted. Less than a full profile on purpose — no email or
+   * phone beyond the listing's own contact number.
+   */
+  owner: ListingOwner | null;
+}
+
+export interface ListingOwner {
+  id: string;
+  name: string | null;
+  surname: string | null;
+  avatarUrl: string | null;
+  avatarThumbUrl: string | null;
+  isVerifiedRealtor: boolean;
+  createdAt: string;
 }
 
 export interface MapPointFeature {
@@ -163,6 +199,12 @@ export interface FeedFilters {
 }
 
 export const listingApi = {
+  /** Public: the app needs categories before sign-in (filters, post form). */
+  categories: () => api<Category[]>("/categories", { auth: false }),
+
+  /** Public: the amenity chips on the post form and the listing page. */
+  amenities: () => api<Amenity[]>("/amenities", { auth: false }),
+
   /** The browsable feed — ALL active listings, not just the map viewport. */
   getFeed: (filters: FeedFilters, limit = 20, offset = 0) => {
     const params = new URLSearchParams({
@@ -171,8 +213,10 @@ export const listingApi = {
       offset: String(offset),
     });
     if (filters.category) params.set("category", filters.category);
-    if (filters.priceMin != null) params.set("priceMin", String(filters.priceMin));
-    if (filters.priceMax != null) params.set("priceMax", String(filters.priceMax));
+    if (filters.priceMin != null)
+      params.set("priceMin", String(filters.priceMin));
+    if (filters.priceMax != null)
+      params.set("priceMax", String(filters.priceMax));
     if (filters.q?.trim()) params.set("q", filters.q.trim());
     if (filters.sort) params.set("sort", filters.sort);
     return api<Listing[]>(`/listings?${params}`, { auth: false });
@@ -194,8 +238,10 @@ export const listingApi = {
     });
     if (filters.address?.trim()) params.set("address", filters.address.trim());
     if (filters.category) params.set("category", filters.category);
-    if (filters.priceMin != null) params.set("priceMin", String(filters.priceMin));
-    if (filters.priceMax != null) params.set("priceMax", String(filters.priceMax));
+    if (filters.priceMin != null)
+      params.set("priceMin", String(filters.priceMin));
+    if (filters.priceMax != null)
+      params.set("priceMax", String(filters.priceMax));
     return api<ViewportResponse>(`/listings/map?${params}`, { auth: false });
   },
 
@@ -215,7 +261,14 @@ export const listingApi = {
   getLatest: (limit = 10) =>
     api<Listing[]>(`/listings/latest?limit=${limit}`, { auth: false }),
 
-  getMine: () => api<Listing[]>(`/listings/mine`),
+  getMine: (limit = 20, offset = 0) =>
+    api<Listing[]>(`/listings/mine?limit=${limit}&offset=${offset}`),
+
+  /** The account screen's three totals — the lists paginate, counts don't. */
+  getCounts: () =>
+    api<{ mine: number; mineActive: number; saved: number }>(
+      `/listings/counts`,
+    ),
 
   create: (input: CreateListingInput) =>
     api<Listing>(`/listings`, {
@@ -233,7 +286,18 @@ export const listingApi = {
   restore: (id: string) =>
     api<Listing>(`/listings/${id}/restore`, { method: "PATCH" }),
 
-  getSaved: () => api<Listing[]>(`/listings/saved`),
+  getSaved: (limit = 20, offset = 0) =>
+    api<Listing[]>(`/listings/saved?limit=${limit}&offset=${offset}`),
+
+  /** Just the ids — what the save-hearts subscribe to. */
+  getSavedIds: () => api<string[]>(`/listings/saved/ids`),
+
+  /** Flag a listing for the moderators. 409 ALREADY_REPORTED on a repeat. */
+  report: (id: string, reason: ReportReason, comment?: string) =>
+    api<{ success: boolean }>(`/listings/${id}/report`, {
+      method: "POST",
+      body: { reason, ...(comment ? { comment } : {}) },
+    }),
 
   /** Both idempotent server-side, so a repeated tap can't error. */
   save: (id: string) =>

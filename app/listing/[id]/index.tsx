@@ -1,4 +1,4 @@
-import {} from "react";
+import { useState } from "react";
 // app/listing/[id]/index.tsx
 import {
   Text,
@@ -15,10 +15,11 @@ import {
   Card,
   EmptyState,
   HEADER_EDGES,
+  Avatar,
 } from "../../../src/components/ui";
 import { spacing, radii } from "../../../src/theme/tokens";
 import { useTheme } from "../../../src/theme/useTheme";
-import { useT, type TranslationKey } from "../../../src/i18n";
+import { useT, useLanguage, type TranslationKey } from "../../../src/i18n";
 import { confirm } from "../../../src/lib/alerts";
 import { useListing } from "../../../src/features/listings/hooks/useListing";
 import {
@@ -32,12 +33,15 @@ import {
 import { ListingImageCarousel } from "../../../src/features/listings/components/ListingImageCarousel";
 import { ListingLocationMap } from "../../../src/features/listings/components/ListingLocationMap";
 import { SimilarListings } from "../../../src/features/listings/components/SimilarListings";
+import { ReportListingSheet } from "../../../src/features/listings/components/ReportListingSheet";
 import { useConversations } from "../../../src/features/chat/hooks/useConversations";
 import { OfferBadge } from "../../../src/features/listings/components/OfferBadge";
 import { htmlToText } from "../../../src/features/listings/utils/format";
 import { useAuthStore } from "../../../src/features/auth/store/auth.store";
 import { requireAuth } from "../../../src/features/auth/guest";
 import { usePresence } from "../../../src/features/chat/hooks/usePresence";
+import { useCategories } from "../../../src/features/listings/hooks/useCategories";
+import { useAmenities } from "../../../src/features/listings/hooks/useAmenities";
 import { PresenceStatus } from "../../../src/features/chat/components/PresenceStatus";
 
 export default function ListingDetailScreen() {
@@ -50,6 +54,11 @@ export default function ListingDetailScreen() {
   const toggleSave = useToggleSave();
   const { colors, text } = useTheme();
   const t = useT();
+  const language = useLanguage();
+  // Categories are admin-managed; the name comes from the server's list.
+  const { nameOf: categoryName } = useCategories();
+  const { nameOf: amenityName } = useAmenities();
+  const [reporting, setReporting] = useState(false);
   // For "Xabar yozish": an existing thread about THIS listing reopens instead
   // of drafting a duplicate — the server would merge them on send anyway, but
   // reopening shows the history immediately.
@@ -84,6 +93,11 @@ export default function ListingDetailScreen() {
 
   const isOwner = !!userId && userId === listing.ownerId;
 
+  // A seller who never filled in their name still needs something to tap.
+  const ownerName =
+    [listing.owner?.name, listing.owner?.surname].filter(Boolean).join(" ") ||
+    t("chat.unknownUser");
+
   // Inactive offers are hidden, but a listing whose offers are all inactive
   // still needs a price on screen rather than an empty row.
   const activeOffers = listing.offers.filter((o) => o.isActive);
@@ -97,7 +111,7 @@ export default function ListingDetailScreen() {
         : `${listing.floor}/${listing.totalFloors}`;
 
   const specs: { key: TranslationKey; value: string | null }[] = [
-    { key: "listings.specType", value: t(`categories.${listing.category}`) },
+    { key: "listings.specType", value: categoryName(listing.category) },
     {
       key: "listings.specArea",
       value: listing.areaM2 ? `${Number(listing.areaM2)} m²` : null,
@@ -309,7 +323,7 @@ export default function ListingDetailScreen() {
                     }}
                   >
                     <Text style={{ ...text.caption, color: colors.primary }}>
-                      {t(`props.${key}` as Parameters<typeof t>[0])}
+                      {amenityName(key)}
                     </Text>
                   </View>
                 ))}
@@ -348,12 +362,90 @@ export default function ListingDetailScreen() {
               />
             </View>
           ) : (
-            <View style={{ gap: spacing.sm }}>
-              {/* Tells the buyer whether a message is likely to be read now. */}
-              <PresenceStatus
-                presence={ownerPresence}
-                prefix={t("listings.seller")}
-              />
+            <View style={{ gap: spacing.md }}>
+              {/* Who is selling — a name and a face carry more than "Sotuvchi",
+                  and the whole row opens their profile and their other ads.
+                  Through requireAuth: the profile endpoint needs a session,
+                  so a guest is sent to sign in rather than to a 401. */}
+              {listing.owner ? (
+                <Pressable
+                  onPress={() =>
+                    requireAuth(() =>
+                      router.push(`/profile/${listing.owner!.id}`),
+                    )
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={t("userProfile.openProfile")}
+                  style={({ pressed }) => ({
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: spacing.md,
+                    padding: spacing.md,
+                    borderRadius: radii.lg,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: pressed
+                      ? colors.surfaceRaised
+                      : colors.surface,
+                  })}
+                >
+                  <Avatar
+                    uri={
+                      listing.owner.avatarThumbUrl ?? listing.owner.avatarUrl
+                    }
+                    name={ownerName}
+                    size={48}
+                    online={ownerPresence?.online}
+                  />
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: spacing.xs,
+                      }}
+                    >
+                      <Text style={text.bodyStrong} numberOfLines={1}>
+                        {ownerName}
+                      </Text>
+                      {listing.owner.isVerifiedRealtor ? (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={16}
+                          color={colors.primary}
+                        />
+                      ) : null}
+                    </View>
+                    {/* Presence when it is known, otherwise how long they have
+                        been on the app — both answer "can I trust a reply?" */}
+                    {ownerPresence ? (
+                      <PresenceStatus presence={ownerPresence} />
+                    ) : (
+                      <Text style={text.caption}>
+                        {t("userProfile.memberSince", {
+                          date: new Date(
+                            listing.owner.createdAt,
+                          ).toLocaleDateString(language, {
+                            year: "numeric",
+                            month: "long",
+                          }),
+                        })}
+                      </Text>
+                    )}
+                  </View>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={18}
+                    color={colors.textFaint}
+                  />
+                </Pressable>
+              ) : (
+                // The account is gone; the listing outlives it.
+                <PresenceStatus
+                  presence={ownerPresence}
+                  prefix={t("listings.seller")}
+                />
+              )}
               {/* The way in for everyone else — guests included: the tap routes
                 through requireAuth, so a signed-out user lands on the login
                 flow instead of a silent 401. Sending the opener is what
@@ -386,12 +478,44 @@ export default function ListingDetailScreen() {
             </View>
           )}
 
+          {/* Moderation way in — everyone but the owner; guests go through
+              the same login gate as every other account-only action. */}
+          {!isOwner ? (
+            <Pressable
+              onPress={() => requireAuth(() => setReporting(true))}
+              accessibilityRole="button"
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: spacing.sm,
+                paddingVertical: spacing.md,
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Ionicons
+                name="flag-outline"
+                size={16}
+                color={colors.textMuted}
+              />
+              <Text style={{ ...text.caption, color: colors.textMuted }}>
+                {t("report.action")}
+              </Text>
+            </Pressable>
+          ) : null}
+
           <SimilarListings
             listingId={listing.id}
             purpose={activeOffers[0]?.purpose ?? "SALE"}
           />
         </View>
       </ScrollView>
+
+      <ReportListingSheet
+        listingId={listing.id}
+        visible={reporting}
+        onClose={() => setReporting(false)}
+      />
     </Screen>
   );
 }

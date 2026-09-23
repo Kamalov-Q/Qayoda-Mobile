@@ -1,5 +1,5 @@
 // app/profile/[id].tsx
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -25,6 +25,7 @@ import { useT, useLanguage } from "../../src/i18n";
 import { errorMessage } from "../../src/lib/api-error";
 import { resolveMediaUrl } from "../../src/lib/media-url";
 import { useUserProfile } from "../../src/features/users/hooks/useUserProfile";
+import { useUserListings } from "../../src/features/users/hooks/useUserListings";
 import { ListingCard } from "../../src/features/listings/components/ListingCard";
 import type { Listing } from "../../src/features/listings/api/listings.api";
 import { usePresence } from "../../src/features/chat/hooks/usePresence";
@@ -40,6 +41,12 @@ export default function UserProfileScreen() {
     useUserProfile(id);
   const [viewingAvatar, setViewingAvatar] = useState(false);
   const presence = usePresence(id);
+  // Page one rides along with the profile; this fetches the rest on scroll.
+  const more = useUserListings(id, data?.listingCount ?? 0);
+  const listings = useMemo(
+    () => [...(data?.listings ?? []), ...(more.data?.pages.flat() ?? [])],
+    [data?.listings, more.data],
+  );
 
   const photo = data?.avatarUrl ?? data?.avatarThumbUrl ?? null;
 
@@ -156,7 +163,7 @@ export default function UserProfileScreen() {
       <Stack.Screen options={{ title: name }} />
 
       <FlatList<Listing>
-        data={data.listings}
+        data={listings}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={header}
         contentContainerStyle={{
@@ -181,6 +188,19 @@ export default function UserProfileScreen() {
         renderItem={({ item }) => (
           <ListingCard listing={item} onPress={openListing} />
         )}
+        // Half a screen early, so the next page is usually there by the time
+        // the reader reaches the end.
+        onEndReachedThreshold={0.5}
+        onEndReached={() => {
+          if (more.hasNextPage && !more.isFetchingNextPage) {
+            void more.fetchNextPage();
+          }
+        }}
+        ListFooterComponent={
+          more.isFetchingNextPage ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : null
+        }
       />
 
       {viewingAvatar ? (

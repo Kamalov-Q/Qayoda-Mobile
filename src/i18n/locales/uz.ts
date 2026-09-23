@@ -189,19 +189,37 @@ export const uz = {
     logoutConfirmMessage: "Hisobingizdan chiqmoqchimisiz?",
   },
 
-  props: {
-    REPAIRED: "Ta'mirlangan",
-    FURNISHED: "Mebel bilan",
-    AC: "Konditsioner",
-    HEATING: "Isitish tizimi",
-    PARKING: "Avtoturargoh",
-    GARAGE: "Garaj",
-    BALCONY: "Balkon",
-    ELEVATOR: "Lift",
-    INTERNET: "Internet",
-    SECURITY: "Qo'riqlanadi",
-    POOL: "Basseyn",
-    GARDEN: "Bog'",
+
+  chatReport: {
+    action: "Shikoyat qilish",
+    title: "Suhbat haqida shikoyat",
+    subtitle: "Nima uchun bu suhbat haqida xabar bermoqchisiz?",
+    SPAM: "Spam yoki reklama",
+    SCAM: "Firibgarlik: oldindan to'lov so'ramoqda",
+    HARASSMENT: "Haqorat yoki tahdid",
+    INAPPROPRIATE: "Nomaqbul kontent",
+    OTHER: "Boshqa sabab",
+    sent: "Shikoyat yuborildi. Moderatorlar ko'rib chiqadi.",
+    already: "Siz bu suhbat haqida allaqachon xabar bergansiz",
+    notice:
+      "Shikoyat yuborilsa, moderatorlar shu suhbat yozishmalarini ko'rishi mumkin.",
+  },
+
+  report: {
+    action: "Shikoyat qilish",
+    title: "Shikoyat qilish",
+    subtitle: "Nima uchun bu e'lon haqida xabar bermoqchisiz?",
+    FRAUD: "Firibgarlik",
+    WRONG_INFO: "Ma'lumotlar noto'g'ri",
+    ALREADY_SOLD: "Allaqachon sotilgan yoki band",
+    WRONG_PRICE: "Narx noto'g'ri",
+    DUPLICATE: "Takroriy e'lon",
+    INAPPROPRIATE: "Nomaqbul kontent",
+    OTHER: "Boshqa sabab",
+    otherPlaceholder: "Sababni yozing…",
+    submit: "Yuborish",
+    sent: "Shikoyat yuborildi. Rahmat!",
+    already: "Siz bu e'lon haqida allaqachon xabar bergansiz",
   },
 
   validation: {
@@ -273,16 +291,6 @@ export const uz = {
     perDay: "/kun",
   },
 
-  categories: {
-    APARTMENT: "Kvartira",
-    HOUSE: "Hovli",
-    LAND: "Yer",
-    NON_RESIDENTIAL: "Noturar joy",
-    BUILDING: "Bino",
-    DACHA: "Dacha",
-    HOTEL: "Mehmonxona",
-  },
-
   purposes: {
     SALE: "Sotish",
     RENT_MONTHLY: "Oylik ijara",
@@ -327,6 +335,8 @@ export const uz = {
     dropPin: "Xaritada belgilash",
     pinSet: "Nuqta qo'yildi",
     noPin: "Nuqta hali qo'yilmagan",
+    noCategoryTitle: "Turi tanlanmagan",
+    noCategoryMessage: "E'lon turlarini yuklab bo'lmadi. Internetni tekshirib, qayta urinib ko'ring.",
     missingLocationTitle: "Joylashuv belgilanmagan",
     missingLocationMessage:
       "E'lonni joylashdan oldin chegara chizing yoki xaritaga nuqta qo'ying.",
@@ -516,6 +526,7 @@ export const uz = {
       "Ovozli xabar uchun mikrofonga ruxsat berishingiz kerak",
     uploadError: "Yuklashda xatolik",
     voiceLoadError: "Ovozli xabarni ochib bo'lmadi",
+    voiceEmpty: "Ovoz yozilmadi — qayta urinib ko'ring",
     saveImage: "Rasmni saqlash",
     imageSaved: "Rasm galereyaga saqlandi",
     saveImageError: "Rasmni saqlab bo'lmadi",
@@ -533,6 +544,8 @@ export const uz = {
   },
 
   errors: {
+    categoryUnknown: "Bu tur endi mavjud emas — boshqa turni tanlang",
+    floorsNotAllowed: "Bu turdagi e'lon uchun qavat ko'rsatilmaydi",
     otpInvalid: "Kod noto'g'ri yoki muddati tugagan",
     otpLocked: "Ko'p marta xato kiritildi. Yangi kod so'rang.",
     otpCooldown: "Yangi kodni {{seconds}} soniyadan keyin so'rashingiz mumkin",

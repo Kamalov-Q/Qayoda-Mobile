@@ -186,15 +186,29 @@ export const ChatInput = memo(function ChatInput({
         rec.uri,
         "VOICE",
         "voice.m4a",
-        "audio/m4a",
+        // The standard type for m4a. "audio/m4a" is not registered, and it is
+        // what the CDN then serves the file as — which some players refuse.
+        "audio/mp4",
       );
+      // The server probes what it received. A probed 0 against a recording we
+      // know was seconds long means the file reached it without its audio —
+      // send nothing rather than a silent bubble the recipient will tap at.
+      // (A server without ffmpeg answers null, not 0, so it is not caught here.)
+      if (att.durationSec === 0 && rec.durationSec >= 1) {
+        console.warn("[voice] upload had no audio:", att.url);
+        toast.errorKey("chat.voiceEmpty");
+        return;
+      }
+
       onSend({
         type: "VOICE",
         mediaUrl: att.url,
         fileName: att.fileName,
         fileSize: att.fileSize,
         mimeType: att.mimeType,
-        durationSec: att.durationSec ?? rec.durationSec,
+        // `||`, not `??`: the server returns 0 when it cannot probe the clip
+        // (no ffmpeg, odd container), and 0 would win over the real length.
+        durationSec: att.durationSec || rec.durationSec,
         waveform: att.waveform ?? undefined,
         replyToId: replyTo?.id,
       });

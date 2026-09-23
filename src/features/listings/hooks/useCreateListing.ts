@@ -10,6 +10,7 @@ export function useCreateListing() {
     mutationFn: (input: CreateListingInput) => listingApi.create(input),
     onSuccess: (listing) => {
       queryClient.invalidateQueries({ queryKey: ["listings", "mine"] });
+      queryClient.invalidateQueries({ queryKey: ["listings", "counts"] });
       queryClient.invalidateQueries({ queryKey: ["listings", "viewport"] });
       toast.successKey("listings.created");
       router.replace(`/listing/${listing.id}`);

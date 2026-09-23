@@ -22,8 +22,7 @@ import { useIsAuthed } from "../../src/features/auth/guest";
 import { GuestPrompt } from "../../src/features/auth/components/GuestPrompt";
 import { useProfile } from "../../src/features/profile/hooks/useProfile";
 import { resolveMediaUrl } from "../../src/lib/media-url";
-import { useMyListings } from "../../src/features/listings/hooks/useMyListings";
-import { useSavedListings } from "../../src/features/listings/hooks/useSavedListings";
+import { useListingCounts } from "../../src/features/listings/hooks/useMyListings";
 
 const LINKS = [
   {
@@ -60,8 +59,7 @@ export default function AccountScreen() {
 
   // Counts reuse the queries the other tabs already keep warm, so this screen
   // costs no extra requests once either has been visited.
-  const { data: mine } = useMyListings();
-  const { data: saved } = useSavedListings();
+  const { data: counts } = useListingCounts();
   // Full profile (avatar, phone) lives behind /profile, not the session user.
   const { data: profile } = useProfile();
   // Two URLs, two jobs: the thumb is what the 76pt circle needs, and blowing
@@ -73,7 +71,7 @@ export default function AccountScreen() {
     profile?.avatarUrl ?? profile?.avatarThumbUrl,
   );
   const [viewingAvatar, setViewingAvatar] = useState(false);
-  const activeCount = mine?.filter((l) => l.status === "ACTIVE").length;
+  const activeCount = counts?.mineActive;
 
 
   // Each language is written in itself — someone who has the app stuck in a
@@ -256,7 +254,7 @@ export default function AccountScreen() {
           >
             <StatCell
               label={t("profile.statListings")}
-              value={mine?.length}
+              value={counts?.mine}
               onPress={() => router.push("/(tabs)/places")}
             />
             <StatCell
@@ -267,7 +265,7 @@ export default function AccountScreen() {
             />
             <StatCell
               label={t("profile.statSaved")}
-              value={saved?.length}
+              value={counts?.saved}
               divider
               onPress={() => router.push("/(tabs)/saved")}
             />

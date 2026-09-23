@@ -31,14 +31,13 @@ import { useT } from "../../src/i18n";
 import {
   Listing,
   OfferPurpose,
-  PropertyCategory,
 } from "../../src/features/listings/api/listings.api";
 import { useDebouncedValue } from "../../src/lib/use-debounced-value";
 import {
   ALL_ICON,
-  CATEGORY_ICONS,
   PURPOSE_ICONS,
 } from "../../src/features/listings/utils/icons";
+import { useCategories } from "../../src/features/listings/hooks/useCategories";
 import { useMapViewport } from "../../src/features/listings/hooks/useMapViewport";
 import { useListingsFeed } from "../../src/features/listings/hooks/useListingsFeed";
 import { useRates } from "../../src/features/listings/hooks/useRates";
@@ -107,24 +106,20 @@ const PURPOSES = [
 type Sort = "default" | "priceAsc" | "priceDesc";
 type ViewMode = "map" | "list" | "grid";
 
-/** "ALL" is the unfiltered state; the rest go to the server as-is. */
-const CATEGORIES = [
-  "ALL",
-  "APARTMENT",
-  "HOUSE",
-  "LAND",
-  "NON_RESIDENTIAL",
-  "BUILDING",
-  "DACHA",
-  "HOTEL",
-] as const;
-type CategoryFilter = (typeof CATEGORIES)[number];
+/**
+ * The unfiltered state; every other value is a category slug sent to the
+ * server as-is. Lower-case on purpose: slugs start with an upper-case letter,
+ * so no admin-created category can ever collide with it.
+ */
+const ALL = "__all__";
+type CategoryFilter = string;
 
 export default function SotuvScreen() {
   const { colors, text, shadow } = useTheme();
   const t = useT();
   const [purpose, setPurpose] = useState<OfferPurpose>("SALE");
-  const [category, setCategory] = useState<CategoryFilter>("ALL");
+  const [category, setCategory] = useState<CategoryFilter>(ALL);
+  const { categories, nameOf, iconOf } = useCategories();
   const [sort, setSort] = useState<Sort>("default");
   // Kept as strings: an empty field means "no bound", which 0 cannot express.
   const [minPrice, setMinPrice] = useState("");
@@ -168,7 +163,7 @@ export default function SotuvScreen() {
   const viewportFilters = useMemo(
     () => ({
       address: debouncedQuery || debouncedAddress,
-      category: category === "ALL" ? undefined : (category as PropertyCategory),
+      category: category === ALL ? undefined : category,
       priceMin: boundToUsd(debouncedMin),
       priceMax: boundToUsd(debouncedMax),
     }),
@@ -202,7 +197,7 @@ export default function SotuvScreen() {
   const feed = useListingsFeed(
     {
       purpose,
-      category: category === "ALL" ? undefined : (category as PropertyCategory),
+      category: category === ALL ? undefined : category,
       priceMin: boundToUsd(debouncedMin),
       priceMax: boundToUsd(debouncedMax),
       q: debouncedQuery || undefined,
@@ -270,12 +265,15 @@ export default function SotuvScreen() {
 
   const categoryOptions = useMemo(
     () =>
-      CATEGORIES.map((c) => ({
-        value: c,
-        label: c === "ALL" ? t("filters.allTypes") : t(`categories.${c}`),
-        icon: c === "ALL" ? ALL_ICON : CATEGORY_ICONS[c],
-      })),
-    [t],
+      [
+        { value: ALL, label: t("filters.allTypes"), icon: ALL_ICON },
+        ...categories.map((c) => ({
+          value: c.slug,
+          label: nameOf(c.slug),
+          icon: iconOf(c.slug),
+        })),
+      ],
+    [t, categories, nameOf, iconOf],
   );
 
   const onPressItem = useCallback(
@@ -429,11 +427,9 @@ export default function SotuvScreen() {
         <FilterPill
           icon="business-outline"
           label={
-            category === "ALL"
-              ? t("filters.categoryPill")
-              : t(`categories.${category}`)
+            category === ALL ? t("filters.categoryPill") : nameOf(category)
           }
-          active={category !== "ALL"}
+          active={category !== ALL}
           onPress={() => setCategoryOpen(true)}
         />
       </View>

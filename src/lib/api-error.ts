@@ -20,6 +20,10 @@ const BY_STATUS: Record<number, TranslationKey> = {
 // or ask for a new one.
 const BY_CODE: Record<string, TranslationKey> = {
   PHONE_INVALID: "validation.phoneInvalid",
+  // Categories are admin-managed: one can be hidden or removed while a user
+  // has the post form open.
+  CATEGORY_UNKNOWN: "errors.categoryUnknown",
+  FLOORS_NOT_ALLOWED: "errors.floorsNotAllowed",
   OTP_INVALID: "errors.otpInvalid",
   OTP_LOCKED: "errors.otpLocked",
   OTP_COOLDOWN: "errors.otpCooldown",

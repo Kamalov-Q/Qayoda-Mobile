@@ -41,6 +41,10 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textFaint,
+        // The bar belongs to the bottom edge and nowhere else. Without this,
+        // Android's keyboard pushes it up and it floats mid-screen above the
+        // keyboard; hidden instead, it reappears at the bottom on dismiss.
+        tabBarHideOnKeyboard: true,
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,

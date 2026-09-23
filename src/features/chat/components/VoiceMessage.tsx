@@ -52,6 +52,12 @@ export const VoiceMessage = memo(function VoiceMessage({
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0); // 0..1
+  // The clip's own length, learned once it loads. Messages sent before the
+  // recorder's duration bug was fixed carry 0, and their bubbles would read
+  // 0:00 forever otherwise.
+  const [loadedSec, setLoadedSec] = useState(0);
+  // Cleared the moment the clip reports itself loaded; fires if it never does.
+  const loadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Stable for the component's lifetime — it closes over nothing that changes
   // (a ref and a setState are both fixed identities), so it doubles as this
@@ -73,6 +79,7 @@ export const VoiceMessage = memo(function VoiceMessage({
       // Scrolling a playing message out of the list windows it away; leaving it
       // registered would let an unmounted bubble own the audio channel.
       releasePlayback(pauseSelf);
+      if (loadTimer.current) clearTimeout(loadTimer.current);
       try {
         player.current?.remove();
       } catch {
@@ -107,7 +114,11 @@ export const VoiceMessage = memo(function VoiceMessage({
             ): void;
           }
         ).addListener("playbackStatusUpdate", (st: AudioStatus) => {
-          if (st.isLoaded) setLoading(false);
+          if (st.isLoaded) {
+            setLoading(false);
+            if (loadTimer.current) clearTimeout(loadTimer.current);
+          }
+          if (st.duration > 0) setLoadedSec(Math.ceil(st.duration));
           setProgress(st.duration ? st.currentTime / st.duration : 0);
           if (st.didJustFinish) {
             setPlaying(false);
@@ -118,6 +129,25 @@ export const VoiceMessage = memo(function VoiceMessage({
           }
         });
         player.current = p;
+
+        // A clip that never loads (missing file, wrong content type, no
+        // network) otherwise leaves the button spinning forever with no sound
+        // and no explanation. Give up, say so, and drop the player so the next
+        // tap retries from scratch rather than waiting on the dead one.
+        loadTimer.current = setTimeout(() => {
+          if (!player.current) return;
+          console.warn("[VoiceMessage] clip did not load:", url);
+          setLoading(false);
+          setPlaying(false);
+          releasePlayback(pauseSelf);
+          try {
+            player.current.remove();
+          } catch {
+            // already released
+          }
+          player.current = null;
+          toast.errorKey("chat.voiceLoadError");
+        }, 12_000);
       } catch {
         setLoading(false);
         toast.errorKey("chat.voiceLoadError");
@@ -137,8 +167,10 @@ export const VoiceMessage = memo(function VoiceMessage({
   // than a second palette colour, so it works on either bubble fill.
   const bg = mine ? "rgba(255,255,255,0.4)" : colors.primaryBorder;
 
-  const mm = Math.floor((durationSec ?? 0) / 60);
-  const ss = String((durationSec ?? 0) % 60).padStart(2, "0");
+  // The stored length when it is real, else whatever the loaded clip reports.
+  const seconds = durationSec || loadedSec;
+  const mm = Math.floor(seconds / 60);
+  const ss = String(seconds % 60).padStart(2, "0");
 
   return (
     <View

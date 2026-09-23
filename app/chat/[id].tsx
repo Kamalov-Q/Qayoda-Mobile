@@ -30,6 +30,7 @@ import { useMessages } from "../../src/features/chat/hooks/useMessages";
 import { formatPresence } from "../../src/features/chat/hooks/usePresence";
 import { useSendMessage } from "../../src/features/chat/hooks/useSendMessage";
 import { MessageBubble } from "../../src/features/chat/components/MessageBubble";
+import { ReportChatSheet } from "../../src/features/chat/components/ReportChatSheet";
 import { TypingIndicator } from "../../src/features/chat/components/TypingIndicator";
 import { ChatInput } from "../../src/features/chat/components/ChatInput";
 import {
@@ -131,6 +132,11 @@ export default function ChatThreadScreen() {
     setActionsFor(m);
   }, []);
 
+  // null = closed; "" = reported from the header, an id = from that message.
+  const [reportingMessageId, setReportingMessageId] = useState<string | null>(
+    null,
+  );
+
   const actions = useMemo<MessageAction[]>(() => {
     const m = actionsFor;
     if (!m) return [];
@@ -157,6 +163,18 @@ export default function ChatThreadScreen() {
           setReplyTo(null);
           setEditing(m);
         },
+      });
+    }
+
+    if (!mine) {
+      // Only their messages: reporting your own says nothing to a moderator,
+      // and the server refuses it anyway.
+      list.push({
+        key: "report",
+        labelKey: "chatReport.action",
+        icon: "flag-outline",
+        destructive: true,
+        onPress: () => setReportingMessageId(m.id),
       });
     }
 
@@ -251,6 +269,20 @@ export default function ChatThreadScreen() {
               <Ionicons name="chevron-back" size={20} color={colors.text} />
             </Pressable>
           ),
+          // Reporting the thread itself, not one message — the header is
+          // where "this conversation is a problem" belongs.
+          headerRight: () =>
+            !isDraft ? (
+              <Pressable
+                onPress={() => setReportingMessageId("")}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel={t("chatReport.action")}
+                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+              >
+                <Ionicons name="flag-outline" size={20} color={colors.textMuted} />
+              </Pressable>
+            ) : null,
           // Avatar + name + presence, and the whole thing opens the peer's
           // profile — the same target a tap on the title has in every
           // messenger, and the only route to their ads from inside a thread.
@@ -384,6 +416,16 @@ export default function ChatThreadScreen() {
         actions={actions}
         onClose={() => setActionsFor(null)}
       />
+
+      {/* A draft thread has no conversation yet — nothing to report. */}
+      {!isDraft ? (
+        <ReportChatSheet
+          conversationId={id}
+          visible={reportingMessageId !== null}
+          messageId={reportingMessageId || undefined}
+          onClose={() => setReportingMessageId(null)}
+        />
+      ) : null}
 
       <ImageViewer uri={photo} onClose={() => setPhoto(null)} />
     </SafeAreaView>

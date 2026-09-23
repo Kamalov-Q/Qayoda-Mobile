@@ -82,6 +82,19 @@ export interface SendMessageInput {
   clientId?: string;
 }
 
+/**
+ * Why a conversation can be reported — fixed moderation policy, so hardcoded
+ * on both sides. Mirrors CHAT_REPORT_REASONS on the server.
+ */
+export const CHAT_REPORT_REASONS = [
+  "SPAM",
+  "SCAM",
+  "HARASSMENT",
+  "INAPPROPRIATE",
+  "OTHER",
+] as const;
+export type ChatReportReason = (typeof CHAT_REPORT_REASONS)[number];
+
 export const chatApi = {
   listConversations: () => api<Conversation[]>(`/chat/conversations`),
 
@@ -110,6 +123,22 @@ export const chatApi = {
     api<ChatMessage>(`/chat/conversations/${conversationId}/messages`, {
       method: "POST",
       body: input,
+    }),
+
+  /**
+   * Flags a conversation for the moderators. Only its two participants may,
+   * once each. This report is also what lets an admin read the thread —
+   * unreported chats are not readable by anyone but the participants.
+   */
+  report: (
+    conversationId: string,
+    reason: ChatReportReason,
+    comment?: string,
+    messageId?: string,
+  ) =>
+    api<{ success: boolean }>(`/chat/conversations/${conversationId}/report`, {
+      method: "POST",
+      body: { reason, ...(comment ? { comment } : {}), ...(messageId ? { messageId } : {}) },
     }),
 
   markRead: (conversationId: string) =>

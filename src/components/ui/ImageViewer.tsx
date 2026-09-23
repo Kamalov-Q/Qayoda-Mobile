@@ -45,6 +45,20 @@ const chromeButton = {
  *  context menu covers it there, so the button is native-only. */
 const CAN_SAVE = Platform.OS !== "web";
 
+/**
+ * The gallery decides what a file is from its extension, so a URL without one
+ * (a CDN key, a signed link with a query string) must not become an
+ * extension-less file — iOS rejects those outright.
+ */
+function fileNameFor(uri: string): string {
+  const path = uri.split("?")[0];
+  const last = path.slice(path.lastIndexOf("/") + 1);
+  const ext = /\.(jpe?g|png|heic|heif|webp|gif)$/i.exec(last)?.[0] ?? ".jpg";
+  // Unique per save: a fixed name collides with the copy still being written
+  // by a previous save, and the collision surfaces as "could not save".
+  return `img_${Date.now()}${ext}`;
+}
+
 async function saveToLibrary(uri: string) {
   // writeOnly: saving needs no read access, and iOS shows the lighter
   // "add to library" prompt for it.
@@ -60,7 +74,8 @@ async function saveToLibrary(uri: string) {
   const downloads = new Directory(Paths.cache, "chat-downloads");
   if (!downloads.exists) downloads.create({ intermediates: true });
 
-  const file = await File.downloadFileAsync(uri, downloads, {
+  const target = new File(downloads, fileNameFor(uri));
+  const file = await File.downloadFileAsync(uri, target, {
     idempotent: true, // same photo saved twice must not throw
   });
 
@@ -68,7 +83,12 @@ async function saveToLibrary(uri: string) {
     await MediaLibrary.saveToLibraryAsync(file.uri);
     toast.successKey("chat.imageSaved");
   } finally {
-    file.delete();
+    // Cleanup must never turn a saved photo into an error.
+    try {
+      file.delete();
+    } catch {
+      // The OS reclaims the cache directory anyway.
+    }
   }
 }
 
@@ -96,9 +116,11 @@ export function ImageViewer({
     setSaving(true);
     try {
       await saveToLibrary(uri);
-    } catch {
-      // The URL, the disk and the gallery can each refuse; none of them is
-      // worth its own message here.
+    } catch (e) {
+      // The URL, the disk and the gallery can each refuse; the user gets one
+      // message, but the real reason belongs in the log — "could not save"
+      // alone is unactionable when it happens on someone's phone.
+      console.warn("[ImageViewer] save failed:", e);
       toast.errorKey("chat.saveImageError");
     } finally {
       setSaving(false);

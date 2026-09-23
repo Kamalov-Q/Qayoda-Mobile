@@ -22,10 +22,7 @@ import {
 import { spacing } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT } from "../../src/i18n";
-import {
-  Listing,
-  PropertyCategory,
-} from "../../src/features/listings/api/listings.api";
+import { Listing } from "../../src/features/listings/api/listings.api";
 import {
   inPriceRange,
   listingPrice,
@@ -33,10 +30,8 @@ import {
 import { useMyListings } from "../../src/features/listings/hooks/useMyListings";
 import { ListingCard } from "../../src/features/listings/components/ListingCard";
 import type { Ionicons } from "@expo/vector-icons";
-import {
-  ALL_ICON,
-  CATEGORY_ICONS,
-} from "../../src/features/listings/utils/icons";
+import { ALL_ICON } from "../../src/features/listings/utils/icons";
+import { useCategories } from "../../src/features/listings/hooks/useCategories";
 
 // Both filters run over the already-fetched list: /listings/mine returns the
 // user's own listings whole, so filtering client-side costs no request and
@@ -50,19 +45,11 @@ const STATUS_ICONS = {
   ARCHIVED: "archive-outline",
 } as const satisfies Record<Status, keyof typeof Ionicons.glyphMap>;
 
-const CATEGORIES = [
-  "APARTMENT",
-  "HOUSE",
-  "LAND",
-  "NON_RESIDENTIAL",
-  "BUILDING",
-  "DACHA",
-  "HOTEL",
-] as const satisfies readonly PropertyCategory[];
-
-const ALL = "ALL";
+// Lower-case on purpose: status values and category slugs are upper-case, so
+// no admin-created category can collide with "no filter".
+const ALL = "__all__";
 type StatusFilter = typeof ALL | Status;
-type CategoryFilter = typeof ALL | PropertyCategory;
+type CategoryFilter = string;
 
 /** Chip option; named locally because `Option` collides with the DOM global. */
 type Choice<T extends string> = {
@@ -74,10 +61,21 @@ type Choice<T extends string> = {
 export default function PlacesScreen() {
   const { text, colors } = useTheme();
   const t = useT();
-  const { data, isLoading, isError, refetch, isRefetching } = useMyListings();
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+    isRefetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useMyListings();
 
   const [status, setStatus] = useState<StatusFilter>(ALL);
   const [category, setCategory] = useState<CategoryFilter>(ALL);
+  // Admin-managed categories (GET /categories), in their display order.
+  const { categories, nameOf, iconOf } = useCategories();
   // Kept as strings: an empty field means "no bound", which 0 cannot express.
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
@@ -103,13 +101,13 @@ export default function PlacesScreen() {
   const categoryOptions = useMemo<Choice<CategoryFilter>[]>(
     () => [
       { value: ALL, label: t("filters.all"), icon: ALL_ICON },
-      ...CATEGORIES.map((value) => ({
-        value,
-        label: t(`categories.${value}`),
-        icon: CATEGORY_ICONS[value],
+      ...categories.map((c) => ({
+        value: c.slug,
+        label: nameOf(c.slug),
+        icon: iconOf(c.slug),
       })),
     ],
-    [t],
+    [t, categories, nameOf, iconOf],
   );
 
   // Locale-aware lowercasing costs nothing here and Cyrillic addresses need it.
@@ -236,6 +234,18 @@ export default function PlacesScreen() {
         <FlatList
           data={listings}
           keyExtractor={(item) => item.id}
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+          }}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={
+            isFetchingNextPage ? (
+              <ActivityIndicator
+                color={colors.primary}
+                style={{ paddingVertical: 16 }}
+              />
+            ) : null
+          }
           contentContainerStyle={{
             padding: spacing.lg,
             gap: spacing.md,

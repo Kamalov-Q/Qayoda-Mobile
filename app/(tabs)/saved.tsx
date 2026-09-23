@@ -18,8 +18,16 @@ import { ListingCard } from "../../src/features/listings/components/ListingCard"
 export default function SavedScreen() {
   const { text, colors } = useTheme();
   const t = useT();
-  const { data, isLoading, isError, refetch, isRefetching } =
-    useSavedListings();
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+    isRefetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useSavedListings();
 
   const onPress = useCallback((id: string) => router.push(`/listing/${id}`), []);
 
@@ -59,6 +67,18 @@ export default function SavedScreen() {
         <FlatList
           data={data}
           keyExtractor={(item) => item.id}
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+          }}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={
+            isFetchingNextPage ? (
+              <ActivityIndicator
+                color={colors.primary}
+                style={{ paddingVertical: 16 }}
+              />
+            ) : null
+          }
           contentContainerStyle={{
             padding: spacing.lg,
             gap: spacing.md,

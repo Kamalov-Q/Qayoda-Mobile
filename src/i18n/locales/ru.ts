@@ -189,19 +189,37 @@ export const ru: Dictionary = {
     logoutConfirmMessage: "Выйти из аккаунта?",
   },
 
-  props: {
-    REPAIRED: "С ремонтом",
-    FURNISHED: "С мебелью",
-    AC: "Кондиционер",
-    HEATING: "Отопление",
-    PARKING: "Парковка",
-    GARAGE: "Гараж",
-    BALCONY: "Балкон",
-    ELEVATOR: "Лифт",
-    INTERNET: "Интернет",
-    SECURITY: "Охрана",
-    POOL: "Бассейн",
-    GARDEN: "Сад",
+
+  chatReport: {
+    action: "Пожаловаться",
+    title: "Жалоба на переписку",
+    subtitle: "Почему вы сообщаете об этой переписке?",
+    SPAM: "Спам или реклама",
+    SCAM: "Мошенничество: просит предоплату",
+    HARASSMENT: "Оскорбления или угрозы",
+    INAPPROPRIATE: "Неприемлемый контент",
+    OTHER: "Другая причина",
+    sent: "Жалоба отправлена. Модераторы её рассмотрят.",
+    already: "Вы уже пожаловались на эту переписку",
+    notice:
+      "После жалобы модераторы смогут увидеть переписку в этом чате.",
+  },
+
+  report: {
+    action: "Пожаловаться",
+    title: "Пожаловаться",
+    subtitle: "Почему вы хотите пожаловаться на это объявление?",
+    FRAUD: "Мошенничество",
+    WRONG_INFO: "Неверная информация",
+    ALREADY_SOLD: "Уже продано или занято",
+    WRONG_PRICE: "Неверная цена",
+    DUPLICATE: "Повторное объявление",
+    INAPPROPRIATE: "Неприемлемый контент",
+    OTHER: "Другая причина",
+    otherPlaceholder: "Опишите причину…",
+    submit: "Отправить",
+    sent: "Жалоба отправлена. Спасибо!",
+    already: "Вы уже пожаловались на это объявление",
   },
 
   validation: {
@@ -271,16 +289,6 @@ export const ru: Dictionary = {
     perDay: "/сут",
   },
 
-  categories: {
-    APARTMENT: "Квартира",
-    HOUSE: "Дом",
-    LAND: "Участок",
-    NON_RESIDENTIAL: "Нежилое помещение",
-    BUILDING: "Здание",
-    DACHA: "Дача",
-    HOTEL: "Гостиница",
-  },
-
   purposes: {
     SALE: "Продажа",
     RENT_MONTHLY: "Аренда на месяц",
@@ -325,6 +333,8 @@ export const ru: Dictionary = {
     dropPin: "Отметить на карте",
     pinSet: "Точка поставлена",
     noPin: "Точка ещё не поставлена",
+    noCategoryTitle: "Тип не выбран",
+    noCategoryMessage: "Не удалось загрузить типы объявлений. Проверьте интернет и повторите.",
     missingLocationTitle: "Расположение не указано",
     missingLocationMessage:
       "Перед публикацией нарисуйте границу или поставьте точку на карте.",
@@ -514,6 +524,7 @@ export const ru: Dictionary = {
       "Для голосового сообщения нужно разрешить доступ к микрофону",
     uploadError: "Ошибка загрузки",
     voiceLoadError: "Не удалось открыть голосовое сообщение",
+    voiceEmpty: "Голос не записался — попробуйте ещё раз",
     saveImage: "Сохранить фото",
     imageSaved: "Фото сохранено в галерею",
     saveImageError: "Не удалось сохранить фото",
@@ -530,6 +541,8 @@ export const ru: Dictionary = {
   },
 
   errors: {
+    categoryUnknown: "Этот тип больше недоступен — выберите другой",
+    floorsNotAllowed: "Для этого типа объявления этаж не указывается",
     otpInvalid: "Код неверный или устарел",
     otpLocked: "Слишком много неверных попыток. Запросите новый код.",
     otpCooldown: "Новый код можно запросить через {{seconds}} с",
