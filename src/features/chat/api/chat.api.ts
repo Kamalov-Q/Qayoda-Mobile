@@ -25,6 +25,9 @@ export interface ChatMessage {
   height: number | null;
   waveform: number[] | null;
   replyToId: string | null;
+  /** Set only on a forward — whose words these originally were. */
+  forwardedFromUserId?: string | null;
+  forwardedFromName?: string | null;
   replyTo?: {
     id: string;
     senderId: string;
@@ -49,6 +52,8 @@ export interface Conversation {
   id: string;
   listingId: string;
   listingTitle: string | null;
+  /** The message kept at the top of the thread, or null. */
+  pinnedMessageId?: string | null;
   role: "host" | "guest";
   other: {
     id: string;
@@ -139,6 +144,24 @@ export const chatApi = {
     api<{ success: boolean }>(`/chat/conversations/${conversationId}/report`, {
       method: "POST",
       body: { reason, ...(comment ? { comment } : {}), ...(messageId ? { messageId } : {}) },
+    }),
+
+  /** Copies a message into another conversation, keeping its first author. */
+  forward: (conversationId: string, messageId: string) =>
+    api<ChatMessage>(`/chat/conversations/${conversationId}/forward`, {
+      method: "POST",
+      body: { messageId },
+    }),
+
+  /** `messageId: null` clears the pin. Either participant may set it. */
+  setPinned: (conversationId: string, messageId: string | null) =>
+    api<{
+      conversationId: string;
+      pinnedMessageId: string | null;
+      pinnedMessage: ChatMessage | null;
+    }>(`/chat/conversations/${conversationId}/pin`, {
+      method: "POST",
+      body: { messageId },
     }),
 
   markRead: (conversationId: string) =>

@@ -149,6 +149,10 @@ export default function RootLayout() {
             />
             {/* The three lists set their own titles; this is the hub. */}
             <Stack.Screen
+              name="support"
+              options={{ title: t("support.title") }}
+            />
+            <Stack.Screen
               name="activity/index"
               options={{ title: t("activity.title") }}
             />

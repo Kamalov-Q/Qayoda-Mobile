@@ -24,9 +24,11 @@ import {
 import { useT, type Language } from "../src/i18n";
 import { useIsAuthed } from "../src/features/auth/guest";
 import { SignInMethods } from "../src/features/auth/components/SignInMethods";
+import { useSupportUnread } from "../src/features/support/hooks/useSupport";
 import { MiniLocationMap } from "../src/features/map/MiniLocationMap";
 
 export default function SettingsScreen() {
+  const supportUnread = useSupportUnread();
   const authed = useIsAuthed();
   const { colors, text } = useTheme();
   const t = useT();
@@ -89,6 +91,62 @@ export default function SettingsScreen() {
                 <Text style={text.bodyStrong}>{t("activity.title")}</Text>
                 <Text style={text.caption}>{t("activity.intro")}</Text>
               </View>
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={colors.textFaint}
+              />
+            </Pressable>
+          </Section>
+        ) : null}
+
+        {/* Straight after activity: when someone opens Settings with a
+            problem, this is what they were looking for. */}
+        {authed ? (
+          <Section title={t("support.title")}>
+            <Pressable
+              onPress={() => router.push("/support")}
+              accessibilityRole="button"
+              accessibilityLabel={t("support.title")}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing.md,
+                padding: spacing.md,
+                borderRadius: radii.lg,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: pressed ? colors.surfaceRaised : colors.surface,
+              })}
+            >
+              <Ionicons
+                name="chatbubble-ellipses-outline"
+                size={20}
+                color={colors.primary}
+              />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={text.bodyStrong}>{t("support.title")}</Text>
+                <Text style={text.caption}>{t("support.hint")}</Text>
+              </View>
+              {supportUnread > 0 ? (
+                <View
+                  style={{
+                    minWidth: 22,
+                    height: 22,
+                    paddingHorizontal: 6,
+                    borderRadius: radii.pill,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: colors.primary,
+                  }}
+                >
+                  <Text
+                    style={{ ...text.caption, color: colors.onPrimary, fontWeight: "700" }}
+                  >
+                    {supportUnread}
+                  </Text>
+                </View>
+              ) : null}
               <Ionicons
                 name="chevron-forward"
                 size={16}

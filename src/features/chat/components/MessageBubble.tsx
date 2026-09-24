@@ -89,6 +89,25 @@ export const MessageBubble = memo(function MessageBubble({
       onLongPress={() => onLongPress(m)}
       style={bubbleStyle(mine, colors)}
     >
+      {/* Above the reply quote: a forward is about where the whole message
+          came from, a reply is about what it answers. */}
+      {m.forwardedFromName ? (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+            marginBottom: spacing.xs,
+            opacity: 0.85,
+          }}
+        >
+          <Ionicons name="arrow-redo-outline" size={12} color={fg} />
+          <Text style={{ fontSize: 12, fontStyle: "italic", color: fg }}>
+            {t("chat.forwardedFrom", { name: m.forwardedFromName })}
+          </Text>
+        </View>
+      ) : null}
+
       {m.replyTo ? (
         <Pressable
           onPress={() => onPressReply?.(m.replyTo!.id)}

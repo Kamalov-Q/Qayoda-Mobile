@@ -11,14 +11,15 @@ import {
 } from "react-native";
 import { router, useLocalSearchParams, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useHeaderHeight } from "expo-router/react-navigation";
-import { Avatar, ImageViewer } from "../../src/components/ui";
+import { Avatar, ImageViewer, toast } from "../../src/components/ui";
 import { spacing, radii, sizing } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
-import { useT, useLanguage } from "../../src/i18n";
+import { useT, useLanguage, type TranslationKey } from "../../src/i18n";
 import { confirm } from "../../src/lib/alerts";
+import { errorMessage } from "../../src/lib/api-error";
 import { getChatSocket } from "../../src/lib/chat-socket";
 import {
   chatApi,
@@ -33,6 +34,7 @@ import { MessageBubble } from "../../src/features/chat/components/MessageBubble"
 import { ReportChatSheet } from "../../src/features/chat/components/ReportChatSheet";
 import { TypingIndicator } from "../../src/features/chat/components/TypingIndicator";
 import { ChatInput } from "../../src/features/chat/components/ChatInput";
+import { ForwardSheet } from "../../src/features/chat/components/ForwardSheet";
 import {
   MessageActionSheet,
   type MessageAction,
@@ -50,6 +52,15 @@ import {
   useSpecsFormatter,
 } from "../../src/features/listings/utils/format";
 import { useStartConversation } from "../../src/features/chat/hooks/useStartConversation";
+
+/** What a pinned attachment says when it has no caption to show. */
+const ATTACHMENT_LABEL: Record<string, TranslationKey> = {
+  IMAGE: "chat.attachmentImage",
+  VIDEO: "chat.attachmentVideo",
+  VIDEO_NOTE: "chat.attachmentVideo",
+  VOICE: "chat.attachmentVoice",
+  FILE: "chat.attachmentFile",
+};
 
 export default function ChatThreadScreen() {
   const { id, listingId, prefill } = useLocalSearchParams<{
@@ -141,6 +152,61 @@ export default function ChatThreadScreen() {
   const [reportingMessageId, setReportingMessageId] = useState<string | null>(
     null,
   );
+  const [forwarding, setForwarding] = useState<string | null>(null);
+
+  // The conversation is the source of truth; `live` only holds what the
+  // socket or an optimistic pin has said since it was last fetched. Derived
+  // rather than copied into state by an effect, so a refetch cannot briefly
+  // show the old pin.
+  const [live, setLive] = useState<{ id: string; pinned: string | null } | null>(
+    null,
+  );
+  const pinnedId =
+    live && live.id === id
+      ? live.pinned
+      : (conversation?.pinnedMessageId ?? null);
+  const setPinnedId = useCallback(
+    (next: string | null) => id && setLive({ id, pinned: next }),
+    [id],
+  );
+
+  useEffect(() => {
+    const socket = getChatSocket();
+    const onPin = (payload: {
+      conversationId: string;
+      pinnedMessageId: string | null;
+    }) => {
+      if (payload.conversationId === id) setPinnedId(payload.pinnedMessageId);
+    };
+    socket.on("conversation:pin", onPin);
+    return () => {
+      socket.off("conversation:pin", onPin);
+    };
+  }, [id, setPinnedId]);
+
+  // Only shown when the pinned message is among the ones loaded: scrolling
+  // back far enough to find it is the client's job, and a bar that says
+  // "pinned message" with nothing in it would be worse than no bar.
+  const pinnedMessage = useMemo(
+    () => (pinnedId ? (messages ?? []).find((m) => m.id === pinnedId) : null),
+    [pinnedId, messages],
+  );
+
+  const pin = useMutation({
+    mutationFn: (messageId: string | null) =>
+      chatApi.setPinned(id!, messageId),
+    // Optimistic: the bar appearing is the confirmation, and a pin that waits
+    // for a round trip reads as a tap that did nothing.
+    onMutate: (messageId) => {
+      const previous = pinnedId;
+      setPinnedId(messageId);
+      return { previous };
+    },
+    onError: (error, _vars, context) => {
+      setPinnedId(context?.previous ?? null);
+      toast.error(errorMessage(error));
+    },
+  });
 
   const actions = useMemo<MessageAction[]>(() => {
     const m = actionsFor;
@@ -158,6 +224,22 @@ export default function ChatThreadScreen() {
         },
       },
     ];
+
+    list.push({
+      key: "forward",
+      labelKey: "chat.forward",
+      icon: "arrow-redo-outline",
+      onPress: () => setForwarding(m.id),
+    });
+
+    // Either participant may pin: a two-person thread has no owner, and a
+    // rule about who is allowed to would be a rule with no reason behind it.
+    list.push({
+      key: "pin",
+      labelKey: pinnedId === m.id ? "chat.unpin" : "chat.pin",
+      icon: pinnedId === m.id ? "remove-circle-outline" : "pin-outline",
+      onPress: () => pin.mutate(pinnedId === m.id ? null : m.id),
+    });
 
     if (mine && m.type === "TEXT") {
       list.push({
@@ -201,7 +283,7 @@ export default function ChatThreadScreen() {
     }
 
     return list;
-  }, [actionsFor, userId]);
+  }, [actionsFor, userId, pinnedId, pin]);
 
   const submitEdit = useCallback(
     (body: string) => {
@@ -368,6 +450,50 @@ export default function ChatThreadScreen() {
         behavior="padding"
         keyboardVerticalOffset={Platform.OS === "ios" ? headerHeight : 0}
       >
+        {/* Above the list, not inside it: an inverted FlatList puts its
+            header at the bottom, and a pin belongs at the top of the thread
+            no matter which way the list is drawn. */}
+        {pinnedMessage ? (
+          <Pressable
+            onPress={() => setActionsFor(pinnedMessage)}
+            accessibilityRole="button"
+            accessibilityLabel={t("chat.pinned")}
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              gap: spacing.sm,
+              paddingHorizontal: spacing.md,
+              paddingVertical: spacing.sm,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border,
+              backgroundColor: pressed
+                ? colors.surfaceRaised
+                : colors.surface,
+            })}
+          >
+            <Ionicons name="pin" size={15} color={colors.primary} />
+            <View style={{ flex: 1, gap: 1 }}>
+              <Text
+                style={{ ...text.caption, color: colors.primary, fontWeight: "600" }}
+              >
+                {t("chat.pinned")}
+              </Text>
+              <Text style={text.caption} numberOfLines={1}>
+                {pinnedMessage.body ||
+                  t(ATTACHMENT_LABEL[pinnedMessage.type] ?? "chat.attachment")}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => pin.mutate(null)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={t("chat.unpin")}
+            >
+              <Ionicons name="close" size={16} color={colors.textMuted} />
+            </Pressable>
+          </Pressable>
+        ) : null}
+
         {isDraft ? (
           <DraftContext listing={draftListing} />
         ) : isLoading ? (
@@ -439,6 +565,12 @@ export default function ChatThreadScreen() {
         visible={!!actionsFor}
         actions={actions}
         onClose={() => setActionsFor(null)}
+      />
+
+      <ForwardSheet
+        messageId={forwarding}
+        fromConversationId={id ?? ""}
+        onClose={() => setForwarding(null)}
       />
 
       {/* A draft thread has no conversation yet — nothing to report. */}
