@@ -90,6 +90,15 @@ export interface Listing {
   createdAt: string;
   publishedAt: string | null;
   /**
+   * Denormalized on the server from `listing_reviews`, so every card can show
+   * stars without a second request. `ratingAvg` is null until somebody rates
+   * it — which is not the same as a rating of zero.
+   */
+  ratingAvg: number | null;
+  ratingCount: number;
+  /** Distinct viewers — one per person, not per page open. */
+  viewCount: number;
+  /**
    * The seller, as the public listing page shows them. Null when the account
    * has since been deleted. Less than a full profile on purpose — no email or
    * phone beyond the listing's own contact number.
@@ -291,6 +300,16 @@ export const listingApi = {
 
   /** Just the ids — what the save-hearts subscribe to. */
   getSavedIds: () => api<string[]>(`/listings/saved/ids`),
+
+  /**
+   * Records that this person opened the listing and returns the count now.
+   * Deduplicated server-side by user id, or by the device header for guests,
+   * so calling it on every mount is correct rather than wasteful.
+   */
+  recordView: (id: string) =>
+    api<{ viewCount: number; counted: boolean }>(`/listings/${id}/view`, {
+      method: "POST",
+    }),
 
   /** Flag a listing for the moderators. 409 ALREADY_REPORTED on a repeat. */
   report: (id: string, reason: ReportReason, comment?: string) =>

@@ -12,6 +12,32 @@ export function useIsAuthed(): boolean {
   return useAuthStore((s) => s.status === "authenticated");
 }
 
+/**
+ * Like `requireAuth`, but also insists on a verified phone number.
+ *
+ * Telegram and Google prove who someone is; neither proves a reachable Uzbek
+ * number. Actions other people have to live with — posting, reviewing,
+ * reporting, opening a chat — are gated on one, and the server enforces the
+ * same rule (403 PHONE_REQUIRED). Checking here too is what turns that into
+ * "add your number" instead of a failed request.
+ */
+export function requirePhone(fn?: () => void) {
+  const { status, user } = useAuthStore.getState();
+
+  if (status !== "authenticated") {
+    toast.successKey("auth.signInRequired");
+    router.push("/(auth)/welcome");
+    return;
+  }
+  if (user?.phoneNumber) {
+    fn?.();
+    return;
+  }
+
+  toast.successKey("auth.phoneRequired");
+  router.push("/link-phone");
+}
+
 /** Run `fn` if signed in; otherwise send the guest to the login flow. */
 export function requireAuth(fn?: () => void) {
   if (useAuthStore.getState().status === "authenticated") {

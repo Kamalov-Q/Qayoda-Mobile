@@ -4,6 +4,7 @@
 // button that only ever errors.
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { Card } from "../../../components/ui";
 import { spacing } from "../../../theme/tokens";
 import { useTheme } from "../../../theme/useTheme";
@@ -51,12 +52,10 @@ export function SignInMethods() {
     <Card flush>
       {ROWS.map((row, index) => {
         const isLinked = linked.has(row.provider);
-        // A phone can only be added by signing in with it — there is no
-        // "link phone" endpoint — so its row has no add action.
+        // Google needs the native module to be in this binary; the other two
+        // are always offerable.
         const canLink =
-          row.provider === "GOOGLE"
-            ? isGoogleSignInAvailable()
-            : row.provider === "TELEGRAM";
+          row.provider === "GOOGLE" ? isGoogleSignInAvailable() : true;
         const busy =
           (row.provider === "GOOGLE" && linkGoogle.isPending) ||
           (unlink.isPending && unlink.variables === row.provider);
@@ -68,8 +67,11 @@ export function SignInMethods() {
           : canLink
             ? {
                 label: t("auth.link"),
-                onPress: () =>
-                  row.provider === "GOOGLE" ? linkGoogle.mutate() : linkTelegram(),
+                onPress: () => {
+                  if (row.provider === "GOOGLE") return linkGoogle.mutate();
+                  if (row.provider === "TELEGRAM") return linkTelegram();
+                  return router.push("/link-phone");
+                },
                 danger: false,
               }
             : null;
@@ -93,10 +95,15 @@ export function SignInMethods() {
             />
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={text.bodyStrong}>{t(row.labelKey)}</Text>
+              {/* An unavailable provider says why. Showing "not linked" with
+                  no way to link it reads as a broken button rather than as a
+                  build that does not carry the SDK. */}
               <Text style={text.caption}>
                 {isLoading
                   ? "…"
-                  : t(isLinked ? "auth.linked" : "auth.notLinked")}
+                  : !isLinked && !canLink
+                    ? t("auth.googleUnavailable")
+                    : t(isLinked ? "auth.linked" : "auth.notLinked")}
               </Text>
             </View>
             {busy ? (

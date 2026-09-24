@@ -35,6 +35,9 @@ const BY_CODE: Record<string, TranslationKey> = {
   ACCOUNT_BANNED: "errors.accountBanned",
   ACCOUNT_DELETED: "errors.accountDeleted",
   IDENTITY_TAKEN: "errors.identityTaken",
+  // Same situation as IDENTITY_TAKEN, different sentence: someone linking a
+  // phone needs to hear that the NUMBER is spoken for, not "that account".
+  PHONE_TAKEN: "errors.phoneTaken",
   PROVIDER_ALREADY_LINKED: "errors.providerAlreadyLinked",
   LAST_IDENTITY: "errors.lastIdentity",
   INVALID_CREDENTIALS: "errors.invalidCredentials",

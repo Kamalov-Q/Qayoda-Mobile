@@ -119,6 +119,23 @@ export const authApi = {
   // ---- linking (all need a session) --------------------------------------
   identities: () => api<Identity[]>("/auth/identities"),
 
+  /**
+   * Adds a phone to the account already holding the session — the way a
+   * Telegram or Google user gets a verified number without a second account.
+   * Same SMS budget as the sign-in flow; only the verify differs.
+   */
+  linkPhoneRequest: (phone: string, lang: Lang) =>
+    api<{ sent: true; expiresIn: number }>("/auth/link/phone/request", {
+      method: "POST",
+      body: { phone, lang },
+    }),
+
+  linkPhoneVerify: (phone: string, code: string) =>
+    api<Identity>("/auth/link/phone/verify", {
+      method: "POST",
+      body: { phone, code },
+    }),
+
   linkGoogle: (idToken: string) =>
     api<Identity>("/auth/link/google", { method: "POST", body: { idToken } }),
 

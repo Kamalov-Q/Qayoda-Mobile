@@ -22,6 +22,7 @@ import { useTheme } from "../../../src/theme/useTheme";
 import { useT, useLanguage, type TranslationKey } from "../../../src/i18n";
 import { confirm } from "../../../src/lib/alerts";
 import { useListing } from "../../../src/features/listings/hooks/useListing";
+import { useListingViews } from "../../../src/features/listings/hooks/useListingViews";
 import {
   useArchiveListing,
   useRestoreListing,
@@ -38,11 +39,16 @@ import { useConversations } from "../../../src/features/chat/hooks/useConversati
 import { OfferBadge } from "../../../src/features/listings/components/OfferBadge";
 import { htmlToText } from "../../../src/features/listings/utils/format";
 import { useAuthStore } from "../../../src/features/auth/store/auth.store";
-import { requireAuth } from "../../../src/features/auth/guest";
+import {
+  requireAuth,
+  requirePhone,
+} from "../../../src/features/auth/guest";
 import { usePresence } from "../../../src/features/chat/hooks/usePresence";
 import { useCategories } from "../../../src/features/listings/hooks/useCategories";
 import { useAmenities } from "../../../src/features/listings/hooks/useAmenities";
 import { PresenceStatus } from "../../../src/features/chat/components/PresenceStatus";
+import { ReviewsSection } from "../../../src/features/reviews/components/ReviewsSection";
+import { CommentsSection } from "../../../src/features/comments/components/CommentsSection";
 
 export default function ListingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -68,6 +74,10 @@ export default function ListingDetailScreen() {
   const ownerPresence = usePresence(
     listing && listing.ownerId !== userId ? listing.ownerId : undefined,
   );
+
+  // Also before the early returns, and for the same reason. Records this
+  // visit and then tracks the count live over the listings socket.
+  const viewCount = useListingViews(listing?.id, listing?.viewCount ?? 0);
 
   if (isLoading) {
     return (
@@ -201,6 +211,35 @@ export default function ListingDetailScreen() {
               />
             </Pressable>
           ) : null}
+
+          {/* Opposite the save heart, in the same scrim capsule: an eye and a
+              number, no sentence. It is a readout, not a control — but it
+              belongs with the heart, not in the spec list, because both are
+              about how this listing is doing rather than what it is.
+
+              Live: the number moves while the page is open, because other
+              people are opening it at the same time. */}
+          <View
+            style={{
+              position: "absolute",
+              top: spacing.md,
+              left: spacing.md,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: spacing.xs,
+              height: 44,
+              paddingHorizontal: spacing.md,
+              borderRadius: radii.pill,
+              backgroundColor: colors.imageScrim,
+            }}
+            accessibilityRole="text"
+            accessibilityLabel={t("listings.viewCount", { count: viewCount })}
+          >
+            <Ionicons name="eye-outline" size={19} color="#FFFFFF" />
+            <Text style={{ ...text.bodyStrong, color: "#FFFFFF" }}>
+              {viewCount}
+            </Text>
+          </View>
         </View>
 
         <View style={{ padding: spacing.lg, gap: spacing.lg }}>
@@ -447,17 +486,18 @@ export default function ListingDetailScreen() {
                 />
               )}
               {/* The way in for everyone else — guests included: the tap routes
-                through requireAuth, so a signed-out user lands on the login
-                flow instead of a silent 401. Sending the opener is what
-                creates the conversation, so the first message is written for
-                them. */}
+                through requirePhone, so a signed-out user lands on the login
+                flow instead of a silent 401, and one without a verified
+                number is asked for it before a stranger's inbox is opened.
+                Sending the opener is what creates the conversation, so the
+                first message is written for them. */}
               <Button
                 title={t("chat.contactOwner")}
                 icon="chatbubble-ellipses-outline"
                 // Opens the thread in DRAFT mode: composer prefilled, nothing
                 // sent until the buyer presses send themselves.
                 onPress={() =>
-                  requireAuth(() => {
+                  requirePhone(() => {
                     const existing = conversations?.find(
                       (c) => c.listingId === listing.id && c.role === "guest",
                     );
@@ -482,7 +522,7 @@ export default function ListingDetailScreen() {
               the same login gate as every other account-only action. */}
           {!isOwner ? (
             <Pressable
-              onPress={() => requireAuth(() => setReporting(true))}
+              onPress={() => requirePhone(() => setReporting(true))}
               accessibilityRole="button"
               style={({ pressed }) => ({
                 flexDirection: "row",
@@ -503,6 +543,14 @@ export default function ListingDetailScreen() {
               </Text>
             </Pressable>
           ) : null}
+
+          {/* Above "similar listings" on purpose: what people said about
+              THIS place belongs before the offer to go look at another one. */}
+          <ReviewsSection listingId={listing.id} isOwner={isOwner} />
+
+          {/* Under the reviews: a rating is a verdict on the place, the
+              thread below is the questions people still have about it. */}
+          <CommentsSection listingId={listing.id} />
 
           <SimilarListings
             listingId={listing.id}

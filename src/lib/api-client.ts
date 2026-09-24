@@ -2,6 +2,7 @@
 import { API_URL } from "./env";
 import { secureSession } from "./secure-session";
 import { useAuthStore } from "../features/auth/store/auth.store";
+import { deviceId } from "./device-id";
 
 export class ApiError extends Error {
   constructor(
@@ -116,6 +117,9 @@ export async function api<T>(
       ...(auth && useAuthStore.getState().accessToken
         ? { Authorization: `Bearer ${useAuthStore.getState().accessToken}` }
         : {}),
+      // Identifies the installation, not the person: it is what lets a
+      // signed-out visitor be counted once rather than once per page open.
+      ...(deviceId() ? { "X-Device-Id": deviceId()! } : {}),
       ...headers,
     },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),

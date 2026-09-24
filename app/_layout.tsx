@@ -7,6 +7,7 @@ import * as SplashScreen from "expo-splash-screen";
 import * as SystemUI from "expo-system-ui";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "../src/lib/query-client";
+import { loadDeviceId } from "../src/lib/device-id";
 import { bootstrapSession } from "../src/features/auth/hooks/useAuth";
 import { hydratePreferences } from "../src/lib/preferences";
 import { hydrateCategories } from "../src/features/listings/hooks/useCategories";
@@ -38,6 +39,9 @@ export default function RootLayout() {
       hydrateCategories(),
       hydrateAmenities(),
       bootstrapSession(),
+      // Before the first request goes out: it rides on every one of them as
+      // a header, and a request sent without it counts a guest twice.
+      loadDeviceId(),
     ]).finally(() => {
       setReady(true);
       SplashScreen.hideAsync();
@@ -129,13 +133,46 @@ export default function RootLayout() {
               name="listing/[id]/edit-images"
               options={{ title: t("listings.editImages") }}
             />
+            {/* Both set their own title once the counts land; this is what
+                shows while the first page is in flight. */}
+            <Stack.Screen
+              name="listing/[id]/reviews"
+              options={{ title: t("reviews.title") }}
+            />
+            <Stack.Screen
+              name="listing/[id]/comments"
+              options={{ title: t("comments.title") }}
+            />
             <Stack.Screen
               name="settings"
               options={{ title: t("settings.title") }}
             />
+            {/* The three lists set their own titles; this is the hub. */}
+            <Stack.Screen
+              name="activity/index"
+              options={{ title: t("activity.title") }}
+            />
+            <Stack.Screen
+              name="activity/comments"
+              options={{ title: t("activity.comments") }}
+            />
+            <Stack.Screen
+              name="activity/likes"
+              options={{ title: t("activity.likes") }}
+            />
+            <Stack.Screen
+              name="activity/reviews"
+              options={{ title: t("activity.reviews") }}
+            />
             <Stack.Screen
               name="change-password"
               options={{ title: t("auth.changePassword") }}
+            />
+            {/* Pushed over whatever the reader was doing when the phone gate
+                stopped them, so it keeps the header's way back. */}
+            <Stack.Screen
+              name="link-phone"
+              options={{ title: t("auth.linkPhoneTitle") }}
             />
             <Stack.Screen
               name="profile/edit"

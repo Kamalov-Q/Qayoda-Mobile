@@ -35,6 +35,7 @@ export const ListingCard = memo(function ListingCard({
       }
       title={listing.title}
       specs={specs || null}
+      rating={{ average: listing.ratingAvg, count: listing.ratingCount }}
       onPress={() => onPress(listing.id)}
       // Draft and archived listings are only reachable from "my listings",
       // where they sit next to live ones — without this the card gives no hint

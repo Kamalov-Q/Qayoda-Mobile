@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { spacing, radii, type } from "../../../theme/tokens";
 import { useTheme } from "../../../theme/useTheme";
 import { resolveMediaUrl } from "../../../lib/media-url";
+import { RatingPill } from "../../reviews/components/RatingPill";
 
 interface Props {
   thumbUrl: string | null | undefined;
@@ -17,6 +18,8 @@ interface Props {
   meta?: string | null;
   /** Top-right of the photo — the save heart. */
   overlay?: ReactNode;
+  /** Stars for the photo's bottom-right. Omitted, or unrated, draws nothing. */
+  rating?: { average: number | null; count: number } | null;
   onPress: () => void;
 }
 
@@ -37,6 +40,7 @@ export const ListingGridCard = memo(function ListingGridCard({
   specs,
   meta,
   overlay,
+  rating,
   onPress,
 }: Props) {
   const { colors, text, shadow } = useTheme();
@@ -81,6 +85,17 @@ export const ListingGridCard = memo(function ListingGridCard({
             style={{ position: "absolute", top: spacing.sm, right: spacing.sm }}
           >
             {overlay}
+          </View>
+        ) : null}
+
+        {/* Top-LEFT at grid width, not opposite the price the way the full
+            card does it: half a card is narrow enough that a long price and a
+            rating sharing the bottom row would collide. */}
+        {rating ? (
+          <View
+            style={{ position: "absolute", left: spacing.sm, top: spacing.sm }}
+          >
+            <RatingPill average={rating.average} count={rating.count} onPhoto />
           </View>
         ) : null}
 

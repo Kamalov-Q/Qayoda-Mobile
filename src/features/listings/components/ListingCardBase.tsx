@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { spacing, radii, type } from "../../../theme/tokens";
 import { useTheme } from "../../../theme/useTheme";
 import { resolveMediaUrl } from "../../../lib/media-url";
+import { RatingPill } from "../../reviews/components/RatingPill";
 
 interface Props {
   thumbUrl: string | null | undefined;
@@ -17,6 +18,8 @@ interface Props {
   meta?: string | null;
   /** Sits at the photo's top-right: a status badge, a save toggle. */
   overlay?: ReactNode;
+  /** Stars for the photo's bottom-right. Omitted, or unrated, draws nothing. */
+  rating?: { average: number | null; count: number } | null;
   onPress: () => void;
 }
 
@@ -42,6 +45,7 @@ export const ListingCardBase = memo(function ListingCardBase({
   specs,
   meta,
   overlay,
+  rating,
   onPress,
 }: Props) {
   const { colors, text, shadow } = useTheme();
@@ -103,6 +107,20 @@ export const ListingCardBase = memo(function ListingCardBase({
             <Text style={{ ...type.heading, fontSize: 17, color: "#FFFFFF" }}>
               {price}
             </Text>
+          </View>
+        ) : null}
+
+        {/* Opposite the price, so the two numbers people scan for sit on the
+            same line without crowding each other. */}
+        {rating ? (
+          <View
+            style={{
+              position: "absolute",
+              right: spacing.md,
+              bottom: spacing.md,
+            }}
+          >
+            <RatingPill average={rating.average} count={rating.count} onPhoto />
           </View>
         ) : null}
       </View>

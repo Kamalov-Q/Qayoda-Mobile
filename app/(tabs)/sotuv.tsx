@@ -74,6 +74,8 @@ interface FeedItem {
   areaM2: string | null;
   address: string | null;
   publishedAt: string | null;
+  ratingAvg: number | null;
+  ratingCount: number;
 }
 
 function toFeedItem(l: Listing, purpose: OfferPurpose): FeedItem {
@@ -92,6 +94,8 @@ function toFeedItem(l: Listing, purpose: OfferPurpose): FeedItem {
     areaM2: l.areaM2,
     address: l.address,
     publishedAt: l.publishedAt ?? l.createdAt,
+    ratingAvg: l.ratingAvg,
+    ratingCount: l.ratingCount,
   };
 }
 
@@ -770,6 +774,7 @@ const FeedRow = memo(function FeedRow({
         title={item.title}
         specs={specs || null}
         meta={meta}
+        rating={{ average: item.ratingAvg, count: item.ratingCount }}
         onPress={() => onPress(item.id)}
         overlay={<SaveHeart listingId={item.id} />}
       />
@@ -786,6 +791,7 @@ const FeedRow = memo(function FeedRow({
       // specs — those cards are a photo and a price, and the shared card is
       // built to look finished that way rather than half-loaded.
       specs={specs || null}
+      rating={{ average: item.ratingAvg, count: item.ratingCount }}
       onPress={() => onPress(item.id)}
       overlay={<SaveHeart listingId={item.id} />}
     />

@@ -65,6 +65,39 @@ export default function SettingsScreen() {
   return (
     <Screen edges={HEADER_EDGES}>
       <View style={{ gap: spacing.xl, paddingBottom: spacing.xl }}>
+        {/* First, and only when signed in: it is the one part of settings
+            that is about what you did rather than how the app behaves. */}
+        {authed ? (
+          <Section title={t("activity.title")}>
+            <Pressable
+              onPress={() => router.push("/activity")}
+              accessibilityRole="button"
+              accessibilityLabel={t("activity.title")}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing.md,
+                padding: spacing.md,
+                borderRadius: radii.lg,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: pressed ? colors.surfaceRaised : colors.surface,
+              })}
+            >
+              <Ionicons name="pulse-outline" size={20} color={colors.primary} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={text.bodyStrong}>{t("activity.title")}</Text>
+                <Text style={text.caption}>{t("activity.intro")}</Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={colors.textFaint}
+              />
+            </Pressable>
+          </Section>
+        ) : null}
+
         {authed ? (
           <Section title={t("auth.methods")}>
             <SignInMethods />
