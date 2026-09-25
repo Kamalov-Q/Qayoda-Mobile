@@ -8,7 +8,12 @@ import {
   RefreshControl,
 } from "react-native";
 import { router } from "expo-router";
-import { Screen, EmptyState, TAB_EDGES } from "../../src/components/ui";
+import {
+  Screen,
+  EmptyState,
+  BackButton,
+  TAB_EDGES,
+} from "../../src/components/ui";
 import { spacing } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT } from "../../src/i18n";
@@ -40,9 +45,22 @@ export default function SavedScreen() {
           gap: 2,
         }}
       >
-        <Text style={text.display} numberOfLines={1}>
-          {t("saved.title")}
-        </Text>
+        {/* This screen left the tab bar (`href: null`) and is now only ever
+            pushed — from "my activity". Without a way back it is a dead end,
+            and the sibling activity screens all have one from the stack
+            header this one does not get. */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: spacing.md,
+          }}
+        >
+          <BackButton fallback="/activity" />
+          <Text style={{ ...text.title, flex: 1 }} numberOfLines={1}>
+            {t("saved.title")}
+          </Text>
+        </View>
         {!isLoading && !isError && data?.length ? (
           <Text style={text.caption}>
             {t("listings.countFound", { count: data.length })}

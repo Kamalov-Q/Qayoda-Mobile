@@ -1,6 +1,6 @@
 // The line to the support desk. One thread, ever — the same screen whether
 // this is the first message or the fortieth.
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -13,6 +13,8 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
+import { useMutation } from "@tanstack/react-query";
+import { queryClient } from "../src/lib/query-client";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -20,6 +22,7 @@ import {
   EmptyState,
   ImageViewer,
   HEADER_EDGES,
+  toast,
 } from "../src/components/ui";
 import { spacing, radii } from "../src/theme/tokens";
 import { useTheme } from "../src/theme/useTheme";
@@ -27,6 +30,10 @@ import { useT, useLanguage } from "../src/i18n";
 import { errorMessage } from "../src/lib/api-error";
 import { resolveMediaUrl } from "../src/lib/media-url";
 import { ChatInput } from "../src/features/chat/components/ChatInput";
+import {
+  MessageActionSheet,
+  type MessageAction,
+} from "../src/features/chat/components/MessageActionSheet";
 import { VoiceMessage } from "../src/features/chat/components/VoiceMessage";
 import type { SendMessageInput } from "../src/features/chat/api/chat.api";
 import {
@@ -34,6 +41,7 @@ import {
   useSendSupport,
   useSupport,
 } from "../src/features/support/hooks/useSupport";
+import { supportApi } from "../src/features/support/api/support.api";
 import type { SupportMessage } from "../src/features/support/api/support.api";
 
 /** The composer is built for a chat; support has nothing to reply to or
@@ -41,7 +49,7 @@ import type { SupportMessage } from "../src/features/support/api/support.api";
 const noop = () => {};
 
 export default function SupportScreen() {
-  const { colors } = useTheme();
+  const { colors, text } = useTheme();
   const insets = useSafeAreaInsets();
   const t = useT();
   const language = useLanguage();
@@ -52,6 +60,48 @@ export default function SupportScreen() {
   useMarkSupportRead();
 
   const [viewing, setViewing] = useState<string | null>(null);
+  // The message whose menu is open, and the one being answered.
+  const [actionsFor, setActionsFor] = useState<SupportMessage | null>(null);
+  const [replyTo, setReplyTo] = useState<SupportMessage | null>(null);
+
+  const thread = data?.thread ?? null;
+  const pinnedId = thread?.pinnedMessageId ?? null;
+
+  const pin = useMutation({
+    mutationFn: (messageId: string | null) => supportApi.setPinned(messageId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["support"] });
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+
+  const actions = useMemo<MessageAction[]>(() => {
+    const m = actionsFor;
+    if (!m) return [];
+
+    return [
+      {
+        key: "reply",
+        labelKey: "chat.reply",
+        icon: "arrow-undo-outline",
+        onPress: () => setReplyTo(m),
+      },
+      {
+        key: "pin",
+        labelKey: pinnedId === m.id ? "chat.unpin" : "chat.pin",
+        icon: pinnedId === m.id ? "remove-circle-outline" : "pin-outline",
+        onPress: () => pin.mutate(pinnedId === m.id ? null : m.id),
+      },
+    ];
+  }, [actionsFor, pinnedId, pin]);
+
+  const pinnedMessage = useMemo(
+    () =>
+      pinnedId
+        ? (data?.messages ?? []).find((m) => m.id === pinnedId)
+        : null,
+    [pinnedId, data?.messages],
+  );
 
   const onSend = useCallback(
     (input: SendMessageInput) => {
@@ -78,9 +128,11 @@ export default function SupportScreen() {
         mimeType: input.mimeType,
         durationSec: input.durationSec,
         waveform: input.waveform,
+        replyToId: replyTo?.id,
       });
+      setReplyTo(null);
     },
-    [send],
+    [send, replyTo],
   );
 
   const messages = data?.messages ?? [];
@@ -92,6 +144,49 @@ export default function SupportScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={insets.top + 44}
       >
+        {/* Above the list: the pin belongs at the top of the thread. */}
+        {pinnedMessage ? (
+          <Pressable
+            onPress={() => setActionsFor(pinnedMessage)}
+            accessibilityRole="button"
+            accessibilityLabel={t("chat.pinned")}
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              gap: spacing.sm,
+              paddingHorizontal: spacing.md,
+              paddingVertical: spacing.sm,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border,
+              backgroundColor: pressed ? colors.surfaceRaised : colors.surface,
+            })}
+          >
+            <Ionicons name="pin" size={15} color={colors.primary} />
+            <View style={{ flex: 1, gap: 1 }}>
+              <Text
+                style={{
+                  ...text.caption,
+                  color: colors.primary,
+                  fontWeight: "600",
+                }}
+              >
+                {t("chat.pinned")}
+              </Text>
+              <Text style={text.caption} numberOfLines={1}>
+                {pinnedMessage.body || t("chat.attachment")}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => pin.mutate(null)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={t("chat.unpin")}
+            >
+              <Ionicons name="close" size={16} color={colors.textMuted} />
+            </Pressable>
+          </Pressable>
+        ) : null}
+
         {isLoading ? (
           <ActivityIndicator
             style={{ marginTop: spacing.xxl }}
@@ -133,6 +228,13 @@ export default function SupportScreen() {
               <Bubble
                 message={item}
                 language={language}
+                replyTo={
+                  item.replyToId
+                    ? (data?.messages ?? []).find((m) => m.id === item.replyToId)
+                    : undefined
+                }
+                pinned={item.id === pinnedId}
+                onOpenMenu={() => setActionsFor(item)}
                 // "Has the desk seen this?" — one stamp per side, compared
                 // against the message's own time.
                 readAt={data?.thread?.adminReadAt ?? null}
@@ -151,6 +253,41 @@ export default function SupportScreen() {
         {/* No padding of its own: `Screen` already carries the bottom safe
             area through HEADER_EDGES, and adding the inset again here was
             stacking two gaps under the composer. */}
+        {/* What you are answering, above the box — a reply with no visible
+            target is a message about nothing. */}
+        {replyTo ? (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: spacing.sm,
+              paddingHorizontal: spacing.md,
+              paddingTop: spacing.sm,
+              backgroundColor: colors.surface,
+            }}
+          >
+            <View
+              style={{
+                width: 3,
+                height: 28,
+                borderRadius: 2,
+                backgroundColor: colors.primary,
+              }}
+            />
+            <Text style={{ ...text.caption, flex: 1 }} numberOfLines={1}>
+              {replyTo.body || t("chat.attachment")}
+            </Text>
+            <Pressable
+              onPress={() => setReplyTo(null)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={t("common.cancel")}
+            >
+              <Ionicons name="close" size={16} color={colors.textMuted} />
+            </Pressable>
+          </View>
+        ) : null}
+
         <View>
           <ChatInput
             conversationId=""
@@ -165,6 +302,12 @@ export default function SupportScreen() {
         </View>
       </KeyboardAvoidingView>
 
+      <MessageActionSheet
+        visible={!!actionsFor}
+        actions={actions}
+        onClose={() => setActionsFor(null)}
+      />
+
       {viewing ? (
         <ImageViewer uri={viewing} onClose={() => setViewing(null)} />
       ) : null}
@@ -178,11 +321,18 @@ function Bubble({
   message,
   language,
   readAt,
+  replyTo,
+  pinned,
+  onOpenMenu,
   onPressImage,
 }: {
   message: SupportMessage;
   language: string;
   readAt: string | null;
+  /** The message this answers, when it is still loaded. */
+  replyTo?: SupportMessage;
+  pinned?: boolean;
+  onOpenMenu: () => void;
   onPressImage: (url: string) => void;
 }) {
   const { colors, text } = useTheme();
@@ -195,7 +345,11 @@ function Bubble({
     !!readAt && new Date(readAt).getTime() >= new Date(message.createdAt).getTime();
 
   return (
-    <View
+    <Pressable
+      // Long press, like the chat: a permanent row of buttons on every
+      // bubble would be more chrome than conversation.
+      onLongPress={onOpenMenu}
+      delayLongPress={250}
       style={{
         alignSelf: mine ? "flex-end" : "flex-start",
         maxWidth: "85%",
@@ -207,6 +361,32 @@ function Bubble({
         borderColor: mine ? colors.primaryBorder : colors.border,
       }}
     >
+      {pinned ? (
+        <View
+          style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+        >
+          <Ionicons name="pin" size={11} color={colors.primary} />
+          <Text style={{ ...text.caption, color: colors.primary }}>
+            {t("chat.pinned")}
+          </Text>
+        </View>
+      ) : null}
+
+      {/* The quoted line, so an answer is readable without scrolling back. */}
+      {replyTo ? (
+        <View
+          style={{
+            borderLeftWidth: 3,
+            borderLeftColor: colors.primary,
+            paddingLeft: spacing.sm,
+            opacity: 0.85,
+          }}
+        >
+          <Text style={text.caption} numberOfLines={1}>
+            {replyTo.body || t("chat.attachment")}
+          </Text>
+        </View>
+      ) : null}
       {!mine ? (
         <View
           style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}
@@ -347,6 +527,6 @@ function Bubble({
           />
         ) : null}
       </View>
-    </View>
+    </Pressable>
   );
 }

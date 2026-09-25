@@ -24,6 +24,8 @@ export interface SupportMessage {
   forwardedFromName: string | null;
   /** Null when that account is gone — the attribution stays, the link goes. */
   forwardedFromUserId: string | null;
+  /** The message this answers, within the same thread. */
+  replyToId: string | null;
   createdAt: string;
 }
 
@@ -36,6 +38,8 @@ export interface SupportThread {
    *  stamp is later than it. */
   userReadAt: string | null;
   adminReadAt: string | null;
+  /** The message kept at the top of the thread, shared with the desk. */
+  pinnedMessageId: string | null;
   userUnread: number;
   adminUnread: number;
   createdAt: string;
@@ -59,6 +63,8 @@ export interface SendSupportInput {
   mimeType?: string;
   durationSec?: number;
   waveform?: number[];
+  /** A message in the thread this answers. */
+  replyToId?: string;
 }
 
 export const supportApi = {
@@ -84,6 +90,13 @@ export const supportApi = {
    */
   forward: (messageId: string) =>
     api<SupportMessage>("/support/forward", {
+      method: "POST",
+      body: { messageId },
+    }),
+
+  /** `messageId: null` clears it. Either side may pin. */
+  setPinned: (messageId: string | null) =>
+    api<SupportThread>("/support/pin", {
       method: "POST",
       body: { messageId },
     }),
