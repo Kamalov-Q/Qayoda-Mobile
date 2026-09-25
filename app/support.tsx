@@ -95,6 +95,22 @@ export default function SupportScreen() {
     ];
   }, [actionsFor, pinnedId, pin]);
 
+  /**
+   * Scroll to a message by id.
+   *
+   * `scrollToIndex` on a list that has not measured that row yet throws, so
+   * the failure handler nudges to roughly the right offset and tries again —
+   * the standard dance for jumping into a long list.
+   */
+  const jumpTo = useCallback(
+    (messageId: string) => {
+      const index = (data?.messages ?? []).findIndex((m) => m.id === messageId);
+      if (index < 0) return;
+      listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+    },
+    [data?.messages],
+  );
+
   const pinnedMessage = useMemo(
     () =>
       pinnedId
@@ -147,7 +163,9 @@ export default function SupportScreen() {
         {/* Above the list: the pin belongs at the top of the thread. */}
         {pinnedMessage ? (
           <Pressable
-            onPress={() => setActionsFor(pinnedMessage)}
+            // Jumps to it. Opening the menu here was answering a question
+            // nobody asked — the bar exists to get you to the message.
+            onPress={() => jumpTo(pinnedMessage.id)}
             accessibilityRole="button"
             accessibilityLabel={t("chat.pinned")}
             style={({ pressed }) => ({
@@ -217,6 +235,12 @@ export default function SupportScreen() {
             onContentSizeChange={() =>
               listRef.current?.scrollToEnd({ animated: false })
             }
+            onScrollToIndexFailed={({ index, averageItemLength }) => {
+              listRef.current?.scrollToOffset({
+                offset: index * averageItemLength,
+                animated: true,
+              });
+            }}
             ListEmptyComponent={
               <EmptyState
                 icon="chatbubble-ellipses-outline"

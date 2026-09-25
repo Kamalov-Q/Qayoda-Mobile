@@ -15,6 +15,7 @@ import {
   Screen,
   Card,
   Avatar,
+  Button,
   EmptyState,
   ImageViewer,
   HEADER_EDGES,
@@ -29,6 +30,9 @@ import { useUserListings } from "../../src/features/users/hooks/useUserListings"
 import { ListingCard } from "../../src/features/listings/components/ListingCard";
 import type { Listing } from "../../src/features/listings/api/listings.api";
 import { usePresence } from "../../src/features/chat/hooks/usePresence";
+import { useConversations } from "../../src/features/chat/hooks/useConversations";
+import { requirePhone } from "../../src/features/auth/guest";
+import { useAuthStore } from "../../src/features/auth/store/auth.store";
 import { PresenceStatus } from "../../src/features/chat/components/PresenceStatus";
 
 export default function UserProfileScreen() {
@@ -41,6 +45,8 @@ export default function UserProfileScreen() {
     useUserProfile(id);
   const [viewingAvatar, setViewingAvatar] = useState(false);
   const presence = usePresence(id);
+  const viewerId = useAuthStore((st) => st.user?.id);
+  const { data: conversations } = useConversations();
   // Page one rides along with the profile; this fetches the rest on scroll.
   const more = useUserListings(id, data?.listingCount ?? 0);
   const listings = useMemo(
@@ -49,6 +55,20 @@ export default function UserProfileScreen() {
   );
 
   const photo = data?.avatarUrl ?? data?.avatarThumbUrl ?? null;
+
+  // An existing thread with this person wins; otherwise their newest listing
+  // is the thing to start one about.
+  const chatTarget = useMemo(() => {
+    if (!id || id === viewerId) return null;
+
+    const existing = conversations?.find((c) => c.other.id === id);
+    if (existing) return { kind: "existing" as const, id: existing.id };
+
+    const listing = listings[0];
+    return listing
+      ? { kind: "new" as const, listingId: listing.id }
+      : null;
+  }, [id, viewerId, conversations, listings]);
 
   const openListing = useCallback(
     (listingId: string) => router.push(`/listing/${listingId}`),
@@ -82,6 +102,32 @@ export default function UserProfileScreen() {
         </Pressable>
         <Text style={{ ...text.display, textAlign: "center" }}>{name}</Text>
         <PresenceStatus presence={presence} />
+
+        {/* Write to them. Conversations here are bound to a listing, so this
+            reopens the one you already have with this person, or starts one
+            on their newest advert — which is what you would have tapped
+            through to anyway. Hidden when there is neither: a button that
+            can only fail is worse than no button. */}
+        {chatTarget ? (
+          <Button
+            title={t("chat.contactOwner")}
+            icon="chatbubble-ellipses-outline"
+            variant="secondary"
+            onPress={() =>
+              requirePhone(() =>
+                chatTarget.kind === "existing"
+                  ? router.push({
+                      pathname: "/chat/[id]",
+                      params: { id: chatTarget.id, prefill: "1" },
+                    })
+                  : router.push({
+                      pathname: "/chat/[id]",
+                      params: { id: "new", listingId: chatTarget.listingId },
+                    }),
+              )
+            }
+          />
+        ) : null}
         {data ? (
           <Text style={text.caption}>
             {t("userProfile.memberSince", {

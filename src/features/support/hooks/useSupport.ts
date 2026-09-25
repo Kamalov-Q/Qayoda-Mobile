@@ -6,7 +6,10 @@ import {
   type SupportMessage,
 } from "../api/support.api";
 import { queryClient } from "@/src/lib/query-client";
-import { getSupportSocket } from "@/src/lib/support-socket";
+import {
+  disconnectSupportSocket,
+  getSupportSocket,
+} from "@/src/lib/support-socket";
 import { errorMessage } from "@/src/lib/api-error";
 import { toast } from "@/src/components/ui/Toast";
 import { useAuthStore } from "@/src/features/auth/store/auth.store";
@@ -38,27 +41,51 @@ export function useSupport() {
     refetchOnMount: "always",
   });
 
+  return query;
+}
+
+/**
+ * Keeps the support socket connected for as long as someone is signed in.
+ *
+ * Mounted once in the app shell, not in the support screen: an answer from
+ * the desk has to arrive whatever the reader is looking at, or the badge
+ * only appears when they happen to open the thread — which is the one moment
+ * a badge is no longer any use.
+ */
+export function useSupportLive() {
+  const authed = useAuthStore((s) => s.status === "authenticated");
+
   useEffect(() => {
-    if (!authed) return;
+    if (!authed) {
+      // Signing out must not leave a socket authenticated as the last user.
+      disconnectSupportSocket();
+      return;
+    }
 
     const socket = getSupportSocket();
+
     const onMessage = (message: SupportMessage) => {
       queryClient.setQueryData<Thread>(SUPPORT_KEY, (current) =>
         current && !current.messages.some((m) => m.id === message.id)
           ? { ...current, messages: [...current.messages, message] }
           : current,
       );
-      // Reading it is what clears the badge; arriving is not.
+      // Reading it is what clears the badge; arriving is what raises it.
       void queryClient.invalidateQueries({ queryKey: UNREAD_KEY });
     };
 
+    // A thread closing, reopening or being pinned changes the header.
+    const onThread = () => {
+      void queryClient.invalidateQueries({ queryKey: SUPPORT_KEY });
+    };
+
     socket.on("support:message", onMessage);
+    socket.on("support:thread", onThread);
     return () => {
       socket.off("support:message", onMessage);
+      socket.off("support:thread", onThread);
     };
   }, [authed]);
-
-  return query;
 }
 
 /** The badge on the settings row. Cheap enough to poll on focus. */

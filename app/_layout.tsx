@@ -8,6 +8,7 @@ import * as SystemUI from "expo-system-ui";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "../src/lib/query-client";
 import { loadDeviceId } from "../src/lib/device-id";
+import { useSupportLive } from "../src/features/support/hooks/useSupport";
 import { bootstrapSession } from "../src/features/auth/hooks/useAuth";
 import { hydratePreferences } from "../src/lib/preferences";
 import { hydrateCategories } from "../src/features/listings/hooks/useCategories";
@@ -47,6 +48,10 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     });
   }, []);
+
+  // The support socket, for as long as someone is signed in: an answer from
+  // the desk has to reach the badge whatever screen they are on.
+  useSupportLive();
 
   // Paints the window behind the React tree, so overscroll and the gap during
   // navigation show the theme colour instead of white.

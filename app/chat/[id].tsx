@@ -1,5 +1,5 @@
 // app/chat/[id].tsx
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -184,6 +184,19 @@ export default function ChatThreadScreen() {
   // Only shown when the pinned message is among the ones loaded: scrolling
   // back far enough to find it is the client's job, and a bar that says
   // "pinned message" with nothing in it would be worse than no bar.
+  const listRef = useRef<FlatList<ChatMessage>>(null);
+
+  /** Scroll to a message by id. The failure path is the usual one for a list
+   *  that has not measured that row yet. */
+  const jumpTo = useCallback(
+    (messageId: string) => {
+      const index = (messages ?? []).findIndex((m) => m.id === messageId);
+      if (index < 0) return;
+      listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+    },
+    [messages],
+  );
+
   const pinnedMessage = useMemo(
     () => (pinnedId ? (messages ?? []).find((m) => m.id === pinnedId) : null),
     [pinnedId, messages],
@@ -430,7 +443,9 @@ export default function ChatThreadScreen() {
             no matter which way the list is drawn. */}
         {pinnedMessage ? (
           <Pressable
-            onPress={() => setActionsFor(pinnedMessage)}
+            // Jumps to it: the bar exists to get you to the message, not to
+            // offer a menu you did not ask for.
+            onPress={() => jumpTo(pinnedMessage.id)}
             accessibilityRole="button"
             accessibilityLabel={t("chat.pinned")}
             style={({ pressed }) => ({
@@ -475,9 +490,16 @@ export default function ChatThreadScreen() {
           <ActivityIndicator style={{ flex: 1 }} color={colors.primary} />
         ) : (
           <FlatList
+            ref={listRef}
             data={messages ?? []}
             keyExtractor={(m) => m.id}
             inverted
+            onScrollToIndexFailed={({ index, averageItemLength }) => {
+              listRef.current?.scrollToOffset({
+                offset: index * averageItemLength,
+                animated: true,
+              });
+            }}
             onEndReached={loadOlder}
             onEndReachedThreshold={0.4}
             ListFooterComponent={
