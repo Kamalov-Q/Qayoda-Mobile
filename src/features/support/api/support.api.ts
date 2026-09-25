@@ -22,6 +22,8 @@ export interface SupportMessage {
   waveform: number[] | null;
   /** Whose words these originally were, on a forward. */
   forwardedFromName: string | null;
+  /** Null when that account is gone — the attribution stays, the link goes. */
+  forwardedFromUserId: string | null;
   createdAt: string;
 }
 
@@ -30,6 +32,10 @@ export interface SupportThread {
   userId: string;
   status: "OPEN" | "CLOSED";
   lastMessageAt: string | null;
+  /** When each side last read. A message is read when the other side's
+   *  stamp is later than it. */
+  userReadAt: string | null;
+  adminReadAt: string | null;
   userUnread: number;
   adminUnread: number;
   createdAt: string;
@@ -38,6 +44,21 @@ export interface SupportThread {
 export interface SupportImage {
   url: string;
   thumbUrl: string;
+}
+
+export interface SendSupportInput {
+  type?: "TEXT" | "IMAGE" | "VIDEO" | "VIDEO_NOTE" | "VOICE" | "FILE";
+  body?: string;
+  /** The composer's own photo upload. */
+  image?: SupportImage;
+  /** Everything else — voice, video, files. */
+  mediaUrl?: string;
+  thumbUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  mimeType?: string;
+  durationSec?: number;
+  waveform?: number[];
 }
 
 export const supportApi = {
@@ -49,11 +70,13 @@ export const supportApi = {
 
   unread: () => api<{ unread: number }>("/support/unread"),
 
-  send: (body: string, image?: SupportImage) =>
-    api<SupportMessage>("/support/messages", {
-      method: "POST",
-      body: { ...(body ? { body } : {}), ...(image ? { image } : {}) },
-    }),
+  /**
+   * Anything the chat composer can produce: text, a photo, a voice note, a
+   * video or a file. The server stores it in the same shape a forwarded chat
+   * message arrives in, so the desk sees one kind of thread.
+   */
+  send: (input: SendSupportInput) =>
+    api<SupportMessage>("/support/messages", { method: "POST", body: input }),
 
   /**
    * Hands the support desk a message out of one of your chats — the evidence

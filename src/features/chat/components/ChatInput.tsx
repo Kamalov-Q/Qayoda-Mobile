@@ -24,6 +24,13 @@ interface Props {
   /** Draft mode: no conversation exists yet — no typing signals, no
    *  attachments (they need a conversation id), text-only until first send. */
   draft?: boolean;
+  /**
+   * Support mode: the same composer against the support desk. Attachments
+   * and voice work exactly as in a chat — the upload endpoint needs no
+   * conversation — but there is nobody to send typing signals to, and the
+   * desk is not a person who replies to individual messages.
+   */
+  support?: boolean;
   /** Seeds the box once (draft boilerplate); anything typed wins over it. */
   initialText?: string;
   onSend: (input: SendMessageInput) => void;
@@ -37,6 +44,7 @@ interface Props {
 export const ChatInput = memo(function ChatInput({
   conversationId,
   draft,
+  support,
   initialText,
   onSend,
   replyTo,
@@ -77,7 +85,7 @@ export const ChatInput = memo(function ChatInput({
   }, [initialText]);
 
   const emitTyping = (isTyping: boolean, kind?: "text" | "voice") => {
-    if (draft || !conversationId) return;
+    if (draft || support || !conversationId) return;
     getChatSocket().emit("typing", { conversationId, isTyping, kind });
   };
 

@@ -4,7 +4,9 @@ import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { spacing, radii, type Palette } from "../../../theme/tokens";
 import { useTheme } from "../../../theme/useTheme";
+import { router } from "expo-router";
 import { useT, useLanguage } from "../../../i18n";
+import { requireAuth } from "../../auth/guest";
 import { resolveMediaUrl } from "../../../lib/media-url";
 import { VoiceMessage } from "./VoiceMessage";
 import type { ChatMessage } from "../api/chat.api";
@@ -92,20 +94,36 @@ export const MessageBubble = memo(function MessageBubble({
       {/* Above the reply quote: a forward is about where the whole message
           came from, a reply is about what it answers. */}
       {m.forwardedFromName ? (
-        <View
-          style={{
+        <Pressable
+          // The name is the point of a forward — "who said this" is exactly
+          // the question a reader has, and their profile is the answer.
+          // Inert when the account is gone, which is why the id is optional.
+          onPress={() =>
+            m.forwardedFromUserId &&
+            requireAuth(() => router.push(`/profile/${m.forwardedFromUserId}`))
+          }
+          disabled={!m.forwardedFromUserId}
+          accessibilityRole={m.forwardedFromUserId ? "button" : "text"}
+          style={({ pressed }) => ({
             flexDirection: "row",
             alignItems: "center",
             gap: 4,
             marginBottom: spacing.xs,
-            opacity: 0.85,
-          }}
+            opacity: pressed ? 0.6 : 0.85,
+          })}
         >
           <Ionicons name="arrow-redo-outline" size={12} color={fg} />
-          <Text style={{ fontSize: 12, fontStyle: "italic", color: fg }}>
+          <Text
+            style={{
+              fontSize: 12,
+              fontStyle: "italic",
+              color: fg,
+              textDecorationLine: m.forwardedFromUserId ? "underline" : "none",
+            }}
+          >
             {t("chat.forwardedFrom", { name: m.forwardedFromName })}
           </Text>
-        </View>
+        </Pressable>
       ) : null}
 
       {m.replyTo ? (

@@ -313,7 +313,7 @@ export const ru: Dictionary = {
   support: {
     title: "Поддержка",
     hint: "Есть вопрос? Напишите нам",
-    team: "Поддержка Growen City",
+    team: "Growen City Support",
     emptyTitle: "Напишите ваш вопрос",
     emptyHint: "Команда ответит так быстро, как сможет.",
   },

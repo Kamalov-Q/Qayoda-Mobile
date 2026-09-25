@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   supportApi,
-  type SupportImage,
+  type SendSupportInput,
   type SupportMessage,
 } from "../api/support.api";
 import { queryClient } from "@/src/lib/query-client";
@@ -30,6 +30,12 @@ export function useSupport() {
     queryKey: SUPPORT_KEY,
     queryFn: supportApi.mine,
     enabled: authed,
+    // The global 60s staleTime is right for lists that change slowly; a
+    // conversation is not one. Messages can arrive while this screen is
+    // closed — a forward from a chat, or an answer from the desk — and the
+    // socket only listens while it is open.
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   useEffect(() => {
@@ -69,8 +75,7 @@ export function useSupportUnread(): number {
 
 export function useSendSupport() {
   return useMutation({
-    mutationFn: ({ body, image }: { body: string; image?: SupportImage }) =>
-      supportApi.send(body, image),
+    mutationFn: (input: SendSupportInput) => supportApi.send(input),
     onSuccess: (message) => {
       // Appended here as well as on the socket echo: the sender should see
       // their own line land immediately, and the socket handler de-duplicates

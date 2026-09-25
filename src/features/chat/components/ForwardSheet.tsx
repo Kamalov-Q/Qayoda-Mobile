@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
+import { queryClient } from "@/src/lib/query-client";
 import { Avatar, toast } from "@/src/components/ui";
 import { spacing, radii } from "@/src/theme/tokens";
 import { useTheme } from "@/src/theme/useTheme";
@@ -44,7 +45,20 @@ export function ForwardSheet({ messageId, fromConversationId, onClose }: Props) 
       if (target.kind === "support") return supportApi.forward(messageId!);
       return chatApi.forward(target.id, messageId!);
     },
-    onSuccess: () => {
+    onSuccess: (_message, target) => {
+      // The destination is a screen the sender is not looking at, so nothing
+      // else will notice the new message: the support socket is only
+      // connected while the support screen is open, and a chat's cache is
+      // per-conversation. Whichever one received it gets invalidated here.
+      if (target.kind === "support") {
+        void queryClient.invalidateQueries({ queryKey: ["support"] });
+      } else {
+        void queryClient.invalidateQueries({
+          queryKey: ["chat", "messages", target.id],
+        });
+        void queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
+      }
+
       toast.successKey("chat.forwarded");
       onClose();
     },

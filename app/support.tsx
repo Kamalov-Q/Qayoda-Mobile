@@ -1,6 +1,6 @@
 // The line to the support desk. One thread, ever — the same screen whether
 // this is the first message or the fortieth.
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
   Pressable,
 } from "react-native";
 import { Image } from "expo-image";
-import * as ImagePicker from "expo-image-picker";
+import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -20,24 +20,25 @@ import {
   EmptyState,
   ImageViewer,
   HEADER_EDGES,
-  toast,
 } from "../src/components/ui";
 import { spacing, radii } from "../src/theme/tokens";
 import { useTheme } from "../src/theme/useTheme";
 import { useT, useLanguage } from "../src/i18n";
 import { errorMessage } from "../src/lib/api-error";
 import { resolveMediaUrl } from "../src/lib/media-url";
-import { uploadImages } from "../src/lib/upload-client";
-import { CommentComposer } from "../src/features/comments/components/CommentComposer";
+import { ChatInput } from "../src/features/chat/components/ChatInput";
+import { VoiceMessage } from "../src/features/chat/components/VoiceMessage";
+import type { SendMessageInput } from "../src/features/chat/api/chat.api";
 import {
   useMarkSupportRead,
   useSendSupport,
   useSupport,
 } from "../src/features/support/hooks/useSupport";
-import type {
-  SupportImage,
-  SupportMessage,
-} from "../src/features/support/api/support.api";
+import type { SupportMessage } from "../src/features/support/api/support.api";
+
+/** The composer is built for a chat; support has nothing to reply to or
+ *  edit, so those handlers go nowhere. */
+const noop = () => {};
 
 export default function SupportScreen() {
   const { colors } = useTheme();
@@ -50,50 +51,37 @@ export default function SupportScreen() {
   const send = useSendSupport();
   useMarkSupportRead();
 
-  const [draft, setDraft] = useState("");
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [photo, setPhoto] = useState<SupportImage | null>(null);
-  const [uploading, setUploading] = useState(false);
   const [viewing, setViewing] = useState<string | null>(null);
 
-  const pickPhoto = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.9,
-    });
-    if (result.canceled) return;
-
-    const uri = result.assets[0].uri;
-    setPhotoUri(uri);
-    setUploading(true);
-    try {
-      const { images } = await uploadImages([uri]);
-      if (!images.length) throw new Error("no image");
-      setPhoto({ url: images[0].url, thumbUrl: images[0].thumbUrl });
-    } catch (e) {
-      setPhotoUri(null);
-      setPhoto(null);
-      toast.error(errorMessage(e));
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const onSubmit = () => {
-    const body = draft.trim();
-    if ((!body && !photo) || uploading) return;
-
-    send.mutate(
-      { body, image: photo ?? undefined },
-      {
-        onSuccess: () => {
-          setDraft("");
-          setPhotoUri(null);
-          setPhoto(null);
-        },
-      },
-    );
-  };
+  const onSend = useCallback(
+    (input: SendMessageInput) => {
+      const isImage = input.type === "IMAGE";
+      send.mutate({
+        type: input.type,
+        body: input.body,
+        // The composer speaks one language for every attachment; support
+        // keeps photos in their own pair, so they split here rather than in
+        // three places on the server.
+        ...(isImage && input.mediaUrl
+          ? {
+              image: {
+                url: input.mediaUrl,
+                thumbUrl: input.thumbUrl ?? input.mediaUrl,
+              },
+            }
+          : {
+              mediaUrl: input.mediaUrl,
+              thumbUrl: input.thumbUrl,
+            }),
+        fileName: input.fileName,
+        fileSize: input.fileSize,
+        mimeType: input.mimeType,
+        durationSec: input.durationSec,
+        waveform: input.waveform,
+      });
+    },
+    [send],
+  );
 
   const messages = data?.messages ?? [];
 
@@ -145,30 +133,36 @@ export default function SupportScreen() {
               <Bubble
                 message={item}
                 language={language}
+                // "Has the desk seen this?" — one stamp per side, compared
+                // against the message's own time.
+                readAt={data?.thread?.adminReadAt ?? null}
                 onPressImage={setViewing}
               />
             )}
           />
         )}
 
-        {/* Closed threads still take messages: from the customer's side there
-            is no such thing as a conversation support has ended. */}
-        <CommentComposer
-          value={draft}
-          onChangeText={setDraft}
-          onSubmit={onSubmit}
-          sending={send.isPending}
-          target={null}
-          onCancelTarget={() => setDraft("")}
-          bottomInset={insets.bottom}
-          photoUri={photoUri}
-          uploading={uploading}
-          onPickPhoto={() => void pickPhoto()}
-          onRemovePhoto={() => {
-            setPhotoUri(null);
-            setPhoto(null);
-          }}
-        />
+        {/* The chat's own composer, in support mode: photos, files and voice
+            all work here, and rebuilding them for this screen would have been
+            a second implementation to keep in step with the first.
+
+            Closed threads still take messages — from the customer's side
+            there is no such thing as a conversation support has ended. */}
+        {/* No padding of its own: `Screen` already carries the bottom safe
+            area through HEADER_EDGES, and adding the inset again here was
+            stacking two gaps under the composer. */}
+        <View>
+          <ChatInput
+            conversationId=""
+            support
+            onSend={onSend}
+            replyTo={null}
+            onClearReply={noop}
+            editing={null}
+            onSubmitEdit={noop}
+            onClearEdit={noop}
+          />
+        </View>
       </KeyboardAvoidingView>
 
       {viewing ? (
@@ -183,10 +177,12 @@ export default function SupportScreen() {
 function Bubble({
   message,
   language,
+  readAt,
   onPressImage,
 }: {
   message: SupportMessage;
   language: string;
+  readAt: string | null;
   onPressImage: (url: string) => void;
 }) {
   const { colors, text } = useTheme();
@@ -194,6 +190,9 @@ function Bubble({
   const mine = !message.fromAdmin;
   const photo = resolveMediaUrl(message.imageUrl ?? message.imageThumbUrl);
   const media = resolveMediaUrl(message.mediaUrl);
+  // Read when the desk's stamp is later than this message was written.
+  const seen =
+    !!readAt && new Date(readAt).getTime() >= new Date(message.createdAt).getTime();
 
   return (
     <View
@@ -225,14 +224,37 @@ function Bubble({
 
       {/* Forwarded out of a chat: whose words these originally were. */}
       {message.forwardedFromName ? (
-        <View
-          style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+        <Pressable
+          onPress={() =>
+            message.forwardedFromUserId &&
+            router.push(`/profile/${message.forwardedFromUserId}`)
+          }
+          disabled={!message.forwardedFromUserId}
+          accessibilityRole={message.forwardedFromUserId ? "button" : "text"}
+          style={({ pressed }) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+            opacity: pressed ? 0.6 : 1,
+          })}
         >
-          <Ionicons name="arrow-redo-outline" size={12} color={colors.textMuted} />
-          <Text style={{ ...text.caption, fontStyle: "italic" }}>
+          <Ionicons
+            name="arrow-redo-outline"
+            size={12}
+            color={colors.textMuted}
+          />
+          <Text
+            style={{
+              ...text.caption,
+              fontStyle: "italic",
+              textDecorationLine: message.forwardedFromUserId
+                ? "underline"
+                : "none",
+            }}
+          >
             {t("chat.forwardedFrom", { name: message.forwardedFromName })}
           </Text>
-        </View>
+        </Pressable>
       ) : null}
 
       {photo ? (
@@ -253,7 +275,14 @@ function Bubble({
           shown as an openable row rather than with a full player: the point
           is that the desk can hear or read the thing, not that this screen
           becomes a second chat client. */}
-      {media ? (
+      {media && message.type === "VOICE" ? (
+        <VoiceMessage
+          url={media}
+          durationSec={message.durationSec}
+          waveform={message.waveform}
+          mine={mine}
+        />
+      ) : media ? (
         <Pressable
           onPress={() => void Linking.openURL(media)}
           accessibilityRole="button"
@@ -294,12 +323,30 @@ function Bubble({
 
       {message.body ? <Text style={text.body}>{message.body}</Text> : null}
 
-      <Text style={{ ...text.caption, alignSelf: "flex-end" }}>
-        {new Date(message.createdAt).toLocaleTimeString(language, {
-          hour: "2-digit",
-          minute: "2-digit",
-        })}
-      </Text>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 4,
+          alignSelf: "flex-end",
+        }}
+      >
+        <Text style={text.caption}>
+          {new Date(message.createdAt).toLocaleTimeString(language, {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </Text>
+        {/* Only on your own: a tick on the desk's message would be telling
+            them something about yourself. */}
+        {mine ? (
+          <Ionicons
+            name={seen ? "checkmark-done" : "checkmark"}
+            size={14}
+            color={seen ? colors.primary : colors.textFaint}
+          />
+        ) : null}
+      </View>
     </View>
   );
 }

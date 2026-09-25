@@ -10,18 +10,21 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { Screen, EmptyState, Avatar, TAB_EDGES } from "../../src/components/ui";
-import { spacing } from "../../src/theme/tokens";
+import { Ionicons } from "@expo/vector-icons";
+import { spacing, radii } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT, useLanguage } from "../../src/i18n";
 import { useConversations } from "../../src/features/chat/hooks/useConversations";
 import type { Conversation } from "../../src/features/chat/api/chat.api";
 import { useIsAuthed } from "../../src/features/auth/guest";
 import { GuestPrompt } from "../../src/features/auth/components/GuestPrompt";
+import { useSupportUnread } from "../../src/features/support/hooks/useSupport";
 
 export default function ChatInboxScreen() {
-  const { text, colors } = useTheme();
+  const { text, colors, shadow } = useTheme();
   const t = useT();
   const authed = useIsAuthed();
+  const supportUnread = useSupportUnread();
   const { data, isLoading, isError, refetch, isRefetching } =
     useConversations();
 
@@ -82,11 +85,77 @@ export default function ChatInboxScreen() {
               onPressAvatar={onPressAvatar}
             />
           )}
+          // Room for the button to float over without covering the last row.
+          contentInset={{ bottom: FAB_CLEARANCE }}
+          ListFooterComponent={<View style={{ height: FAB_CLEARANCE }} />}
         />
       )}
+
+      {/* The way to the support desk, from the screen people are already on
+          when something has gone wrong with a conversation. Floating rather
+          than a list row: it is not one of your chats, and sorting it in
+          among them would either put it at the top forever or bury it. */}
+      {authed ? (
+        <Pressable
+          onPress={() => router.push("/support")}
+          accessibilityRole="button"
+          accessibilityLabel={t("support.title")}
+          style={({ pressed }) => ({
+            position: "absolute",
+            right: spacing.lg,
+            bottom: spacing.lg,
+            width: 56,
+            height: 56,
+            borderRadius: radii.pill,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: colors.primary,
+            transform: [{ scale: pressed ? 0.94 : 1 }],
+            ...shadow.raised,
+          })}
+        >
+          <Ionicons
+            name="headset"
+            size={26}
+            color={colors.onPrimary}
+          />
+
+          {supportUnread > 0 ? (
+            <View
+              style={{
+                position: "absolute",
+                top: -2,
+                right: -2,
+                minWidth: 22,
+                height: 22,
+                paddingHorizontal: 6,
+                borderRadius: radii.pill,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: colors.danger,
+                borderWidth: 2,
+                borderColor: colors.bg,
+              }}
+            >
+              <Text
+                style={{
+                  color: "#FFFFFF",
+                  fontSize: 11,
+                  fontWeight: "700",
+                }}
+              >
+                {supportUnread}
+              </Text>
+            </View>
+          ) : null}
+        </Pressable>
+      ) : null}
     </Screen>
   );
 }
+
+/** Height the floating button needs kept clear at the bottom of the list. */
+const FAB_CLEARANCE = 80;
 
 const ConversationRow = memo(function ConversationRow({
   item,

@@ -7,13 +7,11 @@ import {
   Pressable,
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import { router, useLocalSearchParams, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useHeaderHeight } from "expo-router/react-navigation";
 import { Avatar, ImageViewer, toast } from "../../src/components/ui";
 import { spacing, radii, sizing } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
@@ -76,7 +74,6 @@ export default function ChatThreadScreen() {
   const { colors, text } = useTheme();
   const t = useT();
   const language = useLanguage();
-  const headerHeight = useHeaderHeight();
 
   const { data: conversation } = useQuery({
     queryKey: ["chat", "conversation", id],
@@ -311,136 +308,112 @@ export default function ChatThreadScreen() {
     formatPresence(other, language);
 
   return (
-    // Not <Screen>: the thread owns its own keyboard handling, which under a
-    // stack header needs the header height as the avoidance offset.
+    // Not <Screen>: the thread owns its own keyboard handling, and now its
+    // own header — so "top" is back in the edge list to clear the notch.
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.bg }}
-      edges={["left", "right", "bottom"]}
+      edges={["top", "left", "right", "bottom"]}
     >
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          // Left, not centred: the avatar makes the title wide enough that
-          // iOS's centred slot would squeeze the name, and sitting next to the
-          // back chevron is the messenger convention anyway.
-          headerTitleAlign: "left",
-          // Both the native chevron and the left slot are given up, and the
-          // whole row — chevron, avatar, name — is rendered as the title.
-          // Two sibling slots is what kept going wrong here: the native
-          // header sizes the custom title itself, and on both platforms it
-          // has at some point been laid over the back button, either eating
-          // its taps or clipping the avatar behind it. One view in one slot
-          // cannot overlap itself.
-          headerBackVisible: false,
-          headerLeft: () => null,
-          // Reporting the thread itself, not one message — the header is
-          // where "this conversation is a problem" belongs.
-          headerRight: () =>
-            !isDraft ? (
-              <Pressable
-                onPress={() => setReportingMessageId("")}
-                hitSlop={12}
-                accessibilityRole="button"
-                accessibilityLabel={t("chatReport.action")}
-                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-              >
-                <Ionicons
-                  name="flag-outline"
-                  size={20}
-                  color={colors.textMuted}
-                />
-              </Pressable>
-            ) : null,
-          // Avatar + name + presence, and the whole thing opens the peer's
-          // profile — the same target a tap on the title has in every
-          // messenger, and the only route to their ads from inside a thread.
-          headerTitle: () => (
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: spacing.sm,
-                // The native header keeps its own left inset even with the
-                // left slot given up, so the row is pulled back across it —
-                // a back button belongs at the screen edge, not indented
-                // into the middle of the header.
-                marginLeft: Platform.OS === "ios" ? -spacing.md : -spacing.sm,
-                flexShrink: 1,
-              }}
-            >
-              <Pressable
-                onPress={() =>
-                  router.canGoBack()
-                    ? router.back()
-                    : router.replace("/(tabs)/chat")
-                }
-                hitSlop={12}
-                accessibilityRole="button"
-                accessibilityLabel={t("common.back")}
-                // Same capsule as the app's BackButton — a bare chevron read
-                // as part of the title, not as a control.
-                style={({ pressed }) => ({
-                  width: sizing.controlSm,
-                  height: sizing.controlSm,
-                  borderRadius: radii.md,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  backgroundColor: pressed
-                    ? colors.surfaceRaised
-                    : colors.surface,
-                })}
-              >
-                <Ionicons name="chevron-back" size={20} color={colors.text} />
-              </Pressable>
+      {/* No native header at all.
+          `headerTitleAlign: "left"` is a JS-stack option that iOS's native
+          stack ignores, so a custom title is centred whatever we ask for —
+          which is what kept pushing the back button into the middle of the
+          header. Owning the row outright is the only way to put a chevron
+          where a chevron belongs, and this header has enough going on
+          (avatar, presence, tap-through to a profile) to be worth it. */}
+      <Stack.Screen options={{ headerShown: false }} />
 
-              <Pressable
-                onPress={openProfile}
-                disabled={!conversation && !ownerId}
-                accessibilityRole="button"
-                accessibilityLabel={t("userProfile.openProfile")}
-                style={({ pressed }) => ({
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: spacing.sm,
-                  flexShrink: 1,
-                  opacity: pressed ? 0.6 : 1,
-                })}
-              >
-                <Avatar
-                  uri={
-                    conversation?.other.avatarThumbUrl ??
-                    conversation?.other.avatarUrl ??
-                    ownerCard?.avatarThumbUrl ??
-                    ownerCard?.avatarUrl
-                  }
-                  name={otherName}
-                  size={34}
-                  online={conversation?.other.online}
-                />
-                <View style={{ flexShrink: 1 }}>
-                  <Text style={text.heading} numberOfLines={1}>
-                    {otherName}
-                  </Text>
-                  {conversation ? (
-                    <Text
-                      style={{
-                        ...text.caption,
-                        color: conversation.other.online
-                          ? colors.primary
-                          : colors.textMuted,
-                      }}
-                    >
-                      {lastSeenLabel(conversation.other)}
-                    </Text>
-                  ) : null}
-                </View>
-              </Pressable>
-            </View>
-          ),
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: spacing.sm,
+          paddingHorizontal: spacing.md,
+          paddingVertical: spacing.sm,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
+          backgroundColor: colors.bg,
         }}
-      />
+      >
+        <Pressable
+          onPress={() =>
+            router.canGoBack() ? router.back() : router.replace("/(tabs)/chat")
+          }
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel={t("common.back")}
+          style={({ pressed }) => ({
+            width: sizing.controlSm,
+            height: sizing.controlSm,
+            borderRadius: radii.md,
+            alignItems: "center",
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: pressed ? colors.surfaceRaised : colors.surface,
+          })}
+        >
+          <Ionicons name="chevron-back" size={20} color={colors.text} />
+        </Pressable>
+
+        <Pressable
+          onPress={openProfile}
+          disabled={!conversation && !ownerId}
+          accessibilityRole="button"
+          accessibilityLabel={t("userProfile.openProfile")}
+          style={({ pressed }) => ({
+            flex: 1,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: spacing.sm,
+            opacity: pressed ? 0.6 : 1,
+          })}
+        >
+          <Avatar
+            uri={
+              conversation?.other.avatarThumbUrl ??
+              conversation?.other.avatarUrl ??
+              ownerCard?.avatarThumbUrl ??
+              ownerCard?.avatarUrl
+            }
+            name={otherName}
+            size={34}
+            online={conversation?.other.online}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={text.heading} numberOfLines={1}>
+              {otherName}
+            </Text>
+            {conversation ? (
+              <Text
+                style={{
+                  ...text.caption,
+                  color: conversation.other.online
+                    ? colors.primary
+                    : colors.textMuted,
+                }}
+                numberOfLines={1}
+              >
+                {lastSeenLabel(conversation.other)}
+              </Text>
+            ) : null}
+          </View>
+        </Pressable>
+
+        {/* Reporting the thread itself, not one message — this is where
+            "this conversation is a problem" belongs. */}
+        {!isDraft ? (
+          <Pressable
+            onPress={() => setReportingMessageId("")}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel={t("chatReport.action")}
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+          >
+            <Ionicons name="flag-outline" size={20} color={colors.textMuted} />
+          </Pressable>
+        ) : null}
+      </View>
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -448,7 +421,9 @@ export default function ChatThreadScreen() {
         // longer resizes the window for the keyboard, so `undefined` left the
         // composer buried under it — typing was invisible.
         behavior="padding"
-        keyboardVerticalOffset={Platform.OS === "ios" ? headerHeight : 0}
+        // Zero: the header is inside this view now, so the keyboard has
+        // nothing above the tree to account for.
+        keyboardVerticalOffset={0}
       >
         {/* Above the list, not inside it: an inverted FlatList puts its
             header at the bottom, and a pin belongs at the top of the thread

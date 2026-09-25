@@ -313,7 +313,7 @@ export const uz = {
   support: {
     title: "Yordam markazi",
     hint: "Savolingiz bormi? Bizga yozing",
-    team: "Growen City yordam",
+    team: "Growen City Support",
     emptyTitle: "Savolingizni yozing",
     emptyHint: "Jamoamiz imkon qadar tez javob beradi.",
   },
