@@ -52,7 +52,7 @@ const ACTIONS = [
     key: "saved",
     labelKey: "home.actionSaved" as TranslationKey,
     icon: "heart-outline",
-    href: "/(tabs)/saved",
+    href: "/saved",
   },
 ] as const;
 

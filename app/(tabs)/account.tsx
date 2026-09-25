@@ -35,7 +35,7 @@ const LINKS = [
     key: "saved",
     labelKey: "profile.linkSaved" as TranslationKey,
     icon: "heart-outline",
-    href: "/(tabs)/saved" as Href,
+    href: "/saved" as Href,
   },
   {
     key: "add",
@@ -267,7 +267,7 @@ export default function AccountScreen() {
               label={t("profile.statSaved")}
               value={counts?.saved}
               divider
-              onPress={() => router.push("/(tabs)/saved")}
+              onPress={() => router.push("/saved")}
             />
           </View>
         </View>

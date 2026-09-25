@@ -30,7 +30,7 @@ export default function ActivityScreen() {
       icon: "bookmark-outline",
       labelKey: "activity.saved",
       hintKey: "activity.savedHint",
-      href: "/(tabs)/saved",
+      href: "/saved",
       count: counts.data?.saved,
     },
     {

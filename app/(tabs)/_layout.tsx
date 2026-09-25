@@ -109,7 +109,6 @@ export default function TabsLayout() {
           under (tabs) becomes a tab unless it says otherwise, hence href:null
           rather than simply omitting them. */}
       <Tabs.Screen name="places" options={{ href: null }} />
-      <Tabs.Screen name="saved" options={{ href: null }} />
       {/* Reached from Settings and the profile quick links, not the bar —
           the bar keeps the four things people actually live in. */}
       <Tabs.Screen name="about" options={{ href: null }} />

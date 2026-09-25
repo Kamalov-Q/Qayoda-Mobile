@@ -21,10 +21,13 @@ export interface MessageAction {
 export function MessageActionSheet({
   visible,
   actions,
+  info,
   onClose,
 }: {
   visible: boolean;
   actions: MessageAction[];
+  /** Delivery and read times — shown, not pressable. */
+  info?: string | null;
   onClose: () => void;
 }) {
   const { colors, text, shadow } = useTheme();
@@ -81,6 +84,31 @@ export function MessageActionSheet({
               marginBottom: spacing.sm,
             }}
           />
+
+          {/* Above the actions and visibly not one of them: this is the
+              answer to "did they see it", which is why the menu was opened
+              at least as often as any of the buttons below. */}
+          {info ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing.sm,
+                paddingHorizontal: spacing.lg,
+                paddingVertical: spacing.sm,
+                marginBottom: spacing.xs,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border,
+              }}
+            >
+              <Ionicons
+                name="checkmark-done"
+                size={15}
+                color={colors.textMuted}
+              />
+              <Text style={text.caption}>{info}</Text>
+            </View>
+          ) : null}
 
           {actions.map((action) => (
             <Pressable

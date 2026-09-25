@@ -116,9 +116,13 @@ export default function UserProfileScreen() {
             onPress={() =>
               requirePhone(() =>
                 chatTarget.kind === "existing"
-                  ? router.push({
+                  ? // No `prefill`: that seeds the composer with the
+                    // listing-enquiry boilerplate, which is right when you
+                    // arrive from an advert and wrong when you arrive from a
+                    // person you were already talking to.
+                    router.push({
                       pathname: "/chat/[id]",
-                      params: { id: chatTarget.id, prefill: "1" },
+                      params: { id: chatTarget.id },
                     })
                   : router.push({
                       pathname: "/chat/[id]",

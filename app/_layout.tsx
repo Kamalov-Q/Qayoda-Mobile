@@ -157,6 +157,13 @@ export default function RootLayout() {
               name="support"
               options={{ title: t("support.title") }}
             />
+            {/* A stack screen, not a tab: it left the tab bar, and pushing a
+                tab route never made a back entry — which is why "back" from
+                here landed on Home instead of where you came from. */}
+            <Stack.Screen
+              name="saved"
+              options={{ title: t("saved.title") }}
+            />
             <Stack.Screen
               name="activity/index"
               options={{ title: t("activity.title") }}

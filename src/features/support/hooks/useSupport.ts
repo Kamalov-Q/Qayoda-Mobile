@@ -4,6 +4,7 @@ import {
   supportApi,
   type SendSupportInput,
   type SupportMessage,
+  type SupportThread,
 } from "../api/support.api";
 import { queryClient } from "@/src/lib/query-client";
 import {
@@ -74,9 +75,18 @@ export function useSupportLive() {
       void queryClient.invalidateQueries({ queryKey: UNREAD_KEY });
     };
 
-    // A thread closing, reopening or being pinned changes the header.
-    const onThread = () => {
-      void queryClient.invalidateQueries({ queryKey: SUPPORT_KEY });
+    /**
+     * The thread itself changed — read, pinned, closed, reopened.
+     *
+     * Patched in place rather than refetched: the payload IS the new thread,
+     * and a round trip to learn what we were just told would leave the ticks
+     * a second behind on every read.
+     */
+    const onThread = (thread: SupportThread) => {
+      queryClient.setQueryData<Thread>(SUPPORT_KEY, (current) =>
+        current ? { ...current, thread } : current,
+      );
+      void queryClient.invalidateQueries({ queryKey: UNREAD_KEY });
     };
 
     socket.on("support:message", onMessage);

@@ -186,6 +186,32 @@ export default function ChatThreadScreen() {
   // "pinned message" with nothing in it would be worse than no bar.
   const listRef = useRef<FlatList<ChatMessage>>(null);
 
+  /**
+   * The oldest message you had not read when this thread opened.
+   *
+   * Captured once and held in a ref: opening the thread marks everything
+   * read a moment later, and a divider computed from live data would vanish
+   * before it could be seen. It stays until the screen is left, which is the
+   * behaviour Telegram has — the line is a bookmark, not a live state.
+   */
+  const unreadBoundary = useRef<string | null>(null);
+  const boundaryCaptured = useRef(false);
+
+  useEffect(() => {
+    if (boundaryCaptured.current || !messages?.length) return;
+    boundaryCaptured.current = true;
+
+    const unread = messages.filter(
+      (m) => m.senderId !== userId && !m.readAt && !m.deletedAt,
+    );
+    // The list is newest-first, so the oldest unread is the last of them.
+    unreadBoundary.current = unread.length
+      ? unread[unread.length - 1].id
+      : null;
+    // No state and no re-render of its own: opening a thread marks it read a
+    // moment later, and that cache write is the render the line is drawn on.
+  }, [messages, userId]);
+
   /** Scroll to a message by id. The failure path is the usual one for a list
    *  that has not measured that row yet. */
   const jumpTo = useCallback(
@@ -217,6 +243,26 @@ export default function ChatThreadScreen() {
       toast.error(errorMessage(error));
     },
   });
+
+  /**
+   * When the other side got it, and when they read it — for your own
+   * messages only. A receipt on someone else's message would be telling them
+   * about themselves.
+   */
+  const deliveryInfo = useMemo(() => {
+    const m = actionsFor;
+    if (!m || m.senderId !== userId || m.pending) return null;
+
+    const at = (iso: string) =>
+      new Date(iso).toLocaleTimeString(language, {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+    if (m.readAt) return t("chat.readAt", { time: at(m.readAt) });
+    if (m.deliveredAt) return t("chat.deliveredAt", { time: at(m.deliveredAt) });
+    return t("chat.sentNotDelivered");
+  }, [actionsFor, userId, language, t]);
 
   const actions = useMemo<MessageAction[]>(() => {
     const m = actionsFor;
@@ -517,12 +563,45 @@ export default function ChatThreadScreen() {
             windowSize={9}
             keyboardDismissMode="on-drag"
             renderItem={({ item }) => (
-              <MessageBubble
-                message={item}
-                mine={item.senderId === userId}
-                onLongPress={onLongPress}
-                onPressImage={setPhoto}
-              />
+              <>
+                {/* Above the bubble in the item's own JSX: an inverted list
+                    counter-rotates each row, so top-to-bottom inside a row
+                    still reads top-to-bottom on screen. */}
+                {item.id === unreadBoundary.current ? (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: spacing.sm,
+                      paddingHorizontal: spacing.md,
+                      paddingVertical: spacing.sm,
+                    }}
+                  >
+                    <View
+                      style={{ flex: 1, height: 1, backgroundColor: colors.border }}
+                    />
+                    <Text
+                      style={{
+                        ...text.caption,
+                        color: colors.primary,
+                        fontWeight: "600",
+                      }}
+                    >
+                      {t("chat.unreadDivider")}
+                    </Text>
+                    <View
+                      style={{ flex: 1, height: 1, backgroundColor: colors.border }}
+                    />
+                  </View>
+                ) : null}
+
+                <MessageBubble
+                  message={item}
+                  mine={item.senderId === userId}
+                  onLongPress={onLongPress}
+                  onPressImage={setPhoto}
+                />
+              </>
             )}
           />
         )}
@@ -561,6 +640,7 @@ export default function ChatThreadScreen() {
       <MessageActionSheet
         visible={!!actionsFor}
         actions={actions}
+        info={deliveryInfo}
         onClose={() => setActionsFor(null)}
       />
 

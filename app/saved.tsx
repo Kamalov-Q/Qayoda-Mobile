@@ -1,4 +1,4 @@
-// app/(tabs)/saved.tsx
+// app/saved.tsx
 import { useCallback } from "react";
 import {
   Text,
@@ -8,17 +8,12 @@ import {
   RefreshControl,
 } from "react-native";
 import { router } from "expo-router";
-import {
-  Screen,
-  EmptyState,
-  BackButton,
-  TAB_EDGES,
-} from "../../src/components/ui";
-import { spacing } from "../../src/theme/tokens";
-import { useTheme } from "../../src/theme/useTheme";
-import { useT } from "../../src/i18n";
-import { useSavedListings } from "../../src/features/listings/hooks/useSavedListings";
-import { ListingCard } from "../../src/features/listings/components/ListingCard";
+import { Screen, EmptyState, HEADER_EDGES } from "../src/components/ui";
+import { spacing } from "../src/theme/tokens";
+import { useTheme } from "../src/theme/useTheme";
+import { useT } from "../src/i18n";
+import { useSavedListings } from "../src/features/listings/hooks/useSavedListings";
+import { ListingCard } from "../src/features/listings/components/ListingCard";
 
 export default function SavedScreen() {
   const { text, colors } = useTheme();
@@ -37,7 +32,7 @@ export default function SavedScreen() {
   const onPress = useCallback((id: string) => router.push(`/listing/${id}`), []);
 
   return (
-    <Screen style={{ padding: 0 }} scroll={false} edges={TAB_EDGES}>
+    <Screen style={{ padding: 0 }} scroll={false} edges={HEADER_EDGES}>
       <View
         style={{
           paddingHorizontal: spacing.lg,
@@ -45,22 +40,9 @@ export default function SavedScreen() {
           gap: 2,
         }}
       >
-        {/* This screen left the tab bar (`href: null`) and is now only ever
-            pushed — from "my activity". Without a way back it is a dead end,
-            and the sibling activity screens all have one from the stack
-            header this one does not get. */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: spacing.md,
-          }}
-        >
-          <BackButton fallback="/activity" />
-          <Text style={{ ...text.title, flex: 1 }} numberOfLines={1}>
-            {t("saved.title")}
-          </Text>
-        </View>
+        <Text style={text.display} numberOfLines={1}>
+          {t("saved.title")}
+        </Text>
         {!isLoading && !isError && data?.length ? (
           <Text style={text.caption}>
             {t("listings.countFound", { count: data.length })}

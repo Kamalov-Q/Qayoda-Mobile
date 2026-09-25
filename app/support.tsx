@@ -75,6 +75,27 @@ export default function SupportScreen() {
     onError: (e) => toast.error(errorMessage(e)),
   });
 
+  /**
+   * When the desk read it — for your own messages only. Support has no
+   * per-message delivery state, so "sent" is all there is to say until the
+   * thread's read stamp passes the message.
+   */
+  const deliveryInfo = useMemo(() => {
+    const m = actionsFor;
+    if (!m || m.fromAdmin) return null;
+
+    const readAt = thread?.adminReadAt;
+    if (readAt && new Date(readAt) >= new Date(m.createdAt)) {
+      return t("chat.readAt", {
+        time: new Date(readAt).toLocaleTimeString(language, {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      });
+    }
+    return t("chat.sentNotDelivered");
+  }, [actionsFor, thread?.adminReadAt, language, t]);
+
   const actions = useMemo<MessageAction[]>(() => {
     const m = actionsFor;
     if (!m) return [];
@@ -329,6 +350,7 @@ export default function SupportScreen() {
       <MessageActionSheet
         visible={!!actionsFor}
         actions={actions}
+        info={deliveryInfo}
         onClose={() => setActionsFor(null)}
       />
 
@@ -462,17 +484,25 @@ function Bubble({
       ) : null}
 
       {photo ? (
-        <Image
-          source={{ uri: photo }}
-          style={{
-            width: 200,
-            height: 150,
-            borderRadius: radii.md,
-            backgroundColor: colors.surfaceRaised,
-          }}
-          contentFit="cover"
-          onTouchEnd={() => onPressImage(photo)}
-        />
+        // A Pressable, not `onTouchEnd` on the Image: that fires at the end
+        // of any touch, including the one that was a scroll — so dragging
+        // the thread past a photo opened it.
+        <Pressable
+          onPress={() => onPressImage(photo)}
+          accessibilityRole="imagebutton"
+          style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+        >
+          <Image
+            source={{ uri: photo }}
+            style={{
+              width: 200,
+              height: 150,
+              borderRadius: radii.md,
+              backgroundColor: colors.surfaceRaised,
+            }}
+            contentFit="cover"
+          />
+        </Pressable>
       ) : null}
 
       {/* Voice, video and files arrive here only by forwarding, so they are
