@@ -32,6 +32,8 @@ import type { Listing } from "../../src/features/listings/api/listings.api";
 import { usePresence } from "../../src/features/chat/hooks/usePresence";
 import { useConversations } from "../../src/features/chat/hooks/useConversations";
 import { requirePhone } from "../../src/features/auth/guest";
+import { useToggleBlock } from "../../src/features/blocks/hooks/useBlocks";
+import { confirm } from "../../src/lib/alerts";
 import { useAuthStore } from "../../src/features/auth/store/auth.store";
 import { PresenceStatus } from "../../src/features/chat/components/PresenceStatus";
 
@@ -55,6 +57,27 @@ export default function UserProfileScreen() {
   );
 
   const photo = data?.avatarUrl ?? data?.avatarThumbUrl ?? null;
+
+  const isSelf = !!viewerId && viewerId === id;
+  const blocked = !!data?.blockedByMe;
+  const toggleBlock = useToggleBlock();
+
+  const onToggleBlock = () => {
+    if (!id) return;
+    if (blocked) {
+      toggleBlock.mutate({ userId: id, block: false });
+      return;
+    }
+    // Only the block is confirmed: it cuts a conversation off, and
+    // unblocking is a keystroke away if it was a mistake.
+    confirm({
+      titleKey: "blocks.confirmTitle",
+      messageKey: "blocks.confirmMessage",
+      confirmKey: "blocks.block",
+      destructive: true,
+      onConfirm: () => toggleBlock.mutate({ userId: id, block: true }),
+    });
+  };
 
   // An existing thread with this person wins; otherwise their newest listing
   // is the thing to start one about.
@@ -101,14 +124,22 @@ export default function UserProfileScreen() {
           />
         </Pressable>
         <Text style={{ ...text.display, textAlign: "center" }}>{name}</Text>
-        <PresenceStatus presence={presence} />
+        {/* Presence is what blocking is for: the server already withholds
+            it, and this keeps the row from rendering an empty state. */}
+        {blocked ? (
+          <Text style={{ ...text.caption, color: colors.textMuted }}>
+            {t("blocks.youBlocked")}
+          </Text>
+        ) : (
+          <PresenceStatus presence={presence} />
+        )}
 
         {/* Write to them. Conversations here are bound to a listing, so this
             reopens the one you already have with this person, or starts one
             on their newest advert — which is what you would have tapped
             through to anyway. Hidden when there is neither: a button that
             can only fail is worse than no button. */}
-        {chatTarget ? (
+        {chatTarget && !blocked ? (
           <Button
             title={t("chat.contactOwner")}
             icon="chatbubble-ellipses-outline"
@@ -164,6 +195,40 @@ export default function UserProfileScreen() {
             />
           </Card>
         </View>
+      ) : null}
+
+      {/* Blocking lives at the bottom of the profile, the way it does in
+          every messenger: it is the last thing you decide about someone, and
+          it should not sit next to the button that writes to them. */}
+      {data && !isSelf ? (
+        <Pressable
+          onPress={onToggleBlock}
+          disabled={toggleBlock.isPending}
+          accessibilityRole="button"
+          style={({ pressed }) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: spacing.sm,
+            paddingVertical: spacing.md,
+            opacity: pressed ? 0.6 : 1,
+          })}
+        >
+          <Ionicons
+            name={blocked ? "lock-open-outline" : "ban-outline"}
+            size={16}
+            color={blocked ? colors.primary : colors.danger}
+          />
+          <Text
+            style={{
+              ...text.caption,
+              fontWeight: "600",
+              color: blocked ? colors.primary : colors.danger,
+            }}
+          >
+            {t(blocked ? "blocks.unblock" : "blocks.block")}
+          </Text>
+        </Pressable>
       ) : null}
 
       {data ? (

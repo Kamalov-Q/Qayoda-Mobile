@@ -51,6 +51,12 @@ export default function ActivityScreen() {
       hintKey: "activity.reviewsHint",
       href: "/activity/reviews",
     },
+    {
+      icon: "ban-outline",
+      labelKey: "blocks.title",
+      hintKey: "blocks.hint",
+      href: "/activity/blocked",
+    },
   ];
 
   return (

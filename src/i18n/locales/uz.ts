@@ -318,6 +318,22 @@ export const uz = {
     emptyHint: "Jamoamiz imkon qadar tez javob beradi.",
   },
 
+  blocks: {
+    title: "Bloklangan foydalanuvchilar",
+    hint: "Ular sizga yoza olmaydi",
+    block: "Bloklash",
+    unblock: "Blokdan chiqarish",
+    blocked: "Foydalanuvchi bloklandi",
+    unblocked: "Blokdan chiqarildi",
+    confirmTitle: "Bloklansinmi?",
+    confirmMessage:
+      "U sizga xabar yoza olmaydi va faolligingizni ko'ra olmaydi. Xohlagan vaqtda blokdan chiqarishingiz mumkin.",
+    emptyTitle: "Bloklangan foydalanuvchilar yo'q",
+    emptyHint: "Kimnidir bloklasangiz, u shu yerda ko'rinadi.",
+    youBlocked: "Siz bu foydalanuvchini bloklagansiz",
+    unavailable: "Bu suhbat mavjud emas",
+  },
+
   validation: {
     emailInvalid: "Noto'g'ri email format",
     passwordMismatch: "Parollar mos emas",

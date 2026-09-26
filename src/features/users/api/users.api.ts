@@ -9,6 +9,12 @@ export interface UserProfile {
   name: string | null;
   surname: string | null;
   phoneNumber: string | null;
+  /**
+   * Whether the viewer has blocked this person. The profile also arrives
+   * stripped of presence and phone when a block exists in either direction,
+   * so the screen does not have to know which way round it was.
+   */
+  blockedByMe?: boolean;
   /** Prefer this one; `avatarThumbUrl` is the fallback. */
   avatarUrl: string | null;
   avatarThumbUrl: string | null;

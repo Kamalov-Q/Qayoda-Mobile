@@ -34,6 +34,9 @@ const BY_CODE: Record<string, TranslationKey> = {
   SESSION_CONSUMED: "errors.telegramExpired",
   ACCOUNT_BANNED: "errors.accountBanned",
   ACCOUNT_DELETED: "errors.accountDeleted",
+  // Deliberately the same line whichever side blocked: telling someone "they
+  // blocked you" hands them what that person chose not to give.
+  BLOCKED: "blocks.unavailable",
   IDENTITY_TAKEN: "errors.identityTaken",
   // Same situation as IDENTITY_TAKEN, different sentence: someone linking a
   // phone needs to hear that the NUMBER is spoken for, not "that account".

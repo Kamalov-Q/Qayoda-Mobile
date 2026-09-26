@@ -9,6 +9,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "../src/lib/query-client";
 import { loadDeviceId } from "../src/lib/device-id";
 import { useSupportLive } from "../src/features/support/hooks/useSupport";
+import { useBlocksLive } from "../src/features/blocks/hooks/useBlocks";
 import { bootstrapSession } from "../src/features/auth/hooks/useAuth";
 import { hydratePreferences } from "../src/lib/preferences";
 import { hydrateCategories } from "../src/features/listings/hooks/useCategories";
@@ -52,6 +53,8 @@ export default function RootLayout() {
   // The support socket, for as long as someone is signed in: an answer from
   // the desk has to reach the badge whatever screen they are on.
   useSupportLive();
+  // Keeps the blocked list in step across this person's own devices.
+  useBlocksLive();
 
   // Paints the window behind the React tree, so overscroll and the gap during
   // navigation show the theme colour instead of white.
@@ -175,6 +178,10 @@ export default function RootLayout() {
             <Stack.Screen
               name="activity/likes"
               options={{ title: t("activity.likes") }}
+            />
+            <Stack.Screen
+              name="activity/blocked"
+              options={{ title: t("blocks.title") }}
             />
             <Stack.Screen
               name="activity/reviews"
