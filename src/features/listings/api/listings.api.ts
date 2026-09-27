@@ -75,6 +75,10 @@ export interface Listing {
   descriptionHtml: string | null;
   descriptionText: string | null;
   rooms: number | null;
+  /** Who is behind the advert. Null on listings posted before it was asked. */
+  sellerType: "OWNER" | "REALTOR" | null;
+  /** New build or resale. Null for land, and for older listings. */
+  buildingType: "NEW" | "SECONDARY" | null;
   areaM2: string | null;
   floor: number | null;
   totalFloors: number | null;
@@ -165,6 +169,9 @@ export interface ImageInput {
 
 export interface CreateListingInput {
   category: PropertyCategory;
+  /** Omitted when the seller did not answer — the column stays null. */
+  sellerType?: "OWNER" | "REALTOR";
+  buildingType?: "NEW" | "SECONDARY";
   title?: string;
   descriptionHtml?: string;
   rooms?: number;

@@ -122,6 +122,28 @@ export default function ListingDetailScreen() {
 
   const specs: { key: TranslationKey; value: string | null }[] = [
     { key: "listings.specType", value: categoryName(listing.category) },
+    // Above the measurements: who is selling and whether the block is new
+    // are what a buyer decides on before they read a single number.
+    {
+      key: "listings.specSeller",
+      value: listing.sellerType
+        ? t(
+            listing.sellerType === "OWNER"
+              ? "add.sellerTypeOwner"
+              : "add.sellerTypeRealtor",
+          )
+        : null,
+    },
+    {
+      key: "listings.specBuilding",
+      value: listing.buildingType
+        ? t(
+            listing.buildingType === "NEW"
+              ? "add.buildingTypeNew"
+              : "add.buildingTypeSecondary",
+          )
+        : null,
+    },
     {
       key: "listings.specArea",
       value: listing.areaM2 ? `${Number(listing.areaM2)} m²` : null,

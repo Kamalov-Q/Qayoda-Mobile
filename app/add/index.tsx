@@ -22,7 +22,7 @@ import {
 import { spacing } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import * as Location from "expo-location";
-import { useT } from "../../src/i18n";
+import { useT, type TranslationKey } from "../../src/i18n";
 import { useIsAuthed } from "../../src/features/auth/guest";
 import { GuestPrompt } from "../../src/features/auth/components/GuestPrompt";
 import { notify } from "../../src/lib/alerts";
@@ -57,6 +57,40 @@ const PURPOSES = [
 // floors: a single-storey shop filed as BUILDING, or a ground-level house
 // converted into an APARTMENT, has none to give. Asked rather than assumed,
 // because a blank floor field is ambiguous between "no floors" and "skipped".
+/** Who is posting. Uzbek portals ask this first, and buyers filter on it. */
+const SELLER_TYPES = ["OWNER", "REALTOR"] as const;
+type SellerType = (typeof SELLER_TYPES)[number];
+
+const SELLER_TYPE_ICONS = {
+  OWNER: "person-outline",
+  REALTOR: "briefcase-outline",
+} as const satisfies Record<SellerType, keyof typeof Ionicons.glyphMap>;
+
+const SELLER_TYPE_LABELS = {
+  OWNER: "add.sellerTypeOwner",
+  REALTOR: "add.sellerTypeRealtor",
+} as const satisfies Record<SellerType, TranslationKey>;
+
+/**
+ * New build or resale.
+ *
+ * Offered only for floor-capable categories — the same flag the floors
+ * section uses. A plot of land is neither new nor secondary, and asking
+ * would only collect a meaningless answer.
+ */
+const BUILDING_TYPES = ["NEW", "SECONDARY"] as const;
+type BuildingType = (typeof BUILDING_TYPES)[number];
+
+const BUILDING_TYPE_ICONS = {
+  NEW: "business-outline",
+  SECONDARY: "home-outline",
+} as const satisfies Record<BuildingType, keyof typeof Ionicons.glyphMap>;
+
+const BUILDING_TYPE_LABELS = {
+  NEW: "add.buildingTypeNew",
+  SECONDARY: "add.buildingTypeSecondary",
+} as const satisfies Record<BuildingType, TranslationKey>;
+
 const FLOOR_CHOICES = ["yes", "no"] as const;
 type FloorChoice = (typeof FLOOR_CHOICES)[number];
 
@@ -146,6 +180,10 @@ const makeSchema = (t: ReturnType<typeof useT>) => {
           .min(3, t("validation.minChars", { count: 3 }))
           .max(TITLE_MAX, t("validation.maxChars", { count: TITLE_MAX })),
         rooms: intInRange(0, MAX_ROOMS),
+        // Both optional: "" means the seller did not answer, and the submit
+        // maps that to null rather than guessing on their behalf.
+        sellerType: z.enum(SELLER_TYPES).or(z.literal("")),
+        buildingType: z.enum(BUILDING_TYPES).or(z.literal("")),
         hasFloors: z.enum(FLOOR_CHOICES),
         floor: intInRange(1, MAX_FLOORS),
         totalFloors: intInRange(1, MAX_FLOORS),
@@ -312,6 +350,26 @@ export default function AddListingScreen() {
       })),
     [t],
   );
+  const sellerTypeOptions = useMemo<SelectGridOption<SellerType>[]>(
+    () =>
+      SELLER_TYPES.map((value) => ({
+        value,
+        label: t(SELLER_TYPE_LABELS[value]),
+        icon: SELLER_TYPE_ICONS[value],
+      })),
+    [t],
+  );
+
+  const buildingTypeOptions = useMemo<SelectGridOption<BuildingType>[]>(
+    () =>
+      BUILDING_TYPES.map((value) => ({
+        value,
+        label: t(BUILDING_TYPE_LABELS[value]),
+        icon: BUILDING_TYPE_ICONS[value],
+      })),
+    [t],
+  );
+
   const floorOptions = useMemo<SelectGridOption<FloorChoice>[]>(
     () =>
       FLOOR_CHOICES.map((value) => ({
@@ -337,6 +395,10 @@ export default function AddListingScreen() {
       currency: "USD",
       title: "",
       rooms: "",
+      // Nothing preselected: a default here would put a claim in the
+      // seller's mouth about who they are.
+      sellerType: "",
+      buildingType: "",
       price: "",
       // A flat in a block is the common case here — so when the starting
       // category has floors, the two fields start open rather than behind a
@@ -535,6 +597,11 @@ export default function AddListingScreen() {
       category: selectedCategory,
       title: d.title.trim(),
       rooms: d.rooms ? Number(d.rooms) : undefined,
+      // "" means unanswered; undefined keeps the field off the payload and
+      // the column null, rather than storing a guess.
+      sellerType: d.sellerType || undefined,
+      // Only where a building exists — the same rule the section is shown by.
+      buildingType: showFloors ? d.buildingType || undefined : undefined,
       // Both stay off the payload unless the category can carry them AND the
       // owner said it does — the server rejects a floor on anything else.
       floor: sendFloors && d.floor ? Number(d.floor) : undefined,
@@ -608,6 +675,44 @@ export default function AddListingScreen() {
             </View>
           )}
         </Section>
+
+        {/* Right after the category, because both answers change what the
+            rest of the form means — and a buyer scanning results filters on
+            them before they look at anything else. */}
+        <Section title={t("add.sellerTypeTitle")}>
+          <Controller
+            control={control}
+            name="sellerType"
+            render={({ field: { value, onChange } }) => (
+              <SelectGrid
+                options={sellerTypeOptions}
+                value={value || undefined}
+                columns={2}
+                onChange={onChange}
+              />
+            )}
+          />
+        </Section>
+
+        {/* Floor-capable categories only: a plot of land is neither new nor
+            secondary, and the same flag already decides whether floors are
+            worth asking about. */}
+        {showFloors ? (
+          <Section title={t("add.buildingTypeTitle")}>
+            <Controller
+              control={control}
+              name="buildingType"
+              render={({ field: { value, onChange } }) => (
+                <SelectGrid
+                  options={buildingTypeOptions}
+                  value={value || undefined}
+                  columns={2}
+                  onChange={onChange}
+                />
+              )}
+            />
+          </Section>
+        ) : null}
 
         <Controller
           control={control}
