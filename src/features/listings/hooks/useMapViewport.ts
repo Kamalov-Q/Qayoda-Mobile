@@ -52,6 +52,9 @@ export function useMapViewport(
     category: filters.category,
     priceMin: filters.priceMin,
     priceMax: filters.priceMax,
+    // Normalised to undefined rather than null so a map that never had a
+    // radius and one whose radius was cleared share a cache entry.
+    radius: filters.radius ?? undefined,
   };
 
   const query = useQuery({

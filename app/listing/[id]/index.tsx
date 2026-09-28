@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 // app/listing/[id]/index.tsx
 import {
   Text,
@@ -6,8 +6,10 @@ import {
   ScrollView,
   ActivityIndicator,
   Pressable,
+  Share,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
+import * as Linking from "expo-linking";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Screen,
@@ -22,7 +24,8 @@ import { useTheme } from "../../../src/theme/useTheme";
 import { useT, useLanguage, type TranslationKey } from "../../../src/i18n";
 import { confirm } from "../../../src/lib/alerts";
 import { useListing } from "../../../src/features/listings/hooks/useListing";
-import { useListingViews } from "../../../src/features/listings/hooks/useListingViews";
+import type { RepairType } from "../../../src/features/listings/api/listings.api";
+import { useListingLive } from "../../../src/features/listings/hooks/useListingLive";
 import {
   useArchiveListing,
   useRestoreListing,
@@ -37,18 +40,28 @@ import { SimilarListings } from "../../../src/features/listings/components/Simil
 import { ReportListingSheet } from "../../../src/features/listings/components/ReportListingSheet";
 import { useConversations } from "../../../src/features/chat/hooks/useConversations";
 import { OfferBadge } from "../../../src/features/listings/components/OfferBadge";
-import { htmlToText } from "../../../src/features/listings/utils/format";
-import { useAuthStore } from "../../../src/features/auth/store/auth.store";
 import {
-  requireAuth,
-  requirePhone,
-} from "../../../src/features/auth/guest";
+  htmlToText,
+  useRelativeDate,
+} from "../../../src/features/listings/utils/format";
+import { useAuthStore } from "../../../src/features/auth/store/auth.store";
+import { requireAuth, requirePhone } from "../../../src/features/auth/guest";
 import { usePresence } from "../../../src/features/chat/hooks/usePresence";
 import { useCategories } from "../../../src/features/listings/hooks/useCategories";
 import { useAmenities } from "../../../src/features/listings/hooks/useAmenities";
 import { PresenceStatus } from "../../../src/features/chat/components/PresenceStatus";
 import { ReviewsSection } from "../../../src/features/reviews/components/ReviewsSection";
 import { CommentsSection } from "../../../src/features/comments/components/CommentsSection";
+
+/** The six levels, as the detail page names them. */
+const REPAIR_LABELS: Record<RepairType, TranslationKey> = {
+  NEEDS_REPAIR: "add.repairNeeds",
+  AVERAGE: "add.repairAverage",
+  COSMETIC: "add.repairCosmetic",
+  EURO: "add.repairEuro",
+  DESIGNER: "add.repairDesigner",
+  CAPITAL: "add.repairCapital",
+};
 
 export default function ListingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -77,7 +90,10 @@ export default function ListingDetailScreen() {
 
   // Also before the early returns, and for the same reason. Records this
   // visit and then tracks the count live over the listings socket.
-  const viewCount = useListingViews(listing?.id, listing?.viewCount ?? 0);
+  // Records the view, then keeps every counter on this page moving: views,
+  // comments and the rating all land in the cached listing below.
+  useListingLive(listing?.id);
+  const relativeDate = useRelativeDate();
 
   if (isLoading) {
     return (
@@ -135,6 +151,10 @@ export default function ListingDetailScreen() {
         : null,
     },
     {
+      key: "listings.specRepair",
+      value: listing.repairType ? t(REPAIR_LABELS[listing.repairType]) : null,
+    },
+    {
       key: "listings.specBuilding",
       value: listing.buildingType
         ? t(
@@ -164,12 +184,37 @@ export default function ListingDetailScreen() {
   // The API now returns a plain-text twin of the HTML; fall back to flattening
   // the markup ourselves for listings written before that column existed.
   const description =
-    listing.descriptionText?.trim() || htmlToText(listing.descriptionHtml);
+    // HTML first: it is what the seller wrote, and it still carries the
+    // line breaks even for listings saved while stripHtml was flattening
+    // them. `descriptionText` is the fallback for rows that have no HTML.
+    htmlToText(listing.descriptionHtml) ||
+    listing.descriptionText?.trim() ||
+    "";
+
+  const posted = relativeDate(listing.publishedAt ?? listing.createdAt);
 
   const isArchived = listing.status === "ARCHIVED";
 
   // Archiving is destructive (the photos go with it), so it asks first.
   // Restoring only puts the listing back, so it just runs.
+  /**
+   * Share the listing. A deep link the app can open, with the title as the
+   * message — pasted into Telegram, that is what the other person sees.
+   */
+  const onShare = () => {
+    void Share.share({
+      title: listing.title ?? undefined,
+      // A deep link built from the app's own scheme. When the public site
+      // exists this becomes an https URL — which is the version that works
+      // for someone who does not have the app yet.
+      message: `${listing.title ?? t("listings.untitled")}\n${Linking.createURL(
+        `/listing/${listing.id}`,
+      )}`,
+    }).catch(() => {
+      // Dismissing the sheet rejects on some platforms; that is not an error.
+    });
+  };
+
   const onToggleArchive = () => {
     if (isArchived) {
       restore.mutate(listing.id);
@@ -193,74 +238,53 @@ export default function ListingDetailScreen() {
         <View>
           <ListingImageCarousel images={listing.images} />
 
-          {/* Save rides on the photo, where every listings app puts it. Any
-              signed-in user gets it, owners included — hiding it from owners
-              made the feature invisible to anyone testing with one account.
-              Signed-out viewers have no saved set, so they see nothing. */}
-          {userId ? (
-            <Pressable
-              onPress={() =>
-                toggleSave.mutate({
-                  listingId: listing.id,
-                  listing,
-                  next: !isSaved,
-                })
-              }
-              disabled={toggleSave.isPending}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={t(isSaved ? "saved.unsave" : "saved.save")}
-              accessibilityState={{ selected: isSaved }}
-              style={({ pressed }) => ({
-                position: "absolute",
-                top: spacing.md,
-                right: spacing.md,
-                width: 44,
-                height: 44,
-                borderRadius: radii.pill,
-                alignItems: "center",
-                justifyContent: "center",
-                // Scrim, not a themed surface: it sits on photography, where
-                // a translucent dark disc reads in both schemes.
-                backgroundColor: colors.imageScrim,
-                transform: [{ scale: pressed ? 0.92 : 1 }],
-              })}
-            >
-              <Ionicons
-                name={isSaved ? "heart" : "heart-outline"}
-                size={22}
-                color={isSaved ? colors.danger : "#FFFFFF"}
-              />
-            </Pressable>
-          ) : null}
-
-          {/* Opposite the save heart, in the same scrim capsule: an eye and a
-              number, no sentence. It is a readout, not a control — but it
-              belongs with the heart, not in the spec list, because both are
-              about how this listing is doing rather than what it is.
-
-              Live: the number moves while the page is open, because other
-              people are opening it at the same time. */}
+          {/* One cluster, top-right: share, save, report. Grouped in a
+              single capsule because they are all "things you do about this
+              listing" — three separate floating discs read as three
+              unrelated controls and eat the photo. */}
           <View
             style={{
               position: "absolute",
               top: spacing.md,
-              left: spacing.md,
+              right: spacing.md,
               flexDirection: "row",
               alignItems: "center",
-              gap: spacing.xs,
-              height: 44,
-              paddingHorizontal: spacing.md,
               borderRadius: radii.pill,
               backgroundColor: colors.imageScrim,
             }}
-            accessibilityRole="text"
-            accessibilityLabel={t("listings.viewCount", { count: viewCount })}
           >
-            <Ionicons name="eye-outline" size={19} color="#FFFFFF" />
-            <Text style={{ ...text.bodyStrong, color: "#FFFFFF" }}>
-              {viewCount}
-            </Text>
+            <PhotoAction
+              icon="paper-plane-outline"
+              label={t("listings.share")}
+              onPress={onShare}
+            />
+
+            {/* Signed-in only: a guest has no saved set, so the heart would
+                have nothing to fill in. */}
+            {userId ? (
+              <PhotoAction
+                icon={isSaved ? "heart" : "heart-outline"}
+                tint={isSaved ? colors.danger : undefined}
+                label={t(isSaved ? "saved.unsave" : "saved.save")}
+                selected={isSaved}
+                disabled={toggleSave.isPending}
+                onPress={() =>
+                  toggleSave.mutate({
+                    listingId: listing.id,
+                    listing,
+                    next: !isSaved,
+                  })
+                }
+              />
+            ) : null}
+
+            {!isOwner ? (
+              <PhotoAction
+                icon="alert-circle-outline"
+                label={t("report.action")}
+                onPress={() => requirePhone(() => setReporting(true))}
+              />
+            ) : null}
           </View>
         </View>
 
@@ -288,6 +312,37 @@ export default function ListingDetailScreen() {
             <Text style={text.title}>
               {listing.title ?? t("listings.untitled")}
             </Text>
+
+            {/* How this listing is doing, under the name of what it is. It
+                used to ride the photo, opposite the save heart, where it read
+                well and then scrolled away — and the number is worth more to
+                someone deciding than to someone still looking at the picture.
+
+                Views are live: they move while the page is open, because
+                other people are opening it at the same time. */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing.md,
+              }}
+            >
+              <MetaStat
+                icon="eye-outline"
+                value={String(listing.viewCount)}
+                label={t("listings.viewCount", { count: listing.viewCount })}
+              />
+              <MetaStat
+                icon="chatbubble-outline"
+                value={String(listing.commentCount)}
+                label={t("comments.title")}
+              />
+              <MetaStat
+                icon="time-outline"
+                value={posted}
+                label={t("listings.posted")}
+              />
+            </View>
 
             {/* The toggle's label alone doesn't say which state you're in —
                 this does, and it explains why the listing is off the map. */}
@@ -540,31 +595,9 @@ export default function ListingDetailScreen() {
             </View>
           )}
 
-          {/* Moderation way in — everyone but the owner; guests go through
-              the same login gate as every other account-only action. */}
-          {!isOwner ? (
-            <Pressable
-              onPress={() => requirePhone(() => setReporting(true))}
-              accessibilityRole="button"
-              style={({ pressed }) => ({
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: spacing.sm,
-                paddingVertical: spacing.md,
-                opacity: pressed ? 0.6 : 1,
-              })}
-            >
-              <Ionicons
-                name="flag-outline"
-                size={16}
-                color={colors.textMuted}
-              />
-              <Text style={{ ...text.caption, color: colors.textMuted }}>
-                {t("report.action")}
-              </Text>
-            </Pressable>
-          ) : null}
+          {/* Reporting moved up into the photo's action cluster — two ways
+              to the same sheet, one of them buried under a scroll, is one
+              way too many. */}
 
           {/* Above "similar listings" on purpose: what people said about
               THIS place belongs before the offer to go look at another one. */}
@@ -589,3 +622,74 @@ export default function ListingDetailScreen() {
     </Screen>
   );
 }
+
+/**
+ * One button in the photo's action cluster. Uniform 44pt targets so the three
+ * of them read as one control strip rather than three sizes of disc.
+ */
+function PhotoAction({
+  icon,
+  label,
+  tint,
+  selected,
+  disabled,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  tint?: string;
+  selected?: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      hitSlop={4}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected }}
+      style={({ pressed }) => ({
+        width: 44,
+        height: 44,
+        alignItems: "center",
+        justifyContent: "center",
+        opacity: pressed ? 0.6 : 1,
+        transform: [{ scale: pressed ? 0.9 : 1 }],
+      })}
+    >
+      <Ionicons name={icon} size={21} color={tint ?? "#FFFFFF"} />
+    </Pressable>
+  );
+}
+
+/**
+ * One figure on the line under the title: an icon and a number, no sentence.
+ * A readout rather than a control — the screen already has a row of things to
+ * press, and these three are facts about the listing, not offers to act.
+ */
+const MetaStat = memo(function MetaStat({
+  icon,
+  value,
+  label,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  value: string | null;
+  label: string;
+}) {
+  const { colors, text } = useTheme();
+
+  if (!value) return null;
+
+  return (
+    <View
+      style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+      accessibilityRole="text"
+      accessibilityLabel={`${label}: ${value}`}
+    >
+      <Ionicons name={icon} size={14} color={colors.textFaint} />
+      <Text style={{ ...text.caption, color: colors.textMuted }}>{value}</Text>
+    </View>
+  );
+});

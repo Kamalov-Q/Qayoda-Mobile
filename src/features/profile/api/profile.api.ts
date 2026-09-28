@@ -1,7 +1,10 @@
 // src/features/profile/api/profile.api.ts
-import { Platform } from "react-native";
-import { File } from "expo-file-system";
-import { api, ApiError, refreshSession } from "../../../lib/api-client";
+import {
+  api,
+  errorFromResponse,
+  sendWithAuthRetry,
+} from "../../../lib/api-client";
+import { appendFilePart } from "../../../lib/form-data";
 import { API_URL } from "../../../lib/env";
 import { useAuthStore } from "../../auth/store/auth.store";
 
@@ -35,23 +38,11 @@ export interface UpdateProfileInput {
  * parts, so natives wrap the URI in expo-file-system's File; web reads the
  * URI into a Blob.
  */
-async function appendAvatar(form: FormData, uri: string) {
-  const name = "avatar.jpg";
-
-  if (Platform.OS === "web") {
-    const blob = await fetch(uri).then((r) => r.blob());
-    form.append("file", blob, name);
-    return;
-  }
-
-  form.append("file", new File(uri), name);
-}
-
 async function uploadAvatar(uri: string): Promise<Profile> {
   // Rebuilt per attempt: a FormData body cannot be replayed after the 401.
   const doUpload = async (): Promise<Response> => {
     const form = new FormData();
-    await appendAvatar(form, uri);
+    await appendFilePart(form, "file", uri, "avatar.jpg");
 
     const accessToken = useAuthStore.getState().accessToken;
 
@@ -64,19 +55,10 @@ async function uploadAvatar(uri: string): Promise<Profile> {
     });
   };
 
-  let res = await doUpload();
-  if (res.status === 401) {
-    const ok = await refreshSession();
-    if (!ok) throw new ApiError(401, "Session expired");
-    res = await doUpload();
-  }
+  const res = await sendWithAuthRetry(doUpload);
+  if (!res.ok) throw await errorFromResponse(res, "Failed to upload");
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new ApiError(res.status, err?.message ?? "Failed to upload");
-  }
-
-  return res.json() as Promise<Profile>;
+  return (await res.json()) as Profile;
 }
 
 export const profileApi = {

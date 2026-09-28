@@ -7,7 +7,7 @@ import {
   useAudioRecorderState,
 } from "expo-audio";
 import { Alert } from "react-native";
-import type { RecordingStatus } from "expo-audio";
+import type { AudioRecorder, RecordingStatus } from "expo-audio";
 
 /**
  * How long to wait for iOS to finish writing the recording after stop().
@@ -18,6 +18,28 @@ import type { RecordingStatus } from "expo-audio";
  * the size never revealed it — the file is full-size from the first moment.
  */
 const FINALISE_TIMEOUT_MS = 4000;
+
+/**
+ * Subscribes to the recorder's status events.
+ *
+ * `AudioRecorder` extends expo's SharedObject and does emit
+ * `recordingStatusUpdate` — the published typings simply do not surface
+ * `addListener` on it. The cast is kept here, at the one boundary where it is
+ * needed, rather than inlined in the stop path it would otherwise obscure.
+ */
+function onRecordingStatus(
+  recorder: AudioRecorder,
+  listener: (status: RecordingStatus) => void,
+): { remove(): void } {
+  return (
+    recorder as unknown as {
+      addListener(
+        event: "recordingStatusUpdate",
+        listener: (status: RecordingStatus) => void,
+      ): { remove(): void };
+    }
+  ).addListener("recordingStatusUpdate", listener);
+}
 
 /**
  * Hold-to-talk recording.
@@ -148,14 +170,7 @@ export function useVoiceRecorder() {
         resolve(value);
       };
       const timer = setTimeout(() => settle(null), FINALISE_TIMEOUT_MS);
-      const sub = (
-        recorder as unknown as {
-          addListener(
-            event: "recordingStatusUpdate",
-            listener: (status: RecordingStatus) => void,
-          ): { remove(): void };
-        }
-      ).addListener("recordingStatusUpdate", (status) => {
+      const sub = onRecordingStatus(recorder, (status) => {
         if (status.isFinished) settle(status.url ?? null);
       });
     });

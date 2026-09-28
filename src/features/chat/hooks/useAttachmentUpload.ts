@@ -1,6 +1,9 @@
-import { File } from "expo-file-system";
 import { API_URL } from "../../../lib/env";
-import { ApiError, refreshSession } from "../../../lib/api-client";
+import {
+  errorFromResponse,
+  sendWithAuthRetry,
+} from "../../../lib/api-client";
+import { appendFilePart } from "../../../lib/form-data";
 import { useAuthStore } from "../../auth/store/auth.store";
 
 export interface ChatAttachment {
@@ -15,17 +18,25 @@ export interface ChatAttachment {
   waveform: number[] | null;
 }
 
+/**
+ * Uploads one attachment and returns the row the message will carry.
+ *
+ * The part's content type is the file's own — the OS derives it from the
+ * extension — and that is what the server echoes back as `mimeType`. There is
+ * no way to override it from here, so a caller that needs a particular type
+ * must name the file accordingly.
+ */
 export async function uploadChatAttachment(
   localUri: string,
   kind: "IMAGE" | "VIDEO" | "VOICE" | "VIDEO_NOTE" | "FILE",
   fileName: string,
-  mimeType: string,
 ): Promise<ChatAttachment> {
-  const doUpload = () => {
+  // Rebuilt per attempt: a FormData body cannot be replayed after the 401.
+  const doUpload = async (): Promise<Response> => {
     const form = new FormData();
-    // SDK 57 fetch takes only real Blob parts; expo File wraps the local URI.
-    // Never set Content-Type on the request manually (boundary is auto).
-    form.append("file", new File(localUri), fileName);
+    await appendFilePart(form, "file", localUri, fileName);
+    // Never set Content-Type on the request manually — the boundary is
+    // generated with the body, and naming the type by hand loses it.
     return fetch(`${API_URL}/media/chat/upload?kind=${kind}`, {
       method: "POST",
       headers: {
@@ -35,15 +46,8 @@ export async function uploadChatAttachment(
     });
   };
 
-  let res = await doUpload();
-  if (res.status === 401) {
-    const ok = await refreshSession();
-    if (!ok) throw new ApiError(401, "Sessiya tugadi");
-    res = await doUpload();
-  }
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}) as any);
-    throw new ApiError(res.status, (err as any).message ?? "Yuklashda xatolik");
-  }
-  return res.json();
+  const res = await sendWithAuthRetry(doUpload);
+  if (!res.ok) throw await errorFromResponse(res, "Upload failed");
+
+  return (await res.json()) as ChatAttachment;
 }

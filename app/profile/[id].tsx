@@ -1,5 +1,5 @@
 // app/profile/[id].tsx
-import { useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -13,22 +13,39 @@ import { router, useLocalSearchParams, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Screen,
-  Card,
   Avatar,
   Button,
   EmptyState,
+  FilterPill,
   ImageViewer,
+  SelectSheet,
   HEADER_EDGES,
 } from "../../src/components/ui";
-import { spacing, radii } from "../../src/theme/tokens";
+import { spacing, radii, type } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT, useLanguage } from "../../src/i18n";
 import { errorMessage } from "../../src/lib/api-error";
 import { resolveMediaUrl } from "../../src/lib/media-url";
+import { prettyPhone } from "../../src/lib/phone";
 import { useUserProfile } from "../../src/features/users/hooks/useUserProfile";
 import { useUserListings } from "../../src/features/users/hooks/useUserListings";
+import {
+  isDefaultOwnerFilters,
+  type OwnerFacets,
+  type OwnerListingFilters,
+  type OwnerListingSort,
+  type OwnerStats,
+} from "../../src/features/users/api/users.api";
+import { useCategories } from "../../src/features/listings/hooks/useCategories";
+import {
+  ALL_ICON,
+  PURPOSE_ICONS,
+} from "../../src/features/listings/utils/icons";
 import { ListingCard } from "../../src/features/listings/components/ListingCard";
-import type { Listing } from "../../src/features/listings/api/listings.api";
+import type {
+  Listing,
+  OfferPurpose,
+} from "../../src/features/listings/api/listings.api";
 import { usePresence } from "../../src/features/chat/hooks/usePresence";
 import { useConversations } from "../../src/features/chat/hooks/useConversations";
 import { requirePhone } from "../../src/features/auth/guest";
@@ -36,6 +53,14 @@ import { useToggleBlock } from "../../src/features/blocks/hooks/useBlocks";
 import { confirm } from "../../src/lib/alerts";
 import { useAuthStore } from "../../src/features/auth/store/auth.store";
 import { PresenceStatus } from "../../src/features/chat/components/PresenceStatus";
+
+/** The order the purpose sheet lists them in — the same order the rest of the
+ *  app uses, narrowed to what the seller actually has. */
+const PROFILE_PURPOSES = [
+  "SALE",
+  "RENT_MONTHLY",
+  "RENT_DAILY",
+] as const satisfies readonly OfferPurpose[];
 
 export default function UserProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -49,12 +74,29 @@ export default function UserProfileScreen() {
   const presence = usePresence(id);
   const viewerId = useAuthStore((st) => st.user?.id);
   const { data: conversations } = useConversations();
-  // Page one rides along with the profile; this fetches the rest on scroll.
-  const more = useUserListings(id, data?.listingCount ?? 0);
-  const listings = useMemo(
-    () => [...(data?.listings ?? []), ...(more.data?.pages.flat() ?? [])],
-    [data?.listings, more.data],
+  const [filters, setFilters] = useState<OwnerListingFilters>({});
+  const [sheet, setSheet] = useState<null | "purpose" | "category" | "sort">(
+    null,
   );
+  const isDefault = isDefaultOwnerFilters(filters);
+
+  // Page one of the unfiltered view rides along with the profile; this
+  // fetches the rest on scroll, and all of it once a filter is on.
+  const more = useUserListings(id, filters, data?.listingCount ?? 0);
+  const pages = useMemo(
+    () => more.data?.pages.flatMap((p) => p.items) ?? [],
+    [more.data],
+  );
+  const listings = useMemo(
+    () => (isDefault ? [...(data?.listings ?? []), ...pages] : pages),
+    [isDefault, data?.listings, pages],
+  );
+
+  // The total for the filter in force — what the reader is looking at, not
+  // what the seller has in all.
+  const shownTotal = isDefault
+    ? (data?.listingCount ?? 0)
+    : (more.data?.pages[0]?.total ?? 0);
 
   const photo = data?.avatarUrl ?? data?.avatarThumbUrl ?? null;
 
@@ -88,14 +130,87 @@ export default function UserProfileScreen() {
     if (existing) return { kind: "existing" as const, id: existing.id };
 
     const listing = listings[0];
-    return listing
-      ? { kind: "new" as const, listingId: listing.id }
-      : null;
+    return listing ? { kind: "new" as const, listingId: listing.id } : null;
   }, [id, viewerId, conversations, listings]);
 
   const openListing = useCallback(
     (listingId: string) => router.push(`/listing/${listingId}`),
     [],
+  );
+
+  const { nameOf, iconOf } = useCategories();
+  // Defaulted rather than read straight off `data`: an app running against a
+  // server that predates these fields should lose the filters, not the whole
+  // screen.
+  const facets: OwnerFacets = data?.facets ?? { purposes: {}, categories: {} };
+  const stats: OwnerStats = data?.stats ?? {
+    listings: data?.listingCount ?? 0,
+    views: 0,
+    // The same five every rating starts at, so a profile served by an older
+    // API shows what that API would have meant rather than a dash.
+    ratingAvg: 5,
+    ratingCount: 0,
+  };
+
+  // "All", then only what this seller actually has, each carrying its count.
+  // Built from facets rather than from the global category list: a profile
+  // offering "Ombor (0)" is a filter that can only disappoint.
+  const purposeOptions = useMemo(
+    () => [
+      { value: "", label: t("userProfile.allPurposes"), icon: ALL_ICON },
+      ...PROFILE_PURPOSES.filter((p) => facets.purposes[p]).map((p) => ({
+        value: p,
+        label: `${t(`purposes.${p}`)} · ${facets.purposes[p]}`,
+        icon: PURPOSE_ICONS[p],
+      })),
+    ],
+    [t, facets.purposes],
+  );
+
+  const categoryOptions = useMemo(
+    () => [
+      { value: "", label: t("filters.allTypes"), icon: ALL_ICON },
+      ...Object.entries(facets.categories)
+        // Most of first: the seller's main line of business leads the sheet.
+        .sort((a, b) => b[1] - a[1])
+        .map(([slug, count]) => ({
+          value: slug,
+          label: `${nameOf(slug)} · ${count}`,
+          icon: iconOf(slug),
+        })),
+    ],
+    [t, facets.categories, nameOf, iconOf],
+  );
+
+  const sortOptions = useMemo(
+    () =>
+      [
+        {
+          value: "newest",
+          label: t("userProfile.sortNewest"),
+          icon: "time-outline",
+        },
+        {
+          value: "oldest",
+          label: t("userProfile.sortOldest"),
+          icon: "hourglass-outline",
+        },
+        {
+          value: "priceAsc",
+          label: t("filters.sortPriceAsc"),
+          icon: "trending-up-outline",
+        },
+        {
+          value: "priceDesc",
+          label: t("filters.sortPriceDesc"),
+          icon: "trending-down-outline",
+        },
+      ] as const satisfies readonly {
+        value: OwnerListingSort;
+        label: string;
+        icon: keyof typeof Ionicons.glyphMap;
+      }[],
+    [t],
   );
 
   const name = data?.fullName ?? t("chat.unknownUser");
@@ -134,35 +249,6 @@ export default function UserProfileScreen() {
           <PresenceStatus presence={presence} />
         )}
 
-        {/* Write to them. Conversations here are bound to a listing, so this
-            reopens the one you already have with this person, or starts one
-            on their newest advert — which is what you would have tapped
-            through to anyway. Hidden when there is neither: a button that
-            can only fail is worse than no button. */}
-        {chatTarget && !blocked ? (
-          <Button
-            title={t("chat.contactOwner")}
-            icon="chatbubble-ellipses-outline"
-            variant="secondary"
-            onPress={() =>
-              requirePhone(() =>
-                chatTarget.kind === "existing"
-                  ? // No `prefill`: that seeds the composer with the
-                    // listing-enquiry boilerplate, which is right when you
-                    // arrive from an advert and wrong when you arrive from a
-                    // person you were already talking to.
-                    router.push({
-                      pathname: "/chat/[id]",
-                      params: { id: chatTarget.id },
-                    })
-                  : router.push({
-                      pathname: "/chat/[id]",
-                      params: { id: "new", listingId: chatTarget.listingId },
-                    }),
-              )
-            }
-          />
-        ) : null}
         {data ? (
           <Text style={text.caption}>
             {t("userProfile.memberSince", {
@@ -175,26 +261,79 @@ export default function UserProfileScreen() {
         ) : null}
       </View>
 
-      {data ? (
-        <View style={{ gap: spacing.sm }}>
-          <Text style={{ ...text.label, marginLeft: spacing.xs }}>
-            {t("userProfile.contact")}
-          </Text>
-          <Card flush>
-            <ContactRow
-              icon="call-outline"
-              label={t("userProfile.phone")}
-              value={data.phoneNumber}
-              emptyLabel={t("userProfile.noPhone")}
-              href={
-                data.phoneNumber
-                  ? `tel:${data.phoneNumber.replace(/[^\d+]/g, "")}`
-                  : null
-              }
-              first
-            />
-          </Card>
+      {/* What this seller is worth knowing by, in their own numbers. Only
+          things actually counted: no "0 sales" column that can never move. */}
+      {data ? <StatsRow stats={stats} /> : null}
+
+      {/* The two things anyone opens a seller's profile to do, side by side,
+          with the number itself underneath — the call button dials it, and
+          the line below is for the reader who wants to copy it or simply see
+          who they are about to ring.
+
+          Writing reopens the conversation you already have with this person,
+          or starts one on their newest advert — which is what you would have
+          tapped through to anyway. Each half is dropped when it cannot work,
+          because a button that can only fail is worse than no button. */}
+      {data && !isSelf && !blocked && (data.phoneNumber || chatTarget) ? (
+        <View style={{ flexDirection: "row", gap: spacing.sm }}>
+          {data.phoneNumber ? (
+            <View style={{ flex: 1 }}>
+              <Button
+                title={t("userProfile.call")}
+                icon="call-outline"
+                variant="secondary"
+                // Swallowed: a device with no dialer (a simulator, a tablet)
+                // would otherwise crash the screen on a tap.
+                onPress={() =>
+                  Linking.openURL(
+                    `tel:${data.phoneNumber!.replace(/[^\d+]/g, "")}`,
+                  ).catch(() => {})
+                }
+              />
+            </View>
+          ) : null}
+          {chatTarget ? (
+            <View style={{ flex: 1 }}>
+              <Button
+                title={t("userProfile.write")}
+                icon="chatbubble-ellipses-outline"
+                onPress={() =>
+                  requirePhone(() =>
+                    chatTarget.kind === "existing"
+                      ? // No `prefill`: that seeds the composer with the
+                        // listing-enquiry boilerplate, which is right when
+                        // you arrive from an advert and wrong when you arrive
+                        // from a person you were already talking to.
+                        router.push({
+                          pathname: "/chat/[id]",
+                          params: { id: chatTarget.id },
+                        })
+                      : router.push({
+                          pathname: "/chat/[id]",
+                          params: {
+                            id: "new",
+                            listingId: chatTarget.listingId,
+                          },
+                        }),
+                  )
+                }
+              />
+            </View>
+          ) : null}
         </View>
+      ) : null}
+
+      {data?.phoneNumber && !isSelf && !blocked ? (
+        <Text
+          selectable
+          style={{
+            ...text.caption,
+            textAlign: "center",
+            marginTop: -spacing.sm,
+          }}
+        >
+          {prettyPhone(data.phoneNumber)}
+        </Text>
       ) : null}
 
       {/* Blocking lives at the bottom of the profile, the way it does in
@@ -231,10 +370,114 @@ export default function UserProfileScreen() {
         </Pressable>
       ) : null}
 
+      {/* Their listings, and the three ways to cut them down. The sheets are
+          built from the seller's own inventory: a purpose or a category they
+          have nothing in is not offered, so no filter here can come back
+          empty. */}
       {data ? (
-        <Text style={{ ...text.label, marginLeft: spacing.xs }}>
-          {t("userProfile.ads")} · {data.listingCount}
-        </Text>
+        <View style={{ gap: spacing.sm }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginLeft: spacing.xs,
+            }}
+          >
+            <Text style={text.label}>
+              {t("userProfile.ads")} · {shownTotal}
+            </Text>
+            {!isDefault ? (
+              <Pressable
+                onPress={() => setFilters({})}
+                hitSlop={8}
+                accessibilityRole="button"
+              >
+                <Text
+                  style={{
+                    ...type.caption,
+                    fontWeight: "600",
+                    color: colors.primary,
+                  }}
+                >
+                  {t("userProfile.clearFilters")}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          {data.listingCount > 0 ? (
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: spacing.sm,
+              }}
+            >
+              {purposeOptions.length > 2 ? (
+                <FilterPill
+                  icon={
+                    filters.purpose
+                      ? PURPOSE_ICONS[filters.purpose]
+                      : "pricetag-outline"
+                  }
+                  label={
+                    filters.purpose
+                      ? t(`purposes.${filters.purpose}`)
+                      : t("userProfile.filterPurpose")
+                  }
+                  active={!!filters.purpose}
+                  count={
+                    filters.purpose
+                      ? facets.purposes[filters.purpose]
+                      : undefined
+                  }
+                  onPress={() => setSheet("purpose")}
+                  maxWidth="60%"
+                />
+              ) : null}
+
+              {categoryOptions.length > 2 ? (
+                <FilterPill
+                  icon={
+                    filters.category
+                      ? iconOf(filters.category)
+                      : "business-outline"
+                  }
+                  label={
+                    filters.category
+                      ? nameOf(filters.category)
+                      : t("userProfile.filterCategory")
+                  }
+                  active={!!filters.category}
+                  count={
+                    filters.category
+                      ? facets.categories[filters.category]
+                      : undefined
+                  }
+                  onPress={() => setSheet("category")}
+                  maxWidth="60%"
+                />
+              ) : null}
+
+              {/* Sorting is worth offering the moment there are two things to
+                  put in an order. */}
+              {data.listingCount > 1 ? (
+                <FilterPill
+                  icon="swap-vertical-outline"
+                  label={
+                    sortOptions.find(
+                      (o) => o.value === (filters.sort ?? "newest"),
+                    )?.label ?? t("userProfile.filterSort")
+                  }
+                  active={!!filters.sort && filters.sort !== "newest"}
+                  onPress={() => setSheet("sort")}
+                  maxWidth="60%"
+                />
+              ) : null}
+            </View>
+          ) : null}
+        </View>
       ) : null}
     </View>
   );
@@ -294,11 +537,29 @@ export default function UserProfileScreen() {
           />
         }
         ListEmptyComponent={
-          <EmptyState
-            icon="home-outline"
-            title={t("userProfile.noAds")}
-            description={t("userProfile.noAdsHint")}
-          />
+          // A filter change is a new query with no cached page, so the list
+          // empties for a beat. A spinner says "fetching"; the empty state
+          // would say "this seller has nothing", which is a different and
+          // wrong thing to tell someone who just tapped a filter.
+          more.isLoading ? (
+            <ActivityIndicator
+              style={{ marginTop: spacing.xl }}
+              color={colors.primary}
+            />
+          ) : isDefault ? (
+            <EmptyState
+              icon="home-outline"
+              title={t("userProfile.noAds")}
+              description={t("userProfile.noAdsHint")}
+            />
+          ) : (
+            <EmptyState
+              icon="funnel-outline"
+              title={t("userProfile.noMatches")}
+              actionLabel={t("userProfile.clearFilters")}
+              onAction={() => setFilters({})}
+            />
+          )
         }
         renderItem={({ item }) => (
           <ListingCard listing={item} onPress={openListing} />
@@ -318,6 +579,43 @@ export default function UserProfileScreen() {
         }
       />
 
+      {/* One sheet open at a time, which is all a finger can do anyway. An
+          empty value is "all": it clears that one filter without touching the
+          other two. */}
+      <SelectSheet
+        visible={sheet === "purpose"}
+        title={t("userProfile.filterPurpose")}
+        options={purposeOptions}
+        value={filters.purpose ?? ""}
+        onSelect={(v) =>
+          setFilters((f) => ({
+            ...f,
+            purpose: (v as OfferPurpose) || undefined,
+          }))
+        }
+        onClose={() => setSheet(null)}
+      />
+
+      <SelectSheet
+        visible={sheet === "category"}
+        title={t("userProfile.filterCategory")}
+        options={categoryOptions}
+        value={filters.category ?? ""}
+        onSelect={(v) =>
+          setFilters((f) => ({ ...f, category: v || undefined }))
+        }
+        onClose={() => setSheet(null)}
+      />
+
+      <SelectSheet
+        visible={sheet === "sort"}
+        title={t("userProfile.filterSort")}
+        options={sortOptions}
+        value={filters.sort ?? "newest"}
+        onSelect={(v) => setFilters((f) => ({ ...f, sort: v }))}
+        onClose={() => setSheet(null)}
+      />
+
       {viewingAvatar ? (
         <ImageViewer
           uri={resolveMediaUrl(photo) ?? null}
@@ -329,84 +627,75 @@ export default function UserProfileScreen() {
 }
 
 /**
- * One contact line. A missing number still gets a row rather than vanishing:
- * "not given" is an answer, and a card that silently loses a line reads as a
- * layout bug when you know the other person has a number.
+ * The three numbers under the name.
+ *
+ * Every one of them is something the platform actually counts. Joymee's
+ * version of this row carries "calls" and "sales" columns that sit at zero on
+ * most profiles forever; a stat nobody can move teaches a reader to ignore
+ * the whole row.
  */
-function ContactRow({
-  icon,
-  label,
-  value,
-  emptyLabel,
-  href,
-  first,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  value: string | null;
-  emptyLabel?: string;
-  href: string | null;
-  first?: boolean;
-}) {
+const StatsRow = memo(function StatsRow({ stats }: { stats: OwnerStats }) {
   const { colors, text } = useTheme();
+  const t = useT();
 
-  const body = (
+  const cells = [
+    { label: t("userProfile.statListings"), value: String(stats.listings) },
+    { label: t("userProfile.statViews"), value: compact(stats.views) },
+    {
+      label: t("userProfile.statRating"),
+      value: stats.ratingAvg.toFixed(1),
+      // Only the rating needs a second line: "4.8" means nothing without
+      // knowing whether it came from three people or three hundred.
+      hint:
+        stats.ratingCount > 0
+          ? t("userProfile.ratingFrom", { count: stats.ratingCount })
+          : undefined,
+    },
+  ];
+
+  return (
     <View
       style={{
         flexDirection: "row",
-        alignItems: "center",
-        gap: spacing.md,
-        padding: spacing.md,
-        borderTopWidth: first ? 0 : 1,
-        borderTopColor: colors.border,
+        backgroundColor: colors.surfaceRaised,
+        borderRadius: radii.lg,
+        paddingVertical: spacing.md,
       }}
     >
-      <View
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: radii.pill,
-          backgroundColor: colors.primarySoft,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Ionicons name={icon} size={18} color={colors.primary} />
-      </View>
-
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={text.caption}>{label}</Text>
-        <Text
+      {cells.map((cell, i) => (
+        <View
+          key={cell.label}
           style={{
-            ...text.bodyStrong,
-            color: value ? colors.text : colors.textMuted,
+            flex: 1,
+            alignItems: "center",
+            gap: 2,
+            // Hairlines between, not around: the row reads as one block.
+            borderLeftWidth: i === 0 ? 0 : 1,
+            borderLeftColor: colors.border,
           }}
-          numberOfLines={1}
         >
-          {value ?? emptyLabel}
-        </Text>
-      </View>
-
-      {href ? (
-        <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
-      ) : null}
+          <Text style={{ ...type.heading, fontSize: 19 }}>{cell.value}</Text>
+          <Text style={text.caption} numberOfLines={1}>
+            {cell.label}
+          </Text>
+          {cell.hint ? (
+            <Text
+              style={{ ...type.caption, fontSize: 11, color: colors.textFaint }}
+              numberOfLines={1}
+            >
+              {cell.hint}
+            </Text>
+          ) : null}
+        </View>
+      ))}
     </View>
   );
+});
 
-  if (!href) return body;
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${label}: ${value}`}
-      // Swallowed: a device with no dialer or mail client (a simulator, a
-      // tablet) would otherwise crash the screen on a tap.
-      onPress={() => Linking.openURL(href).catch(() => {})}
-      style={({ pressed }) => ({
-        backgroundColor: pressed ? colors.surfaceRaised : "transparent",
-      })}
-    >
-      {body}
-    </Pressable>
-  );
+/** 1200 → "1.2k". A seller with 40 000 views would otherwise push the three
+ *  columns out of line on a narrow phone. */
+function compact(n: number): string {
+  if (n < 1000) return String(n);
+  const k = n / 1000;
+  return `${k < 10 ? k.toFixed(1) : Math.round(k)}k`;
 }

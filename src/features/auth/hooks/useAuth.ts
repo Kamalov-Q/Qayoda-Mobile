@@ -209,11 +209,11 @@ export function useTelegramSignIn(linking = false) {
     }, POLL_MS);
   };
 
+  /** Opens a session and waits on it. Touches refs only, never state, so the
+   *  mount effect below can call it without a synchronous re-render. */
   const start = async () => {
     stop();
     activeToken.current = null;
-    setPhase("starting");
-    setError(null);
     try {
       const s = linking
         ? await authApi.linkTelegram()
@@ -231,9 +231,24 @@ export function useTelegramSignIn(linking = false) {
     }
   };
 
+  /** The retry button. Unlike the first run it has a failed attempt on screen
+   *  to clear, which is the only reason this is not just `start`. */
+  const restart = () => {
+    setPhase("starting");
+    setError(null);
+    void start();
+  };
+
   useEffect(() => {
     alive.current = true;
-    start();
+    // The state `restart` would reset is already the initial state here, so
+    // nothing is set synchronously: `start` touches refs, then awaits the
+    // network before it ever calls setState. The compiler's effect rule does
+    // not model `await`, so it reads the whole async function as synchronous —
+    // starting a request on mount and setting state when it answers is the
+    // "subscribe to an external system" case the rule exists to allow.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void start();
     return () => {
       alive.current = false;
       stop();
@@ -245,7 +260,7 @@ export function useTelegramSignIn(linking = false) {
     if (session) Linking.openURL(session.deepLink).catch(() => undefined);
   };
 
-  return { phase, session, error, restart: start, openTelegram };
+  return { phase, session, error, restart, openTelegram };
 }
 
 // ---------------------------------------------------------------- session

@@ -9,15 +9,18 @@ import {
 } from "react";
 import { Platform, StyleSheet, Text, View, Pressable } from "react-native";
 import MapView, {
+  Circle as MapCircle,
   Marker,
   Polygon,
   Region,
   type LatLng,
+  type MapPressEvent,
+  type MarkerDragStartEndEvent,
 } from "react-native-maps";
 import { MAP_PROVIDER } from "./provider";
 import { Image } from "expo-image";
 import Svg, { Circle, Rect, Text as SvgText } from "react-native-svg";
-import { radii, spacing, type } from "../../theme/tokens";
+import { radii, spacing } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 import { useT } from "../../i18n";
 import {
@@ -30,6 +33,8 @@ import {
   isDrawableRing,
   ringToLatLngs,
   toLatLng,
+  toPosition,
+  radiusRegion,
   regionToViewport,
   withAlpha,
   TASHKENT_REGION,
@@ -43,6 +48,18 @@ import { useMyLocation } from "../listings/hooks/useMyLocation";
 
 export interface ListingsMapHandle {
   animateTo: (lat: number, lng: number) => void;
+  /** Frames a search circle, so applying one shows everything inside it. */
+  fitRadius: (center: [number, number], radiusM: number) => void;
+}
+
+/** The search circle, as the screen's filter state describes it. */
+export interface RadiusCircle {
+  /** GeoJSON [lng, lat] — the order everything outside this folder speaks. */
+  center: [number, number];
+  /** Null draws the centre pin but no ring: "anywhere", still centred here. */
+  radiusM: number | null;
+  /** While true the pin is draggable and a tap on the map moves it. */
+  editable?: boolean;
 }
 
 interface Props {
@@ -61,6 +78,14 @@ interface Props {
    * card's "view details" link — so it needs to know to step aside.
    */
   onSelectionChange?: (open: boolean) => void;
+  /** Drawn over the listings; null when no radius filter is being used. */
+  circle?: RadiusCircle | null;
+  /** The centre was dragged, or tapped onto a new spot. Editable circles only. */
+  onCircleMove?: (center: [number, number]) => void;
+  /** The map's own radius control was pressed. Omitted, no control is drawn. */
+  onToggleRadius?: () => void;
+  /** Tints that control — the panel is open, or a radius is applied. */
+  radiusActive?: boolean;
 }
 
 // Height of the preview card, so the locate button can clear it.
@@ -194,6 +219,10 @@ export const ListingsMap = memo(
       onPressListing,
       bottomInset = 0,
       onSelectionChange,
+      circle,
+      onCircleMove,
+      onToggleRadius,
+      radiusActive,
     },
     ref,
   ) {
@@ -218,6 +247,12 @@ export const ListingsMap = memo(
           600,
         );
       },
+      fitRadius: (center, radiusM) => {
+        mapRef.current?.animateToRegion(
+          radiusRegion(toLatLng(center), radiusM),
+          500,
+        );
+      },
     }));
 
     const selectFeature = useCallback(
@@ -237,6 +272,32 @@ export const ListingsMap = memo(
       setSelected(null);
       onSelectionChange?.(false);
     }, [onSelectionChange]);
+
+    /** A tap on empty map: while the circle is being set that means "centre it
+     *  here", which is quicker than dragging across the screen. Otherwise it
+     *  dismisses the preview card, as it always did. */
+    const handleMapPress = useCallback(
+      (e: MapPressEvent) => {
+        if (circle?.editable && onCircleMove) {
+          // iOS reports a marker press as a map press too (the same fall-
+          // through the grace window exists for), and tapping a price bubble
+          // must not quietly move the centre somewhere else.
+          if (Date.now() - overlayPressedAt.current < OVERLAY_PRESS_GRACE_MS)
+            return;
+          onCircleMove(toPosition(e.nativeEvent.coordinate));
+          return;
+        }
+        clearSelection();
+      },
+      [circle?.editable, onCircleMove, clearSelection],
+    );
+
+    const handleCenterDragEnd = useCallback(
+      (e: MarkerDragStartEndEvent) => {
+        onCircleMove?.(toPosition(e.nativeEvent.coordinate));
+      },
+      [onCircleMove],
+    );
 
     const handleRegionChangeComplete = useCallback(
       (region: Region) => {
@@ -308,7 +369,7 @@ export const ListingsMap = memo(
           initialRegion={TASHKENT_REGION}
           mapType="hybrid"
           onRegionChangeComplete={handleRegionChangeComplete}
-          onPress={clearSelection}
+          onPress={handleMapPress}
           showsUserLocation
           showsMyLocationButton={false}
           showsPointsOfInterests={false}
@@ -348,6 +409,37 @@ export const ListingsMap = memo(
                   />
                 ),
               )}
+
+          {/* Last inside the map so the ring sits over the parcels it is
+              narrowing rather than under them. */}
+          {circle && circle.radiusM != null ? (
+            <MapCircle
+              center={toLatLng(circle.center)}
+              radius={circle.radiusM}
+              strokeWidth={2}
+              strokeColor={colors.primary}
+              fillColor={withAlpha(colors.primary, 0.14)}
+            />
+          ) : null}
+
+          {circle ? (
+            <Marker
+              coordinate={toLatLng(circle.center)}
+              anchor={{ x: 0.5, y: 0.5 }}
+              draggable={!!circle.editable}
+              onDragEnd={handleCenterDragEnd}
+              // The pin grows a grab collar when it becomes editable, and a
+              // frozen marker keeps the snapshot it was first drawn with.
+              tracksViewChanges={!!circle.editable}
+              zIndex={2}
+              accessibilityLabel={t("map.radiusCenter")}
+            >
+              <RadiusCenterPin
+                color={colors.primary}
+                editable={!!circle.editable}
+              />
+            </Marker>
+          ) : null}
         </MapView>
 
         {/* Zoom pair, top-right. The locate button keeps the bottom corner —
@@ -371,6 +463,17 @@ export const ListingsMap = memo(
             label={t("map.zoomOut")}
             onPress={() => zoomBy(2)}
           />
+          {/* Separated from the zoom pair by its own gap — it changes what the
+              map is showing, not where the camera is. */}
+          {onToggleRadius ? (
+            <MapIconButton
+              icon="locate-outline"
+              label={t("map.radiusOn")}
+              onPress={onToggleRadius}
+              active={radiusActive}
+              style={{ marginTop: spacing.sm }}
+            />
+          ) : null}
         </View>
 
         <MyLocationButton
@@ -497,7 +600,7 @@ const ClusterMarker = memo(function ClusterMarker({
   cluster: PointCluster;
   onPress: () => void;
 }) {
-  const { colors, shadow } = useTheme();
+  const { colors } = useTheme();
   const t = useT();
   const tracking = useMarkerTracking();
   // Bigger circles for bigger neighbourhoods, gently.
@@ -569,7 +672,7 @@ const PriceMarker = memo(function PriceMarker({
   sublabel?: string;
   onPress: () => void;
 }) {
-  const { colors, shadow } = useTheme();
+  const { colors } = useTheme();
   // A marker with custom children that starts at tracksViewChanges={false}
   // renders blank on Android — it is snapshotted before its child lays out.
   // Tracking stays on until that first layout, then off so panning is smooth.
@@ -650,5 +753,48 @@ const PriceMarker = memo(function PriceMarker({
         </Svg>
       </View>
     </Marker>
+  );
+});
+
+/**
+ * The search circle's centre. A ring with a dot rather than a teardrop pin:
+ * the point of it is which spot the distance is measured from, and a pin's tip
+ * sits somewhere other than where the pin appears to be.
+ *
+ * Grows a grab collar while editable, which is the only affordance saying the
+ * thing can be dragged at all.
+ */
+const RadiusCenterPin = memo(function RadiusCenterPin({
+  color,
+  editable,
+}: {
+  color: string;
+  editable: boolean;
+}) {
+  const size = editable ? 34 : 22;
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: withAlpha(color, editable ? 0.22 : 0),
+        borderWidth: editable ? 1 : 0,
+        borderColor: withAlpha(color, 0.5),
+      }}
+    >
+      <View
+        style={{
+          width: 16,
+          height: 16,
+          borderRadius: 8,
+          backgroundColor: color,
+          borderWidth: 3,
+          borderColor: "#FFFFFF",
+        }}
+      />
+    </View>
   );
 });

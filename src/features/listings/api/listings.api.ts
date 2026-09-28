@@ -34,6 +34,10 @@ export interface Amenity {
  * now (GET /categories), so this is any string the server knows rather than a
  * fixed union — see useCategories for names, icons and the floor rule.
  */
+/** The six levels of finish, worst to best. */
+export type RepairType =
+  "NEEDS_REPAIR" | "AVERAGE" | "COSMETIC" | "EURO" | "DESIGNER" | "CAPITAL";
+
 export type PropertyCategory = string;
 
 /** One entry of GET /categories. */
@@ -79,6 +83,8 @@ export interface Listing {
   sellerType: "OWNER" | "REALTOR" | null;
   /** New build or resale. Null for land, and for older listings. */
   buildingType: "NEW" | "SECONDARY" | null;
+  /** State of repair, from NEEDS_REPAIR to CAPITAL. */
+  repairType: RepairType | null;
   areaM2: string | null;
   floor: number | null;
   totalFloors: number | null;
@@ -94,14 +100,20 @@ export interface Listing {
   createdAt: string;
   publishedAt: string | null;
   /**
-   * Denormalized on the server from `listing_reviews`, so every card can show
-   * stars without a second request. `ratingAvg` is null until somebody rates
-   * it — which is not the same as a rating of zero.
+   * The listing's stars, decided server-side and denormalized onto the row so
+   * every card can show them without a second request.
+   *
+   * Every listing has one: a new listing starts at 5 and moves from there as
+   * people review it and as moderators uphold reports. `ratingCount` is how
+   * many people REVIEWED it, which is not how many things went into the
+   * score — see the server's RatingService.
    */
-  ratingAvg: number | null;
+  ratingAvg: number;
   ratingCount: number;
   /** Distinct viewers — one per person, not per page open. */
   viewCount: number;
+  /** Top-level comments; replies are not counted. */
+  commentCount: number;
   /**
    * The seller, as the public listing page shows them. Null when the account
    * has since been deleted. Less than a full profile on purpose — no email or
@@ -172,6 +184,7 @@ export interface CreateListingInput {
   /** Omitted when the seller did not answer — the column stays null. */
   sellerType?: "OWNER" | "REALTOR";
   buildingType?: "NEW" | "SECONDARY";
+  repairType?: RepairType;
   title?: string;
   descriptionHtml?: string;
   rooms?: number;
@@ -194,6 +207,18 @@ export interface CreateListingInput {
   images: ImageInput[];
 }
 
+/**
+ * A search circle. The server measures to the listing's centroid, so a parcel
+ * is in or out by its middle — and all three fields must travel together: a
+ * centre with no radius, or a radius with no centre, is ignored.
+ */
+export interface RadiusFilter {
+  centerLng: number;
+  centerLat: number;
+  /** Metres, 100 … 100 000. */
+  radiusM: number;
+}
+
 /** Optional server-side narrowing of the viewport query. */
 export interface ViewportFilters {
   /** Case-insensitive substring match on the listing address. */
@@ -202,6 +227,7 @@ export interface ViewportFilters {
   /** USD bounds; either side may be open. */
   priceMin?: number;
   priceMax?: number;
+  radius?: RadiusFilter | null;
 }
 
 export interface FeedFilters {
@@ -211,7 +237,40 @@ export interface FeedFilters {
   priceMax?: number;
   /** Searches title and address. */
   q?: string;
+  /** The same circle the map draws — the list must agree with it. */
+  radius?: RadiusFilter | null;
   sort?: "newest" | "priceAsc" | "priceDesc";
+}
+
+/**
+ * Query params the feed and the map share. An omitted value stays omitted —
+ * `priceMin=` or `category=` would reach the server as an empty string and be
+ * rejected rather than ignored.
+ *
+ * The radius travels as three params or none: the server drops a partial set,
+ * so sending one would silently widen the search instead of failing.
+ */
+function appendCommonFilters(
+  params: URLSearchParams,
+  filters: {
+    category?: PropertyCategory;
+    priceMin?: number;
+    priceMax?: number;
+    radius?: RadiusFilter | null;
+  },
+) {
+  if (filters.category) params.set("category", filters.category);
+  if (filters.priceMin != null)
+    params.set("priceMin", String(filters.priceMin));
+  if (filters.priceMax != null)
+    params.set("priceMax", String(filters.priceMax));
+
+  const { radius } = filters;
+  if (radius) {
+    params.set("centerLng", String(radius.centerLng));
+    params.set("centerLat", String(radius.centerLat));
+    params.set("radiusM", String(Math.round(radius.radiusM)));
+  }
 }
 
 export const listingApi = {
@@ -228,11 +287,7 @@ export const listingApi = {
       limit: String(limit),
       offset: String(offset),
     });
-    if (filters.category) params.set("category", filters.category);
-    if (filters.priceMin != null)
-      params.set("priceMin", String(filters.priceMin));
-    if (filters.priceMax != null)
-      params.set("priceMax", String(filters.priceMax));
+    appendCommonFilters(params, filters);
     if (filters.q?.trim()) params.set("q", filters.q.trim());
     if (filters.sort) params.set("sort", filters.sort);
     return api<Listing[]>(`/listings?${params}`, { auth: false });
@@ -252,12 +307,8 @@ export const listingApi = {
       zoom: String(zoom),
       purpose,
     });
+    appendCommonFilters(params, filters);
     if (filters.address?.trim()) params.set("address", filters.address.trim());
-    if (filters.category) params.set("category", filters.category);
-    if (filters.priceMin != null)
-      params.set("priceMin", String(filters.priceMin));
-    if (filters.priceMax != null)
-      params.set("priceMax", String(filters.priceMax));
     return api<ViewportResponse>(`/listings/map?${params}`, { auth: false });
   },
 

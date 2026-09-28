@@ -9,6 +9,8 @@ interface Props {
   onPress: () => void;
   label: string;
   loading?: boolean;
+  /** Filled rather than outlined — the control is a toggle and it is on. */
+  active?: boolean;
   /** Placement is the caller's business — this only draws the control. */
   style?: ViewStyle;
 }
@@ -20,6 +22,7 @@ export const MapIconButton = memo(function MapIconButton({
   onPress,
   label,
   loading,
+  active,
   style,
 }: Props) {
   const { colors, shadow } = useTheme();
@@ -31,15 +34,21 @@ export const MapIconButton = memo(function MapIconButton({
       hitSlop={8}
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ busy: !!loading }}
+      accessibilityState={{ busy: !!loading, selected: !!active }}
       style={({ pressed }) => [
         {
           width: sizing.controlSm + 8,
           height: sizing.controlSm + 8,
           borderRadius: radii.pill,
-          backgroundColor: pressed ? colors.surfaceRaised : colors.surface,
+          backgroundColor: active
+            ? pressed
+              ? colors.primaryPressed
+              : colors.primary
+            : pressed
+              ? colors.surfaceRaised
+              : colors.surface,
           borderWidth: 1,
-          borderColor: colors.border,
+          borderColor: active ? colors.primary : colors.border,
           justifyContent: "center",
           alignItems: "center",
           // Themed elevation rather than the deprecated shadow*/elevation
@@ -52,7 +61,11 @@ export const MapIconButton = memo(function MapIconButton({
       {loading ? (
         <ActivityIndicator size="small" color={colors.primary} />
       ) : (
-        <Ionicons name={icon} size={20} color={colors.primary} />
+        <Ionicons
+          name={icon}
+          size={20}
+          color={active ? colors.onPrimary : colors.primary}
+        />
       )}
     </Pressable>
   );

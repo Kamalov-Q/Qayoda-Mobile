@@ -1,14 +1,17 @@
 import { memo, type ReactNode } from "react";
 import { Text, View, Pressable } from "react-native";
-import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { spacing, radii, type } from "../../../theme/tokens";
 import { useTheme } from "../../../theme/useTheme";
-import { resolveMediaUrl } from "../../../lib/media-url";
+import { ListingPhotoSlider, type SliderPhoto } from "./ListingPhotoSlider";
+import { ListingCardActions } from "./ListingCardActions";
+import type { Listing } from "../api/listings.api";
 import { RatingPill } from "../../reviews/components/RatingPill";
 
 interface Props {
   thumbUrl: string | null | undefined;
+  /** Every photo, for the slider. One or none falls back to `thumbUrl`. */
+  photos?: SliderPhoto[];
   /** Preformatted — currency symbol and any /month suffix already applied. */
   price: string | null;
   title: string | null;
@@ -20,6 +23,13 @@ interface Props {
   overlay?: ReactNode;
   /** Stars for the photo's bottom-right. Omitted, or unrated, draws nothing. */
   rating?: { average: number | null; count: number } | null;
+  /** Save / comment / share under the card. Omitted, the row is not drawn. */
+  actions?: {
+    listingId: string;
+    commentCount: number;
+    viewCount?: number;
+    listing?: Listing;
+  };
   onPress: () => void;
 }
 
@@ -40,16 +50,17 @@ const PHOTO_HEIGHT = 200;
  */
 export const ListingCardBase = memo(function ListingCardBase({
   thumbUrl,
+  photos,
   price,
   title,
   specs,
   meta,
   overlay,
   rating,
+  actions,
   onPress,
 }: Props) {
   const { colors, text, shadow } = useTheme();
-  const image = resolveMediaUrl(thumbUrl);
 
   return (
     <Pressable
@@ -66,20 +77,16 @@ export const ListingCardBase = memo(function ListingCardBase({
         ...shadow.card,
       })}
     >
-      <View style={{ height: PHOTO_HEIGHT, backgroundColor: colors.surfaceRaised }}>
-        {image ? (
-          <Image
-            source={{ uri: image }}
-            style={{ width: "100%", height: "100%" }}
-            contentFit="cover"
-            transition={150}
-            cachePolicy="memory-disk"
-          />
-        ) : (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-            <Ionicons name="image-outline" size={30} color={colors.textFaint} />
-          </View>
-        )}
+      <View
+        style={{ height: PHOTO_HEIGHT, backgroundColor: colors.surfaceRaised }}
+      >
+        {/* The slider owns the photo area — it also draws the single-photo
+            case, so there is one code path for "what does this card show". */}
+        <ListingPhotoSlider
+          photos={photos?.length ? photos : [{ thumbUrl }]}
+          height={PHOTO_HEIGHT}
+          onPress={onPress}
+        />
 
         {overlay ? (
           <View
@@ -143,7 +150,11 @@ export const ListingCardBase = memo(function ListingCardBase({
                 gap: spacing.xs,
               }}
             >
-              <Ionicons name="resize-outline" size={14} color={colors.textFaint} />
+              <Ionicons
+                name="resize-outline"
+                size={14}
+                color={colors.textFaint}
+              />
               <Text style={text.caption} numberOfLines={1}>
                 {specs}
               </Text>
@@ -158,6 +169,19 @@ export const ListingCardBase = memo(function ListingCardBase({
             </Text>
           ) : null}
         </View>
+      ) : null}
+
+      {/* Last, under everything: the card is a thing to read, and the row of
+          things to do about it belongs after you have read it. */}
+      {actions ? (
+        <ListingCardActions
+          listingId={actions.listingId}
+          commentCount={actions.commentCount}
+          viewCount={actions.viewCount}
+          listing={actions.listing}
+          title={title}
+          compact={false}
+        />
       ) : null}
     </Pressable>
   );

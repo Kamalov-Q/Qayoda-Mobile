@@ -1,5 +1,5 @@
 // app/(tabs)/sotuv.tsx
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import {
   Text,
   View,
@@ -9,8 +9,7 @@ import {
   RefreshControl,
   StyleSheet,
 } from "react-native";
-import { router } from "expo-router";
-import { useIsFocused } from "expo-router";
+import { router, useIsFocused } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Screen,
@@ -19,6 +18,7 @@ import {
   ChipGroup,
   FilterSheet,
   FilterButton,
+  FilterPill,
   PriceRangeFilter,
   SegmentedControl,
   SelectSheet,
@@ -29,6 +29,7 @@ import { spacing, radii, sizing, type } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT } from "../../src/i18n";
 import {
+  BBox,
   Listing,
   OfferPurpose,
 } from "../../src/features/listings/api/listings.api";
@@ -43,18 +44,23 @@ import { useListingsFeed } from "../../src/features/listings/hooks/useListingsFe
 import { useRates } from "../../src/features/listings/hooks/useRates";
 import { usePreferences } from "../../src/lib/preferences";
 import {
-  useIsSaved,
-  useToggleSave,
-} from "../../src/features/listings/hooks/useSavedListings";
-import { requireAuth } from "../../src/features/auth/guest";
-import {
   usePriceFormatter,
   useRelativeDate,
   useSpecsFormatter,
 } from "../../src/features/listings/utils/format";
 import { ListingCardBase } from "../../src/features/listings/components/ListingCardBase";
 import { ListingGridCard } from "../../src/features/listings/components/ListingGridCard";
-import { ListingsMap } from "../../src/features/map/ListingsMap";
+import {
+  ListingsMap,
+  type ListingsMapHandle,
+  type RadiusCircle,
+} from "../../src/features/map/ListingsMap";
+import { RadiusPanel } from "../../src/features/map/RadiusPanel";
+import {
+  nearestStep,
+  type RadiusStep,
+} from "../../src/features/map/RadiusSlider";
+import { formatRadius } from "../../src/features/map/maps";
 
 // The floating map/list/grid switch: its own width, and the room the map
 // controls and the feed have to leave under themselves so nothing hides
@@ -62,6 +68,20 @@ import { ListingsMap } from "../../src/features/map/ListingsMap";
 const SWITCH_WIDTH = 176; // icon-only: three 48pt targets + track padding
 const SWITCH_HEIGHT = 58; // 46pt segments + 5pt track padding + hairline
 const SWITCH_CLEARANCE = SWITCH_HEIGHT + spacing.lg;
+
+// What the radius panel occupies once it is open, so the map's own bottom
+// controls step above it instead of hiding underneath.
+const RADIUS_PANEL_HEIGHT = 196;
+
+/** Where the circle starts: a fifteen-minute walk, which is the distance
+ *  people actually mean by "near here" before they start adjusting. */
+const DEFAULT_RADIUS_M = 1_500;
+
+/** The centre a fresh circle takes — whatever the camera is looking at. */
+const bboxCenter = (b: BBox): [number, number] => [
+  (b.west + b.east) / 2,
+  (b.south + b.north) / 2,
+];
 
 // The list/grid row model, derived from the feed endpoint's full listings.
 interface FeedItem {
@@ -74,8 +94,13 @@ interface FeedItem {
   areaM2: string | null;
   address: string | null;
   publishedAt: string | null;
-  ratingAvg: number | null;
+  ratingAvg: number;
   ratingCount: number;
+  /** Every photo, cover first — the card slides through them. */
+  photos: { thumbUrl: string; url: string }[];
+  commentCount: number;
+  /** Distinct viewers — the eye on the card's action row. */
+  viewCount: number;
 }
 
 function toFeedItem(l: Listing, purpose: OfferPurpose): FeedItem {
@@ -96,6 +121,14 @@ function toFeedItem(l: Listing, purpose: OfferPurpose): FeedItem {
     publishedAt: l.publishedAt ?? l.createdAt,
     ratingAvg: l.ratingAvg,
     ratingCount: l.ratingCount,
+    photos: image
+      ? [image, ...l.images.filter((i) => i.id !== image.id)].map((i) => ({
+          thumbUrl: i.thumbUrl,
+          url: i.url,
+        }))
+      : [],
+    commentCount: l.commentCount,
+    viewCount: l.viewCount,
   };
 }
 
@@ -140,6 +173,23 @@ export default function SotuvScreen() {
   const [query, setQuery] = useState("");
   // Map-first: the pins ARE the feed here. The list is one toggle away.
   const [view, setView] = useState<ViewMode>("map");
+  /**
+   * The applied search circle, and — separately — the one being adjusted.
+   *
+   * Two pieces of state on purpose: dragging the slider or the centre pin
+   * must not refilter, or every stop of the track would fire a request and
+   * redraw the map under the user's thumb. `draft` non-null IS "the panel is
+   * open"; Apply copies it across, the X drops it.
+   */
+  const [radius, setRadius] = useState<{
+    center: [number, number];
+    radiusM: number;
+  } | null>(null);
+  const [radiusDraft, setRadiusDraft] = useState<{
+    center: [number, number];
+    radiusM: RadiusStep;
+  } | null>(null);
+  const mapRef = useRef<ListingsMapHandle>(null);
 
   // Address and price are server-side filters (the map features carry no
   // address to match against locally), so typing must not fire a request per
@@ -164,12 +214,27 @@ export default function SotuvScreen() {
   );
   const debouncedMin = useDebouncedValue(minPrice);
   const debouncedMax = useDebouncedValue(maxPrice);
+  // The circle in the shape the API takes it. Only the applied one — the
+  // draft never reaches a query.
+  const radiusParams = useMemo(
+    () =>
+      radius
+        ? {
+            centerLng: radius.center[0],
+            centerLat: radius.center[1],
+            radiusM: radius.radiusM,
+          }
+        : null,
+    [radius],
+  );
+
   const viewportFilters = useMemo(
     () => ({
       address: debouncedQuery || debouncedAddress,
       category: category === ALL ? undefined : category,
       priceMin: boundToUsd(debouncedMin),
       priceMax: boundToUsd(debouncedMax),
+      radius: radiusParams,
     }),
     [
       debouncedQuery,
@@ -178,6 +243,7 @@ export default function SotuvScreen() {
       debouncedMin,
       debouncedMax,
       boundToUsd,
+      radiusParams,
     ],
   );
 
@@ -185,7 +251,7 @@ export default function SotuvScreen() {
   // pause: no refetch can redraw what nobody sees.
   const isFocused = useIsFocused();
 
-  const { data, isLoading, isError, onRegionChange } = useMapViewport(
+  const { data, isLoading, isError, viewport, onRegionChange } = useMapViewport(
     purpose,
     viewportFilters,
     isFocused,
@@ -205,6 +271,9 @@ export default function SotuvScreen() {
       priceMin: boundToUsd(debouncedMin),
       priceMax: boundToUsd(debouncedMax),
       q: debouncedQuery || undefined,
+      // The list is not the viewport, but it IS the same circle — switching
+      // to it must not silently drop the radius the map is drawing.
+      radius: radiusParams,
       sort: sort === "default" ? "newest" : sort,
     },
     isFocused && view !== "map",
@@ -268,15 +337,14 @@ export default function SotuvScreen() {
   );
 
   const categoryOptions = useMemo(
-    () =>
-      [
-        { value: ALL, label: t("filters.allTypes"), icon: ALL_ICON },
-        ...categories.map((c) => ({
-          value: c.slug,
-          label: nameOf(c.slug),
-          icon: iconOf(c.slug),
-        })),
-      ],
+    () => [
+      { value: ALL, label: t("filters.allTypes"), icon: ALL_ICON },
+      ...categories.map((c) => ({
+        value: c.slug,
+        label: nameOf(c.slug),
+        icon: iconOf(c.slug),
+      })),
+    ],
     [t, categories, nameOf, iconOf],
   );
 
@@ -284,6 +352,70 @@ export default function SotuvScreen() {
     (id: string) => router.push(`/listing/${id}`),
     [],
   );
+
+  // Opens the panel on the applied circle, or on a fresh one centred where
+  // the camera already is — which is what "search around here" means.
+  const openRadius = useCallback(() => {
+    setView("map");
+    setRadiusDraft(
+      radius
+        ? { center: radius.center, radiusM: nearestStep(radius.radiusM) }
+        : { center: bboxCenter(viewport.bbox), radiusM: DEFAULT_RADIUS_M },
+    );
+  }, [radius, viewport.bbox]);
+
+  const applyRadius = useCallback(() => {
+    if (!radiusDraft) return;
+    const { center, radiusM } = radiusDraft;
+    setRadiusDraft(null);
+    // The last stop on the track is "everywhere", which is the absence of the
+    // filter rather than a very large one.
+    if (radiusM == null) {
+      setRadius(null);
+      return;
+    }
+    setRadius({ center, radiusM });
+    // The map filters by the viewport too, so a circle wider than the screen
+    // would hide half of what it just let through.
+    mapRef.current?.fitRadius(center, radiusM);
+  }, [radiusDraft]);
+
+  const clearRadius = useCallback(() => {
+    setRadiusDraft(null);
+    setRadius(null);
+  }, []);
+
+  const toggleRadius = useCallback(() => {
+    if (radiusDraft) setRadiusDraft(null);
+    else openRadius();
+  }, [radiusDraft, openRadius]);
+
+  // Adjusting the circle is a map gesture; leaving the map abandons it rather
+  // than leaving a panel floating over a list with no pin to drag.
+  const changeView = useCallback((next: ViewMode) => {
+    setView(next);
+    setRadiusDraft(null);
+  }, []);
+
+  const moveRadiusCenter = useCallback((center: [number, number]) => {
+    setRadiusDraft((d) => (d ? { ...d, center } : d));
+  }, []);
+
+  const changeRadius = useCallback((radiusM: RadiusStep) => {
+    setRadiusDraft((d) => (d ? { ...d, radiusM } : d));
+  }, []);
+
+  // Draft first: while the panel is open the map shows what Apply would do.
+  const circle: RadiusCircle | null = useMemo(() => {
+    if (radiusDraft)
+      return {
+        center: radiusDraft.center,
+        radiusM: radiusDraft.radiusM,
+        editable: true,
+      };
+    if (radius) return { center: radius.center, radiusM: radius.radiusM };
+    return null;
+  }, [radiusDraft, radius]);
 
   // Anything away from the defaults counts, so the badge matches what the user
   // would have to undo to see the plain feed again. The price pair counts once:
@@ -293,14 +425,18 @@ export default function SotuvScreen() {
   const activeCount =
     (sort === "default" ? 0 : 1) +
     (minPrice || maxPrice ? 1 : 0) +
-    (address.trim() ? 1 : 0);
+    (address.trim() ? 1 : 0) +
+    // Counted even though it has its own pill: Reset clears it too, so the
+    // badge would otherwise promise less than the button does.
+    (radius ? 1 : 0);
 
   const resetFilters = useCallback(() => {
     setSort("default");
     setMinPrice("");
     setMaxPrice("");
     setAddress("");
-  }, []);
+    clearRadius();
+  }, [clearRadius]);
 
   return (
     <Screen style={{ padding: 0 }} scroll={false} edges={TAB_EDGES}>
@@ -417,6 +553,9 @@ export default function SotuvScreen() {
       <View
         style={{
           flexDirection: "row",
+          // Wraps because the radius pill only appears once a circle is set —
+          // three pills in Russian do not fit one row on a small phone.
+          flexWrap: "wrap",
           paddingHorizontal: spacing.lg,
           paddingBottom: spacing.md,
           gap: spacing.sm,
@@ -427,6 +566,7 @@ export default function SotuvScreen() {
           label={t(`purposes.${purpose}`)}
           active={purpose !== "SALE"}
           onPress={() => setPurposeOpen(true)}
+          maxWidth="60%"
         />
         <FilterPill
           icon="business-outline"
@@ -435,7 +575,23 @@ export default function SotuvScreen() {
           }
           active={category !== ALL}
           onPress={() => setCategoryOpen(true)}
+          maxWidth="60%"
         />
+        {/* Only here once a circle is applied — in list and grid view it is
+            the only sign that the results are being cut down by distance. */}
+        {radius ? (
+          <FilterPill
+            icon="locate-outline"
+            label={formatRadius(
+              radius.radiusM,
+              t("map.metres"),
+              t("map.kilometres"),
+            )}
+            active
+            onPress={openRadius}
+            maxWidth="60%"
+          />
+        ) : null}
       </View>
 
       {/* Map and list are fed by the same viewport query: panning the map
@@ -453,11 +609,18 @@ export default function SotuvScreen() {
           }}
         >
           <ListingsMap
+            ref={mapRef}
             data={visible}
             onRegionChange={onRegionChange}
             onPressListing={onPressItem}
-            bottomInset={SWITCH_CLEARANCE}
+            bottomInset={
+              SWITCH_CLEARANCE + (radiusDraft ? RADIUS_PANEL_HEIGHT : 0)
+            }
             onSelectionChange={setCardOpen}
+            circle={circle}
+            onCircleMove={moveRadiusCenter}
+            onToggleRadius={toggleRadius}
+            radiusActive={!!radiusDraft || !!radius}
           />
         </View>
 
@@ -550,7 +713,11 @@ export default function SotuvScreen() {
 
         {/* Total count riding above the switch, reference-app style — on the
             map it is the only place the number fits without a header glance. */}
-        {view === "map" && !isLoading && !isError && !cardOpen ? (
+        {view === "map" &&
+        !isLoading &&
+        !isError &&
+        !cardOpen &&
+        !radiusDraft ? (
           <View
             pointerEvents="none"
             style={{
@@ -607,11 +774,25 @@ export default function SotuvScreen() {
             <SegmentedControl
               segments={viewOptions}
               value={view}
-              onChange={setView}
+              onChange={changeView}
               size="lg"
             />
           </View>
         </View>
+
+        {/* Over everything, including the switch's strip, because while it is
+            open it is the only thing on screen worth touching. */}
+        {radiusDraft && view === "map" ? (
+          <RadiusPanel
+            radiusM={radiusDraft.radiusM}
+            onChangeRadius={changeRadius}
+            onApply={applyRadius}
+            onClear={clearRadius}
+            onCancel={() => setRadiusDraft(null)}
+            applied={!!radius}
+            bottomOffset={SWITCH_CLEARANCE}
+          />
+        ) : null}
       </View>
 
       <SelectSheet
@@ -686,62 +867,6 @@ export default function SotuvScreen() {
  * away from the default, opens a picker sheet. The modern replacement for a
  * row of chips or a truncating segmented track.
  */
-const FilterPill = memo(function FilterPill({
-  icon,
-  label,
-  active,
-  onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  const { colors } = useTheme();
-  const fg = active ? colors.primary : colors.text;
-
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={({ pressed }) => ({
-        flexDirection: "row",
-        alignItems: "center",
-        gap: spacing.xs,
-        paddingHorizontal: spacing.md,
-        height: 38,
-        maxWidth: "60%",
-        borderRadius: radii.pill,
-        borderWidth: 1,
-        borderColor: active ? colors.primaryBorder : colors.border,
-        backgroundColor: active
-          ? colors.primarySoft
-          : pressed
-            ? colors.surfaceRaised
-            : colors.surface,
-      })}
-    >
-      <Ionicons
-        name={icon}
-        size={15}
-        color={active ? colors.primary : colors.textMuted}
-      />
-      <Text
-        style={{ ...type.bodyStrong, fontSize: 14, color: fg }}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
-      <Ionicons
-        name="chevron-down"
-        size={14}
-        color={active ? colors.primary : colors.textMuted}
-      />
-    </Pressable>
-  );
-});
-
 const FeedRow = memo(function FeedRow({
   item,
   purpose,
@@ -770,13 +895,18 @@ const FeedRow = memo(function FeedRow({
     return (
       <ListingGridCard
         thumbUrl={item.thumbUrl}
+        photos={item.photos}
         price={price}
         title={item.title}
         specs={specs || null}
         meta={meta}
         rating={{ average: item.ratingAvg, count: item.ratingCount }}
+        actions={{
+          listingId: item.id,
+          commentCount: item.commentCount,
+          viewCount: item.viewCount,
+        }}
         onPress={() => onPress(item.id)}
-        overlay={<SaveHeart listingId={item.id} />}
       />
     );
   }
@@ -784,6 +914,7 @@ const FeedRow = memo(function FeedRow({
   return (
     <ListingCardBase
       thumbUrl={item.thumbUrl}
+      photos={item.photos}
       price={price}
       title={item.title}
       meta={meta}
@@ -792,53 +923,12 @@ const FeedRow = memo(function FeedRow({
       // built to look finished that way rather than half-loaded.
       specs={specs || null}
       rating={{ average: item.ratingAvg, count: item.ratingCount }}
+      actions={{
+        listingId: item.id,
+        commentCount: item.commentCount,
+        viewCount: item.viewCount,
+      }}
       onPress={() => onPress(item.id)}
-      overlay={<SaveHeart listingId={item.id} />}
     />
-  );
-});
-
-/** Save toggle for the card's photo overlay. The feed's row model is too slim
- *  to seed the Saved cache, so the tab itself fills in on the refetch the
- *  toggle kicks off. */
-const SaveHeart = memo(function SaveHeart({
-  listingId,
-}: {
-  listingId: string;
-}) {
-  const { colors } = useTheme();
-  const t = useT();
-  const isSaved = useIsSaved(listingId);
-  const toggleSave = useToggleSave();
-
-  return (
-    <Pressable
-      onPress={() =>
-        requireAuth(() => toggleSave.mutate({ listingId, next: !isSaved }))
-      }
-      disabled={toggleSave.isPending}
-      hitSlop={10}
-      accessibilityRole="button"
-      accessibilityLabel={t(isSaved ? "saved.unsave" : "saved.save")}
-      accessibilityState={{ selected: isSaved }}
-      style={({ pressed }) => ({
-        width: 34,
-        height: 34,
-        borderRadius: radii.pill,
-        alignItems: "center",
-        justifyContent: "center",
-        // A scrim, because the heart sits on an unknown photo — an outline
-        // glyph alone disappears against a pale one.
-        backgroundColor: colors.imageScrim,
-        opacity: pressed ? 0.7 : 1,
-      })}
-    >
-      <Ionicons
-        name={isSaved ? "heart" : "heart-outline"}
-        size={19}
-        // White, not textFaint: the scrim is dark whichever theme is on.
-        color={isSaved ? colors.danger : "#FFFFFF"}
-      />
-    </Pressable>
   );
 });

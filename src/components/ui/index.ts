@@ -6,6 +6,7 @@ export { SegmentedControl } from "./SegmentedControl";
 export { Chip, ChipGroup } from "./Chip";
 export { SelectGrid, type SelectGridOption } from "./SelectGrid";
 export { FilterSheet, FilterButton, PriceRangeFilter } from "./FilterSheet";
+export { FilterPill } from "./FilterPill";
 export { ErrorBanner } from "./ErrorBanner";
 export { BrandMark } from "./BrandMark";
 export { Rise } from "./Rise";

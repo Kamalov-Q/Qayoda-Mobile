@@ -1,14 +1,16 @@
 import { memo, type ReactNode } from "react";
 import { Text, View, Pressable } from "react-native";
-import { Image } from "expo-image";
-import { Ionicons } from "@expo/vector-icons";
 import { spacing, radii, type } from "../../../theme/tokens";
 import { useTheme } from "../../../theme/useTheme";
-import { resolveMediaUrl } from "../../../lib/media-url";
+import { ListingPhotoSlider, type SliderPhoto } from "./ListingPhotoSlider";
+import { ListingCardActions } from "./ListingCardActions";
+import type { Listing } from "../api/listings.api";
 import { RatingPill } from "../../reviews/components/RatingPill";
 
 interface Props {
   thumbUrl: string | null | undefined;
+  /** Every photo, for the slider. */
+  photos?: SliderPhoto[];
   /** Preformatted — currency symbol and any /month suffix already applied. */
   price: string | null;
   title: string | null;
@@ -20,6 +22,18 @@ interface Props {
   overlay?: ReactNode;
   /** Stars for the photo's bottom-right. Omitted, or unrated, draws nothing. */
   rating?: { average: number | null; count: number } | null;
+  /** Save / comment / share under the card. Omitted, the row is not drawn. */
+  actions?: {
+    listingId: string;
+    commentCount: number;
+    viewCount?: number;
+    listing?: Listing;
+  };
+  /**
+   * The tile is in a horizontal rail rather than a grid. The photos then get
+   * arrows and give up the swipe — two nested pagers cannot share a drag.
+   */
+  rail?: boolean;
   onPress: () => void;
 }
 
@@ -35,16 +49,18 @@ const PHOTO_HEIGHT = 148;
  */
 export const ListingGridCard = memo(function ListingGridCard({
   thumbUrl,
+  photos,
   price,
   title,
   specs,
   meta,
   overlay,
   rating,
+  actions,
+  rail,
   onPress,
 }: Props) {
   const { colors, text, shadow } = useTheme();
-  const image = resolveMediaUrl(thumbUrl);
 
   return (
     <Pressable
@@ -64,21 +80,17 @@ export const ListingGridCard = memo(function ListingGridCard({
       <View
         style={{ height: PHOTO_HEIGHT, backgroundColor: colors.surfaceRaised }}
       >
-        {image ? (
-          <Image
-            source={{ uri: image }}
-            style={{ width: "100%", height: "100%" }}
-            contentFit="cover"
-            transition={150}
-            cachePolicy="memory-disk"
-          />
-        ) : (
-          <View
-            style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
-          >
-            <Ionicons name="image-outline" size={26} color={colors.textFaint} />
-          </View>
-        )}
+        {/* `compact`: no arrows at half width — there is no room for them and
+            a thumb reaches the edge of a grid tile anyway. In a rail it is
+            the other way round: the drag belongs to the rail, so the arrows
+            are the only way through the photos and they earn their space. */}
+        <ListingPhotoSlider
+          photos={photos?.length ? photos : [{ thumbUrl }]}
+          height={PHOTO_HEIGHT}
+          onPress={onPress}
+          compact={!rail}
+          swipeable={!rail}
+        />
 
         {overlay ? (
           <View
@@ -124,9 +136,18 @@ export const ListingGridCard = memo(function ListingGridCard({
       {/* Collapses entirely for point-mode items that carry only a price —
           a photo with a price pill is already a complete card. */}
       {title || specs || meta ? (
-        <View style={{ paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, gap: 2 }}>
+        <View
+          style={{
+            paddingHorizontal: spacing.sm,
+            paddingVertical: spacing.sm,
+            gap: 2,
+          }}
+        >
           {title ? (
-            <Text style={{ ...text.bodyStrong, fontSize: 14 }} numberOfLines={1}>
+            <Text
+              style={{ ...text.bodyStrong, fontSize: 14 }}
+              numberOfLines={1}
+            >
               {title}
             </Text>
           ) : null}
@@ -147,6 +168,19 @@ export const ListingGridCard = memo(function ListingGridCard({
             </Text>
           ) : null}
         </View>
+      ) : null}
+
+      {/* Last, under everything: the card is a thing to read, and the row of
+          things to do about it belongs after you have read it. */}
+      {actions ? (
+        <ListingCardActions
+          listingId={actions.listingId}
+          commentCount={actions.commentCount}
+          viewCount={actions.viewCount}
+          listing={actions.listing}
+          title={title}
+          compact={true}
+        />
       ) : null}
     </Pressable>
   );

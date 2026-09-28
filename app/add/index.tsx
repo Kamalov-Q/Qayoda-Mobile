@@ -1,6 +1,12 @@
 // app/add/index.tsx
 import { useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Text, View, TextInput } from "react-native";
+import {
+  ActivityIndicator,
+  Text,
+  View,
+  TextInput,
+  Pressable,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useForm, useWatch, Controller } from "react-hook-form";
@@ -17,9 +23,11 @@ import {
   HEADER_EDGES,
   type SelectGridOption,
   SegmentedControl,
+  SelectSheet,
   Chip,
+  type Option,
 } from "../../src/components/ui";
-import { spacing } from "../../src/theme/tokens";
+import { spacing, radii, sizing } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import * as Location from "expo-location";
 import { useT, type TranslationKey } from "../../src/i18n";
@@ -90,6 +98,29 @@ const BUILDING_TYPE_LABELS = {
   NEW: "add.buildingTypeNew",
   SECONDARY: "add.buildingTypeSecondary",
 } as const satisfies Record<BuildingType, TranslationKey>;
+
+/**
+ * State of repair, worst to best. Six levels rather than a yes/no: the gap
+ * between "kosmetik" and "dizaynerlik" is most of the price.
+ */
+const REPAIR_TYPES = [
+  "NEEDS_REPAIR",
+  "AVERAGE",
+  "COSMETIC",
+  "EURO",
+  "DESIGNER",
+  "CAPITAL",
+] as const;
+type RepairType = (typeof REPAIR_TYPES)[number];
+
+const REPAIR_LABELS = {
+  NEEDS_REPAIR: "add.repairNeeds",
+  AVERAGE: "add.repairAverage",
+  COSMETIC: "add.repairCosmetic",
+  EURO: "add.repairEuro",
+  DESIGNER: "add.repairDesigner",
+  CAPITAL: "add.repairCapital",
+} as const satisfies Record<RepairType, TranslationKey>;
 
 const FLOOR_CHOICES = ["yes", "no"] as const;
 type FloorChoice = (typeof FLOOR_CHOICES)[number];
@@ -184,6 +215,7 @@ const makeSchema = (t: ReturnType<typeof useT>) => {
         // maps that to null rather than guessing on their behalf.
         sellerType: z.enum(SELLER_TYPES).or(z.literal("")),
         buildingType: z.enum(BUILDING_TYPES).or(z.literal("")),
+        repairType: z.enum(REPAIR_TYPES).or(z.literal("")),
         hasFloors: z.enum(FLOOR_CHOICES),
         floor: intInRange(1, MAX_FLOORS),
         totalFloors: intInRange(1, MAX_FLOORS),
@@ -327,7 +359,7 @@ export default function AddListingScreen() {
     toPayload,
     isUploading,
   } = useImageUpload();
-  const { text } = useTheme();
+  const { text, colors } = useTheme();
   const t = useT();
 
   const schema = useMemo(() => makeSchema(t), [t]);
@@ -370,6 +402,12 @@ export default function AddListingScreen() {
     [t],
   );
 
+  const [repairOpen, setRepairOpen] = useState(false);
+  const repairOptions = useMemo<Option<RepairType | "">[]>(
+    () => REPAIR_TYPES.map((value) => ({ value, label: t(REPAIR_LABELS[value]) })),
+    [t],
+  );
+
   const floorOptions = useMemo<SelectGridOption<FloorChoice>[]>(
     () =>
       FLOOR_CHOICES.map((value) => ({
@@ -399,6 +437,7 @@ export default function AddListingScreen() {
       // seller's mouth about who they are.
       sellerType: "",
       buildingType: "",
+      repairType: "",
       price: "",
       // A flat in a block is the common case here — so when the starting
       // category has floors, the two fields start open rather than behind a
@@ -601,7 +640,8 @@ export default function AddListingScreen() {
       // the column null, rather than storing a guess.
       sellerType: d.sellerType || undefined,
       // Only where a building exists — the same rule the section is shown by.
-      buildingType: showFloors ? d.buildingType || undefined : undefined,
+      buildingType: d.buildingType || undefined,
+      repairType: d.repairType || undefined,
       // Both stay off the payload unless the category can carry them AND the
       // owner said it does — the server rejects a floor on anything else.
       floor: sendFloors && d.floor ? Number(d.floor) : undefined,
@@ -694,11 +734,12 @@ export default function AddListingScreen() {
           />
         </Section>
 
-        {/* Floor-capable categories only: a plot of land is neither new nor
-            secondary, and the same flag already decides whether floors are
-            worth asking about. */}
-        {showFloors ? (
-          <Section title={t("add.buildingTypeTitle")}>
+        {/* Shown for every category. Gating it on floors hid it from houses,
+            dachas and buildings — all of which are built, and all of which
+            sellers describe as new or secondary. Land is the one odd case,
+            and since the field is optional a seller of land simply skips it
+            rather than being told what their plot is. */}
+        <Section title={t("add.buildingTypeTitle")}>
             <Controller
               control={control}
               name="buildingType"
@@ -711,8 +752,69 @@ export default function AddListingScreen() {
                 />
               )}
             />
-          </Section>
-        ) : null}
+        </Section>
+
+        {/* Six levels, so a sheet rather than a grid: "ta'mirlangan" covers
+            everything from fresh paint to a designer fit-out, and the gap
+            between them is most of the price. */}
+        <Section title={t("add.repairTitle")}>
+          <Controller
+            control={control}
+            name="repairType"
+            render={({ field: { value, onChange } }) => (
+              <>
+                <Pressable
+                  onPress={() => setRepairOpen(true)}
+                  accessibilityRole="button"
+                  style={({ pressed }) => ({
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: spacing.sm,
+                    height: sizing.control,
+                    paddingHorizontal: spacing.md,
+                    borderRadius: radii.lg,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: pressed
+                      ? colors.surfaceRaised
+                      : colors.surface,
+                  })}
+                >
+                  <Ionicons
+                    name="construct-outline"
+                    size={18}
+                    color={colors.textMuted}
+                  />
+                  <Text
+                    style={{
+                      ...text.body,
+                      flex: 1,
+                      color: value ? colors.text : colors.textFaint,
+                    }}
+                  >
+                    {value
+                      ? t(REPAIR_LABELS[value])
+                      : t("add.repairPlaceholder")}
+                  </Text>
+                  <Ionicons
+                    name="chevron-down"
+                    size={16}
+                    color={colors.textFaint}
+                  />
+                </Pressable>
+
+                <SelectSheet
+                  visible={repairOpen}
+                  title={t("add.repairTitle")}
+                  options={repairOptions}
+                  value={value}
+                  onSelect={onChange}
+                  onClose={() => setRepairOpen(false)}
+                />
+              </>
+            )}
+          />
+        </Section>
 
         <Controller
           control={control}

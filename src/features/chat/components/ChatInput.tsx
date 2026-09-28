@@ -126,7 +126,6 @@ export const ChatInput = memo(function ChatInput({
         asset.uri,
         isVideo ? "VIDEO" : "IMAGE",
         asset.fileName ?? (isVideo ? "video.mp4" : "photo.jpg"),
-        asset.mimeType ?? (isVideo ? "video/mp4" : "image/jpeg"),
       );
       onSend({
         type: isVideo ? "VIDEO" : "IMAGE",
@@ -161,7 +160,6 @@ export const ChatInput = memo(function ChatInput({
         file.uri,
         "FILE",
         file.name,
-        file.mimeType ?? "application/octet-stream",
       );
       onSend({
         type: "FILE",
@@ -190,14 +188,7 @@ export const ChatInput = memo(function ChatInput({
     if (!rec) return;
     setUploading(true);
     try {
-      const att = await uploadChatAttachment(
-        rec.uri,
-        "VOICE",
-        "voice.m4a",
-        // The standard type for m4a. "audio/m4a" is not registered, and it is
-        // what the CDN then serves the file as — which some players refuse.
-        "audio/mp4",
-      );
+      const att = await uploadChatAttachment(rec.uri, "VOICE", "voice.m4a");
       // The server probes what it received. A probed 0 against a recording we
       // know was seconds long means the file reached it without its audio —
       // send nothing rather than a silent bubble the recipient will tap at.

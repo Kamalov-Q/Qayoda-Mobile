@@ -237,9 +237,9 @@ const ImageTile = memo(function ImageTile({
   // be landing in the very slot it started from.
   useEffect(() => {
     if (active) return;
-    x.value = withTiming(slot.x, { duration: 180 });
-    y.value = withTiming(slot.y, { duration: 180 });
-    lifted.value = withTiming(0, { duration: 140 });
+    x.set(withTiming(slot.x, { duration: 180 }));
+    y.set(withTiming(slot.y, { duration: 180 }));
+    lifted.set(withTiming(0, { duration: 140 }));
   }, [active, slot.x, slot.y, x, y, lifted]);
 
   const pan = Gesture.Pan()
@@ -247,38 +247,38 @@ const ImageTile = memo(function ImageTile({
     // scroll view the form lives in.
     .activateAfterLongPress(180)
     .onStart(() => {
-      startX.value = x.value;
-      startY.value = y.value;
-      lastHover.value = index;
-      lifted.value = withTiming(1, { duration: 140 });
+      startX.set(x.get());
+      startY.set(y.get());
+      lastHover.set(index);
+      lifted.set(withTiming(1, { duration: 140 }));
       runOnJS(onBeginDrag)(img.key, sourceIndex);
     })
     .onUpdate((e) => {
-      x.value = startX.value + e.translationX;
-      y.value = startY.value + e.translationY;
+      x.set(startX.get() + e.translationX);
+      y.set(startY.get() + e.translationY);
 
-      const col = Math.round(x.value / (tile + GAP));
-      const row = Math.round(y.value / (tile + GAP));
+      const col = Math.round(x.get() / (tile + GAP));
+      const row = Math.round(y.get() / (tile + GAP));
       const target = Math.min(
         Math.max(row * cols + Math.min(Math.max(col, 0), cols - 1), 0),
         count - 1,
       );
 
-      if (target !== lastHover.value) {
-        lastHover.value = target;
+      if (target !== lastHover.get()) {
+        lastHover.set(target);
         runOnJS(onHover)(target);
       }
     })
     .onFinalize(() => {
-      lastHover.value = -1;
+      lastHover.set(-1);
       runOnJS(onEndDrag)();
     });
 
   const style = useAnimatedStyle(() => ({
     transform: [
-      { translateX: x.value },
-      { translateY: y.value },
-      { scale: 1 + lifted.value * 0.08 },
+      { translateX: x.get() },
+      { translateY: y.get() },
+      { scale: 1 + lifted.get() * 0.08 },
     ],
   }));
 

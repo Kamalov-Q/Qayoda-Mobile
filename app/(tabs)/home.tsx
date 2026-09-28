@@ -27,12 +27,7 @@ import { useTheme } from "../../src/theme/useTheme";
 import { useT, type TranslationKey } from "../../src/i18n";
 import { useAuthStore } from "../../src/features/auth/store/auth.store";
 import { useLatestListings } from "../../src/features/listings/hooks/useLatestListings";
-import { ListingGridCard } from "../../src/features/listings/components/ListingGridCard";
-import {
-  usePriceFormatter,
-  useSpecsFormatter,
-} from "../../src/features/listings/utils/format";
-import type { Listing } from "../../src/features/listings/api/listings.api";
+import { ListingCard } from "../../src/features/listings/components/ListingCard";
 import { ConnectionBadge } from "../../src/features/chat/components/ConnectionBadge";
 
 const ACTIONS = [
@@ -267,27 +262,17 @@ export default function HomeScreen() {
 }
 
 /** Card width in the horizontal strip — two-ish per screen, like a shelf. */
-const STRIP_CARD_WIDTH = 190;
+/** Wide enough that the next card peeks in and says the row scrolls. */
+const STRIP_CARD_WIDTH = 200;
 
 function LatestStrip() {
   const { data } = useLatestListings();
   const t = useT();
-  const formatPrice = usePriceFormatter();
-  const formatSpecs = useSpecsFormatter();
 
   // Silent when empty or failed: the Home screen must not show an error for
   // a strip that is a bonus, and a skeleton for 10 cards is more motion than
   // this screen needs.
   if (!data?.length) return null;
-
-  const priceOf = (l: Listing) => {
-    const offer = l.offers.find((o) => o.isActive) ?? l.offers[0];
-    return offer
-      ? formatPrice(offer.price, offer.currency, offer.purpose)
-      : null;
-  };
-  const thumbOf = (l: Listing) =>
-    (l.images.find((i) => i.isPrimary) ?? l.images[0])?.thumbUrl ?? null;
 
   return (
     <Section title={t("home.latestTitle")}>
@@ -301,15 +286,18 @@ function LatestStrip() {
         contentContainerStyle={{
           paddingHorizontal: spacing.lg,
           gap: spacing.md,
+          // The cards cast a shadow; without this the row clips it.
+          paddingVertical: spacing.xs,
         }}
         renderItem={({ item }) => (
           <View style={{ width: STRIP_CARD_WIDTH }}>
-            <ListingGridCard
-              thumbUrl={thumbOf(item)}
-              price={priceOf(item)}
-              title={item.title}
-              specs={formatSpecs(item) || null}
-              onPress={() => router.push(`/listing/${item.id}`)}
+            {/* The same card the feed draws, from the same mapping — photo
+                slider, stars and the save/comment/share row included. */}
+            <ListingCard
+              listing={item}
+              variant="rail"
+              meta={item.address}
+              onPress={(id) => router.push(`/listing/${id}`)}
             />
           </View>
         )}

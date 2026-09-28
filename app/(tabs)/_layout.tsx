@@ -1,7 +1,9 @@
 // app/(tabs)/_layout.tsx
-import { Tabs } from "expo-router";
+import { Tabs, router } from "expo-router";
+import { View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { radii } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT } from "../../src/i18n";
 import { useChatSocket } from "@/src/features/chat/hooks/useChatSocket";
@@ -31,7 +33,7 @@ const ICON_SIZE = 28;
 export default function TabsLayout() {
   useChatSocket();
   const unread = useUnreadTotal();
-  const { colors } = useTheme();
+  const { colors, shadow } = useTheme();
   const insets = useSafeAreaInsets();
   const t = useT();
 
@@ -88,6 +90,41 @@ export default function TabsLayout() {
               size={ICON_SIZE}
             />
           ),
+        }}
+      />
+      {/* The centre button. It is a tab in the bar and nothing else: the
+          press is intercepted and pushed onto the stack instead, so the post
+          form gets the whole screen with no tab bar under it — and coming
+          back returns to whichever tab you were on rather than resetting. */}
+      <Tabs.Screen
+        name="add"
+        options={{
+          title: t("tabs.add"),
+          tabBarIcon: ({ focused }) => (
+            <View
+              style={{
+                // Lifted out of the bar, the way every marketplace draws its
+                // post button. The negative margin is what makes it read as
+                // the primary action rather than a fifth equal tab.
+                marginTop: -16,
+                width: 46,
+                height: 46,
+                borderRadius: radii.pill,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: focused ? colors.primaryPressed : colors.primary,
+                ...shadow.raised,
+              }}
+            >
+              <Ionicons name="add" size={28} color={colors.onPrimary} />
+            </View>
+          ),
+        }}
+        listeners={{
+          tabPress: (e) => {
+            e.preventDefault();
+            router.push("/add");
+          },
         }}
       />
       <Tabs.Screen

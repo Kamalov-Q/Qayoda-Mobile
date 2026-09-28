@@ -31,8 +31,14 @@ export type RatingDistribution = Record<"1" | "2" | "3" | "4" | "5", number>;
 export interface ReviewsPage {
   /** How many reviews exist in total, not how many this page holds. */
   count: number;
-  /** Null until somebody rates it. */
-  average: number | null;
+  /**
+   * The listing's rating — the same number its card shows. Not the mean of
+   * the bars below it: it starts at 5, is pulled towards 5 while the reviews
+   * are few, fades old ones, and carries any report a moderator upheld.
+   */
+  average: number;
+  /** The plain mean of the reviews themselves. Null until there is one. */
+  reviewAverage: number | null;
   distribution: RatingDistribution;
   /** The caller's own review, when they are signed in and have left one. */
   mine: Review | null;

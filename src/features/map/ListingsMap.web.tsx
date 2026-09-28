@@ -13,6 +13,15 @@ import { ViewportResponse, BBox } from "../listings/api/listings.api";
 
 export interface ListingsMapHandle {
   animateTo: (lat: number, lng: number) => void;
+  fitRadius: (center: [number, number], radiusM: number) => void;
+}
+
+/** Declared so the radius filter type-checks against either platform's map —
+ *  there is nothing here to draw it on. */
+export interface RadiusCircle {
+  center: [number, number];
+  radiusM: number | null;
+  editable?: boolean;
 }
 
 interface Props {
@@ -38,7 +47,11 @@ export function ListingsMap(_props: Props) {
     >
       <Ionicons name="map-outline" size={28} color={colors.textFaint} />
       <Text
-        style={{ ...type.caption, color: colors.textMuted, textAlign: "center" }}
+        style={{
+          ...type.caption,
+          color: colors.textMuted,
+          textAlign: "center",
+        }}
       >
         {t("map.unavailableWeb")}
       </Text>

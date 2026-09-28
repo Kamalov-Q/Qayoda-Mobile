@@ -1,5 +1,4 @@
-import { io, Socket } from "socket.io-client";
-import { API_URL } from "./env";
+import { namespaceSocket } from "./socket";
 
 /**
  * The public `/listings` namespace: live view counts, and nothing that needs
@@ -7,22 +6,7 @@ import { API_URL } from "./env";
  * token and disconnects anyone without one, and most people looking at a
  * listing are signed out.
  */
-let socket: Socket | null = null;
+const listings = namespaceSocket("/listings", { auth: false });
 
-export function getListingsSocket(): Socket {
-  if (socket) return socket;
-
-  socket = io(`${API_URL}/listings`, {
-    transports: ["websocket"],
-    reconnection: true,
-    reconnectionDelay: 1000,
-    reconnectionDelayMax: 10_000,
-  });
-
-  return socket;
-}
-
-export function disconnectListingsSocket() {
-  socket?.disconnect();
-  socket = null;
-}
+export const getListingsSocket = () => listings.get();
+export const disconnectListingsSocket = () => listings.disconnect();

@@ -22,6 +22,49 @@ interface RequestOptions extends Omit<RequestInit, "body"> {
   auth?: boolean; // default true
 }
 
+/** Nest's error envelope. `message` is an array when class-validator produced
+ *  it — one entry per failing field. */
+interface ErrorBody {
+  message?: string | string[];
+  code?: string;
+  retryAfter?: number;
+}
+
+/**
+ * A failed Response, as an ApiError. Exported because the multipart uploads
+ * cannot go through `api()` — their bodies are FormData, which JSON.stringify
+ * would destroy — and they must still fail in the shape errorMessage() reads.
+ */
+export async function errorFromResponse(
+  res: Response,
+  fallback = "Request failed",
+): Promise<ApiError> {
+  const body = (await res.json().catch(() => ({}))) as ErrorBody;
+  const message = Array.isArray(body.message) ? body.message[0] : body.message;
+
+  return new ApiError(
+    res.status,
+    message ?? fallback,
+    typeof body.code === "string" ? body.code : undefined,
+    typeof body.retryAfter === "number" ? body.retryAfter : undefined,
+  );
+}
+
+/**
+ * Sends, and on a 401 refreshes the session and sends again — the same retry
+ * `api()` does for JSON requests. `send` is called afresh each time because a
+ * FormData body cannot be replayed once consumed.
+ */
+export async function sendWithAuthRetry(
+  send: () => Promise<Response>,
+): Promise<Response> {
+  const res = await send();
+  if (res.status !== 401) return res;
+
+  if (!(await refreshSession())) throw new ApiError(401, "Session expired");
+  return send();
+}
+
 // ---- Single-flight refresh ----------------------------------------------
 // If N requests hit 401 simultaneously, exactly ONE refresh call fires and
 // the rest await it. Load-bearing: the backend rotates refresh tokens and
@@ -133,17 +176,7 @@ export async function api<T>(
     res = await fetchWithTimeout(`${API_URL}${path}`, buildInit());
   }
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new ApiError(
-      res.status,
-      Array.isArray(err.message)
-        ? err.message[0]
-        : (err.message ?? "Request failed"),
-      typeof err.code === "string" ? err.code : undefined,
-      typeof err.retryAfter === "number" ? err.retryAfter : undefined,
-    );
-  }
+  if (!res.ok) throw await errorFromResponse(res);
 
   // 204 (logout) and any other empty reply: res.json() would throw on "".
   if (res.status === 204) return undefined as T;

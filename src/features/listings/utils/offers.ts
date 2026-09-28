@@ -1,12 +1,23 @@
-import { Listing, Offer } from "../api/listings.api";
+import { Listing, Offer, OfferPurpose } from "../api/listings.api";
 
 /**
  * The offer a listing is represented by in lists and filters: the active one,
  * falling back to whatever exists so an all-inactive listing still shows a
  * price instead of an empty row.
+ *
+ * `prefer` names a purpose to look for first — a listing that is both for
+ * sale and to rent should show its rent price in a list of rentals.
  */
-export function primaryOffer(listing: Listing): Offer | undefined {
-  return listing.offers.find((o) => o.isActive) ?? listing.offers[0];
+export function primaryOffer(
+  listing: Listing,
+  prefer?: OfferPurpose,
+): Offer | undefined {
+  return (
+    (prefer &&
+      listing.offers.find((o) => o.purpose === prefer && o.isActive)) ||
+    listing.offers.find((o) => o.isActive) ||
+    listing.offers[0]
+  );
 }
 
 /** Its price as a number, or null when the listing carries no offer at all. */

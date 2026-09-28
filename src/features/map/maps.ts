@@ -149,3 +149,35 @@ export function withAlpha(hex: string, alpha: number): string {
   const b = int & 255;
   return `rgba(${r},${g},${b},${alpha})`;
 }
+
+/** Metres per degree of latitude. Longitude shrinks with the cosine of the
+ *  latitude; at Tashkent's 41° a degree of longitude is only ~84 km. */
+const M_PER_DEG_LAT = 111_320;
+
+/**
+ * Camera that fits a search circle with a little air around it, so the whole
+ * radius is on screen rather than cropped by the viewport the map also filters
+ * by. Square in metres, not in degrees — a region with equal deltas is a tall
+ * rectangle this far from the equator.
+ */
+export function radiusRegion(center: LatLng, radiusM: number): Region {
+  const latDelta = (radiusM * 2 * 1.3) / M_PER_DEG_LAT;
+  const cos = Math.max(Math.cos((center.latitude * Math.PI) / 180), 0.01);
+  return {
+    ...center,
+    latitudeDelta: latDelta,
+    longitudeDelta: latDelta / cos,
+  };
+}
+
+/** "750 m" / "1,5 km" — a comma decimal, as both uz and ru write it. */
+export function formatRadius(
+  radiusM: number,
+  unitM: string,
+  unitKm: string,
+): string {
+  if (radiusM < 1000) return `${radiusM} ${unitM}`;
+  const km = radiusM / 1000;
+  const n = Number.isInteger(km) ? String(km) : km.toFixed(1).replace(".", ",");
+  return `${n} ${unitKm}`;
+}

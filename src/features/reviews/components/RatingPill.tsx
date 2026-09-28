@@ -13,13 +13,17 @@ interface Props {
 }
 
 /**
- * Renders nothing when there is nothing to say. An unrated listing showing
- * "0.0" or an empty star row would read as a bad rating rather than as a new
- * listing, which is the opposite of the truth.
+ * Every listing has a rating now — it starts at five and moves from there, so
+ * there is no "unrated" state to hide. The count in brackets is dropped while
+ * it is zero: "5.0" is the marketplace's opinion, "(0)" beside it would look
+ * like a broken counter rather than an honest "nobody has said anything yet".
+ *
+ * Renders nothing only if the server sent no number at all, which an older
+ * API can still do.
  */
 export function RatingPill({ average, count, onPhoto }: Props) {
   const { colors } = useTheme();
-  if (average === null || count === 0) return null;
+  if (average === null) return null;
 
   const fg = onPhoto ? "#FFFFFF" : colors.text;
 
@@ -41,9 +45,16 @@ export function RatingPill({ average, count, onPhoto }: Props) {
       <Text style={{ ...type.caption, fontWeight: "600", color: fg }}>
         {average.toFixed(1)}
       </Text>
-      <Text style={{ ...type.caption, color: onPhoto ? "#FFFFFF" : colors.textMuted }}>
-        ({count})
-      </Text>
+      {count > 0 ? (
+        <Text
+          style={{
+            ...type.caption,
+            color: onPhoto ? "#FFFFFF" : colors.textMuted,
+          }}
+        >
+          ({count})
+        </Text>
+      ) : null}
     </View>
   );
 }

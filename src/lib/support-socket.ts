@@ -1,49 +1,11 @@
-import { io, Socket } from "socket.io-client";
-import { API_URL } from "./env";
-import { useAuthStore } from "../features/auth/store/auth.store";
-import { refreshSession } from "./api-client";
+import { namespaceSocket } from "./socket";
 
 /**
  * The `/support` namespace. Authenticated like the chat socket — a support
  * thread is private — but separate from it, because "every admin on duty" is
  * a room that has no meaning in a peer-to-peer chat.
  */
-let socket: Socket | null = null;
-let refreshing = false;
+const support = namespaceSocket("/support", { auth: true });
 
-export function getSupportSocket(): Socket {
-  if (socket) return socket;
-
-  socket = io(`${API_URL}/support`, {
-    transports: ["websocket"],
-    auth: (cb) => cb({ token: useAuthStore.getState().accessToken }),
-    reconnection: true,
-    reconnectionDelay: 1000,
-    reconnectionDelayMax: 10_000,
-  });
-
-  socket.on("auth:expired", () => void refreshAndReconnect());
-  socket.on("connect_error", (err) => {
-    if (/auth|unauthorized|jwt/i.test(err.message)) void refreshAndReconnect();
-  });
-
-  return socket;
-}
-
-async function refreshAndReconnect() {
-  if (refreshing || !socket) return;
-  refreshing = true;
-  try {
-    if (await refreshSession()) {
-      socket.disconnect();
-      socket.connect();
-    }
-  } finally {
-    refreshing = false;
-  }
-}
-
-export function disconnectSupportSocket() {
-  socket?.disconnect();
-  socket = null;
-}
+export const getSupportSocket = () => support.get();
+export const disconnectSupportSocket = () => support.disconnect();
