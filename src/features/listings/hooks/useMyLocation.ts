@@ -43,6 +43,33 @@ async function ensureForegroundPermission(): Promise<boolean> {
   return true;
 }
 
+/**
+ * Where the device is, but only if that can be answered without asking.
+ *
+ * Returns null rather than prompting: this is for defaults — the centre of a
+ * new search circle — and a permission dialog thrown at someone who tapped
+ * "radius" is a dialog about something they did not ask for. Once they have
+ * granted it (the locate button, the blue dot), this is a cached read and
+ * costs nothing.
+ */
+export async function peekLocation(): Promise<Coords | null> {
+  try {
+    if (!(await Location.getForegroundPermissionsAsync()).granted) return null;
+
+    // Last known only. getCurrentPositionAsync can take seconds outdoors and
+    // longer indoors, and nothing here is worth a wait.
+    const last = await Location.getLastKnownPositionAsync({ maxAge: 300_000 });
+    if (!last) return null;
+
+    return {
+      latitude: last.coords.latitude,
+      longitude: last.coords.longitude,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function useMyLocation() {
   const [loading, setLoading] = useState(false);
 

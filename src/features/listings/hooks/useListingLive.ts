@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { listingApi, type Listing } from "../api/listings.api";
+import { listingApi } from "../api/listings.api";
+import { patchCachedListing } from "../utils/listing-cache";
 import { getListingsSocket } from "@/src/lib/listings-socket";
 
 /**
@@ -21,18 +22,22 @@ type StatsPatch = Omit<ListingStats, "listingId">;
 /**
  * Keeps an open listing live.
  *
- * Two jobs on mount: record this person's view (the server decides whether it
- * counts) and join the listing's room, so its numbers move while the page is
- * open rather than only on the next load. Views, comments and the rating all
- * arrive on one event.
+ * Joins the listing's room, so its numbers move while it is on screen rather
+ * than only on the next load — views, comments and the rating all arrive on
+ * one event — and, unless told otherwise, records this person's view first.
  *
- * It patches the QUERY CACHE rather than returning state. The page already
- * reads `listing.viewCount`, `listing.commentCount` and `listing.ratingAvg`
- * from that cache; writing there means every one of them updates with nothing
- * else to wire up, and a comment posted on another screen — which invalidates
- * nothing here — still moves the number under the title.
+ * It patches the QUERY CACHE rather than returning state, and patches it
+ * EVERYWHERE the listing is cached rather than only on the detail page. The
+ * same listing sits in the feed, the grid, the map's card, Saved and a
+ * profile under five different keys; writing to one of them is what let a
+ * listing say "1 view" while its own card in the feed said 0.
  */
-export function useListingLive(listingId: string | undefined) {
+export function useListingLive(
+  listingId: string | undefined,
+  /** False for a card that merely previews the listing — a glance at a card
+   *  on the map is not a visit, and should not count as one. */
+  { recordView = true }: { recordView?: boolean } = {},
+) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -43,13 +48,7 @@ export function useListingLive(listingId: string | undefined) {
     const patch = (stats: StatsPatch) => {
       if (!alive) return;
 
-      queryClient.setQueryData<Listing>(
-        ["listings", "detail", listingId],
-        // Only when the listing is actually cached: seeding a partial row
-        // from a socket payload would hand the screen a Listing with no
-        // photos, no price and no owner.
-        (old) => (old ? { ...old, ...stats } : old),
-      );
+      patchCachedListing(listingId, stats);
 
       // A moved counter means the list behind it moved too, so the rows are
       // refetched as well as the number. Deliberately NOT done for views:
@@ -70,10 +69,12 @@ export function useListingLive(listingId: string | undefined) {
     // Failure here is silent on purpose: a view that did not register is not
     // something to interrupt a reader for, and the count on screen is still
     // the one the listing came with.
-    listingApi
-      .recordView(listingId)
-      .then((res) => patch({ viewCount: res.viewCount }))
-      .catch(() => {});
+    if (recordView) {
+      listingApi
+        .recordView(listingId)
+        .then((res) => patch({ viewCount: res.viewCount }))
+        .catch(() => {});
+    }
 
     const socket = getListingsSocket();
     const onStats = ({ listingId: id, ...rest }: ListingStats) => {
@@ -92,5 +93,5 @@ export function useListingLive(listingId: string | undefined) {
       socket.off("connect", rejoin);
       socket.emit("listing:unwatch", { listingId });
     };
-  }, [listingId, queryClient]);
+  }, [listingId, recordView, queryClient]);
 }

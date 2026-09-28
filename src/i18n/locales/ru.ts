@@ -571,6 +571,9 @@ export const ru: Dictionary = {
   },
 
   location: {
+    navigate: "Маршрут",
+    navigateTitle: "В каком приложении открыть?",
+    navigateFailed: "Не удалось открыть приложение карт",
     title: "Местоположение",
     myLocation: "Моё местоположение",
     previewHint: "Покажем ваше местоположение на карте",
@@ -609,6 +612,7 @@ export const ru: Dictionary = {
     radius: "Радиус",
     radiusOn: "Поиск по радиусу",
     radiusWithin: "В пределах",
+    radiusFromHere: "Центр — то, что сейчас на карте; его можно передвинуть там же",
     radiusHint: "Перетащите метку или нажмите на карту, чтобы сместить центр",
     radiusAll: "Все",
     radiusApply: "Применить",

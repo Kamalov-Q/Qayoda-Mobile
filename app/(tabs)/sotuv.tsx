@@ -22,7 +22,7 @@ import {
   PriceRangeFilter,
   SegmentedControl,
   SelectSheet,
-  TextField,
+  DebouncedTextField,
   TAB_EDGES,
 } from "../../src/components/ui";
 import { spacing, radii, sizing, type } from "../../src/theme/tokens";
@@ -40,6 +40,7 @@ import {
 } from "../../src/features/listings/utils/icons";
 import { useCategories } from "../../src/features/listings/hooks/useCategories";
 import { useMapViewport } from "../../src/features/listings/hooks/useMapViewport";
+import { peekLocation } from "../../src/features/listings/hooks/useMyLocation";
 import { useListingsFeed } from "../../src/features/listings/hooks/useListingsFeed";
 import { useRates } from "../../src/features/listings/hooks/useRates";
 import { usePreferences } from "../../src/lib/preferences";
@@ -56,6 +57,7 @@ import {
   type RadiusCircle,
 } from "../../src/features/map/ListingsMap";
 import { RadiusPanel } from "../../src/features/map/RadiusPanel";
+import { RadiusFilterRow } from "../../src/features/map/RadiusFilterRow";
 import {
   nearestStep,
   type RadiusStep,
@@ -161,7 +163,15 @@ export default function SotuvScreen() {
   // Kept as strings: an empty field means "no bound", which 0 cannot express.
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
+  /**
+   * The ADDRESS filter and the SEARCH box, as the screen sees them: already
+   * settled. The fields themselves hold what is being typed (see
+   * DebouncedTextField), so a keystroke no longer re-renders the map, the
+   * feed and the filter sheet along with the letter that caused it.
+   */
   const [address, setAddress] = useState("");
+  /** Bumped to clear the address field, which owns its own text. */
+  const [fieldGeneration, setFieldGeneration] = useState(0);
   const [filtersOpen, setFiltersOpen] = useState(false);
   // A listing's preview card is up on the map: the floating count steps aside
   // so it doesn't sit on the card's "view details" link (it's in the header too).
@@ -170,7 +180,7 @@ export default function SotuvScreen() {
   const [purposeOpen, setPurposeOpen] = useState(false);
   // One search box drives both worlds: the feed's title+address search, and
   // the map's server-side address narrowing.
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(""); // settled, not per keystroke
   // Map-first: the pins ARE the feed here. The list is one toggle away.
   const [view, setView] = useState<ViewMode>("map");
   /**
@@ -190,12 +200,8 @@ export default function SotuvScreen() {
     radiusM: RadiusStep;
   } | null>(null);
   const mapRef = useRef<ListingsMapHandle>(null);
-
-  // Address and price are server-side filters (the map features carry no
-  // address to match against locally), so typing must not fire a request per
-  // keystroke.
-  const debouncedAddress = useDebouncedValue(address);
-  const debouncedQuery = useDebouncedValue(query);
+  /** The reader's position, read when the funnel opens — see setRadiusDistance. */
+  const sheetCenter = useRef<[number, number] | null>(null);
 
   // Price bounds are typed in the viewer's display currency but travel in
   // USD — the server compares against the normalised column.
@@ -215,30 +221,39 @@ export default function SotuvScreen() {
   const debouncedMin = useDebouncedValue(minPrice);
   const debouncedMax = useDebouncedValue(maxPrice);
   // The circle in the shape the API takes it. Only the applied one — the
-  // draft never reaches a query.
+  // draft never reaches a query — and debounced like every other filter that
+  // can be dragged: the sheet's slider has fifteen stops, and querying each
+  // one on the way past is fifteen requests for a number nobody stopped on.
+  // The circle itself is drawn from `radius`, so it still follows the thumb.
+  const debouncedRadius = useDebouncedValue(radius, 300);
   const radiusParams = useMemo(
     () =>
-      radius
+      debouncedRadius
         ? {
-            centerLng: radius.center[0],
-            centerLat: radius.center[1],
-            radiusM: radius.radiusM,
+            centerLng: debouncedRadius.center[0],
+            centerLat: debouncedRadius.center[1],
+            radiusM: debouncedRadius.radiusM,
           }
         : null,
-    [radius],
+    [debouncedRadius],
   );
 
   const viewportFilters = useMemo(
     () => ({
-      address: debouncedQuery || debouncedAddress,
+      // Two different questions: the funnel's "Address" field narrows by
+      // address, the search box searches title and address. They used to
+      // collapse into one param, where whichever was typed last silently
+      // replaced the other.
+      address,
+      q: query,
       category: category === ALL ? undefined : category,
       priceMin: boundToUsd(debouncedMin),
       priceMax: boundToUsd(debouncedMax),
       radius: radiusParams,
     }),
     [
-      debouncedQuery,
-      debouncedAddress,
+      query,
+      address,
       category,
       debouncedMin,
       debouncedMax,
@@ -251,7 +266,7 @@ export default function SotuvScreen() {
   // pause: no refetch can redraw what nobody sees.
   const isFocused = useIsFocused();
 
-  const { data, isLoading, isError, viewport, onRegionChange } = useMapViewport(
+  const { data, isError, viewport, onRegionChange } = useMapViewport(
     purpose,
     viewportFilters,
     isFocused,
@@ -270,7 +285,10 @@ export default function SotuvScreen() {
       category: category === ALL ? undefined : category,
       priceMin: boundToUsd(debouncedMin),
       priceMax: boundToUsd(debouncedMax),
-      q: debouncedQuery || undefined,
+      q: query || undefined,
+      // The funnel's address field reached the map and nothing else, so
+      // switching to the list used to widen the search without saying so.
+      address: address || undefined,
       // The list is not the viewport, but it IS the same circle — switching
       // to it must not silently drop the radius the map is drawing.
       radius: radiusParams,
@@ -285,6 +303,16 @@ export default function SotuvScreen() {
 
   const shownCount =
     view === "map" ? (visible?.features.length ?? 0) : feedItems.length;
+
+  /**
+   * Whether there is a number worth printing.
+   *
+   * Tied to having data rather than to `isLoading`: the viewport query keeps
+   * the previous results while a new search lands, so the markers stay on
+   * screen — and a count that blinks out from under them, taking a line of
+   * the header with it, makes a 300ms fetch look like a stall.
+   */
+  const hasCount = !isError && (view === "map" ? !!visible : !feed.isLoading);
 
   const purposeOptions = useMemo(
     () =>
@@ -353,15 +381,33 @@ export default function SotuvScreen() {
     [],
   );
 
-  // Opens the panel on the applied circle, or on a fresh one centred where
-  // the camera already is — which is what "search around here" means.
-  const openRadius = useCallback(() => {
+  /**
+   * Opens the panel on the applied circle, or on a fresh one.
+   *
+   * A new circle is centred on the reader — "within 2 km" means 2 km of where
+   * they are, not of whatever corner of the map they last dragged into view.
+   * Only if the device will say so without a prompt; otherwise the camera's
+   * centre, which is the one place they HAVE pointed at. The camera then
+   * moves to frame it, since their location may be off screen.
+   */
+  const openRadius = useCallback(async () => {
     setView("map");
-    setRadiusDraft(
-      radius
-        ? { center: radius.center, radiusM: nearestStep(radius.radiusM) }
-        : { center: bboxCenter(viewport.bbox), radiusM: DEFAULT_RADIUS_M },
-    );
+
+    if (radius) {
+      setRadiusDraft({
+        center: radius.center,
+        radiusM: nearestStep(radius.radiusM),
+      });
+      return;
+    }
+
+    const here = await peekLocation();
+    const center: [number, number] = here
+      ? [here.longitude, here.latitude]
+      : bboxCenter(viewport.bbox);
+
+    setRadiusDraft({ center, radiusM: DEFAULT_RADIUS_M });
+    if (here) mapRef.current?.fitRadius(center, DEFAULT_RADIUS_M);
   }, [radius, viewport.bbox]);
 
   const applyRadius = useCallback(() => {
@@ -380,14 +426,66 @@ export default function SotuvScreen() {
     mapRef.current?.fitRadius(center, radiusM);
   }, [radiusDraft]);
 
+  /**
+   * The sheet and the map panel edit the same circle from two places, and the
+   * panel holds a draft the sheet knows nothing about. Rather than syncing
+   * them, opening the sheet closes the panel: one editor at a time, and the
+   * sheet's own row shows what the circle is set to.
+   */
+  /**
+   * Closing the sheet frames whatever circle it set. The map filters by the
+   * viewport as well as by the circle, so a radius drawn around the reader —
+   * who may be off screen — would otherwise leave them looking at an empty
+   * map with a count that says there is something to see.
+   */
+  const closeFilters = useCallback(() => {
+    setFiltersOpen(false);
+    if (radius) mapRef.current?.fitRadius(radius.center, radius.radiusM);
+  }, [radius]);
+
+  const openFilters = useCallback(() => {
+    setRadiusDraft(null);
+    setFiltersOpen(true);
+    // Warmed here so the radius row has a centre ready the moment the slider
+    // moves; null simply falls back to the camera.
+    void peekLocation().then((here) => {
+      sheetCenter.current = here ? [here.longitude, here.latitude] : null;
+    });
+  }, []);
+
   const clearRadius = useCallback(() => {
     setRadiusDraft(null);
     setRadius(null);
   }, []);
 
+  /**
+   * The sheet sets the distance and nothing else. A circle that does not
+   * exist yet is centred on whatever the camera is looking at, which is the
+   * only centre the reader has expressed an opinion about; the last stop on
+   * the track is "everywhere", which is the absence of the filter.
+   */
+  const setRadiusDistance = useCallback(
+    (radiusM: RadiusStep) => {
+      if (radiusM == null) {
+        setRadius(null);
+        return;
+      }
+      setRadius((current) => ({
+        // Same centre rule as the map panel: where they are if the device
+        // will say so, else where the camera is looking. `sheetCenter` is
+        // read once when the sheet opens, because a setState updater must
+        // stay pure — it cannot await anything.
+        center:
+          current?.center ?? sheetCenter.current ?? bboxCenter(viewport.bbox),
+        radiusM,
+      }));
+    },
+    [viewport.bbox],
+  );
+
   const toggleRadius = useCallback(() => {
     if (radiusDraft) setRadiusDraft(null);
-    else openRadius();
+    else void openRadius();
   }, [radiusDraft, openRadius]);
 
   // Adjusting the circle is a map gesture; leaving the map abandons it rather
@@ -435,6 +533,8 @@ export default function SotuvScreen() {
     setMinPrice("");
     setMaxPrice("");
     setAddress("");
+    // The address field holds its own text; remounting it is what empties it.
+    setFieldGeneration((n) => n + 1);
     clearRadius();
   }, [clearRadius]);
 
@@ -457,7 +557,7 @@ export default function SotuvScreen() {
           </Text>
           {/* Second line carries what the filters are currently doing — with
               the chips gone, this is the only place the active purpose shows. */}
-          {!isLoading && !isError ? (
+          {hasCount ? (
             <Text style={text.caption} numberOfLines={1}>
               {t("listings.foundShort", { count: shownCount })}
             </Text>
@@ -473,10 +573,7 @@ export default function SotuvScreen() {
             gap: spacing.sm,
           }}
         >
-          <FilterButton
-            onPress={() => setFiltersOpen(true)}
-            activeCount={activeCount}
-          />
+          <FilterButton onPress={openFilters} activeCount={activeCount} />
 
           {/* Circular icon button rather than a labelled pill: the label pushed
               the header off balance in Russian, where the word is twice as
@@ -514,11 +611,11 @@ export default function SotuvScreen() {
         }}
       >
         <View style={{ flex: 1 }}>
-          <TextField
+          <DebouncedTextField
             placeholder={t("listings.searchPlaceholder")}
             icon="search-outline"
-            value={query}
-            onChangeText={setQuery}
+            initialValue={query}
+            onChangeDebounced={setQuery}
             autoCorrect={false}
             returnKeyType="search"
           />
@@ -588,7 +685,7 @@ export default function SotuvScreen() {
               t("map.kilometres"),
             )}
             active
-            onPress={openRadius}
+            onPress={() => void openRadius()}
             maxWidth="60%"
           />
         ) : null}
@@ -713,11 +810,7 @@ export default function SotuvScreen() {
 
         {/* Total count riding above the switch, reference-app style — on the
             map it is the only place the number fits without a header glance. */}
-        {view === "map" &&
-        !isLoading &&
-        !isError &&
-        !cardOpen &&
-        !radiusDraft ? (
+        {view === "map" && hasCount && !cardOpen && !radiusDraft ? (
           <View
             pointerEvents="none"
             style={{
@@ -754,6 +847,8 @@ export default function SotuvScreen() {
             the least visible thing on it. Down here it is thumb-height, both
             destinations are spelled out, and the filled segment says which
             one you are in. */}
+        {/* Hidden while a listing's card is up: the card occupies this strip,
+            and it is one tap from closing. */}
         <View
           style={{
             position: "absolute",
@@ -761,6 +856,7 @@ export default function SotuvScreen() {
             right: 0,
             bottom: spacing.lg,
             alignItems: "center",
+            display: cardOpen ? "none" : "flex",
           }}
           pointerEvents="box-none"
         >
@@ -815,7 +911,7 @@ export default function SotuvScreen() {
 
       <FilterSheet
         visible={filtersOpen}
-        onClose={() => setFiltersOpen(false)}
+        onClose={closeFilters}
         onReset={activeCount ? resetFilters : undefined}
       >
         <Section title={t("filters.purpose")}>
@@ -833,13 +929,26 @@ export default function SotuvScreen() {
           />
         </Section>
         <Section title={t("filters.address")}>
-          <TextField
+          {/* Keyed so Reset clears it: the field owns its own text, and a
+              value pushed in from here would fight whoever is typing. */}
+          <DebouncedTextField
+            key={`address-${fieldGeneration}`}
             placeholder={t("filters.addressPlaceholder")}
             icon="location-outline"
-            value={address}
-            onChangeText={setAddress}
+            initialValue={address}
+            onChangeDebounced={setAddress}
             autoCorrect={false}
             returnKeyType="search"
+          />
+        </Section>
+        {/* Here as well as on the map: it counts towards the badge on this
+            button, and a filter you can see the effect of but cannot find is
+            worse than one that is missing. */}
+        <Section title={t("map.radius")}>
+          <RadiusFilterRow
+            value={nearestStep(radius?.radiusM ?? null)}
+            onChange={setRadiusDistance}
+            hasCenter={!!radius}
           />
         </Section>
         <Section title={t("filters.price")}>

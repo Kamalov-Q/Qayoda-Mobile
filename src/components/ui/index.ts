@@ -1,6 +1,7 @@
 export { Screen, HEADER_EDGES, TAB_EDGES } from "./Screen";
 export { Button } from "./Button";
 export { TextField } from "./TextField";
+export { DebouncedTextField } from "./DebouncedTextField";
 export { OtpInput } from "./OtpInput";
 export { SegmentedControl } from "./SegmentedControl";
 export { Chip, ChipGroup } from "./Chip";

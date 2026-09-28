@@ -47,8 +47,10 @@ export function useMapViewport(
   // filters participate — category/price used to be silently dropped here,
   // so the map ignored them while the list obeyed.
   const address = filters.address?.trim() || "";
+  const search = filters.q?.trim() || "";
   const effective: ViewportFilters = {
     address: address || undefined,
+    q: search || undefined,
     category: filters.category,
     priceMin: filters.priceMin,
     priceMax: filters.priceMax,

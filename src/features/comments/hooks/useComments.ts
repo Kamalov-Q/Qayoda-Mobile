@@ -9,6 +9,7 @@ import {
   type CommentsPage,
 } from "../api/comments.api";
 import { queryClient } from "@/src/lib/query-client";
+import { patchCachedListing } from "@/src/features/listings/utils/listing-cache";
 import { errorMessage } from "@/src/lib/api-error";
 import { toast } from "@/src/components/ui/Toast";
 
@@ -59,6 +60,21 @@ const refresh = (listingId: string) => {
   void queryClient.invalidateQueries({ queryKey: commentsKey(listingId) });
 };
 
+/**
+ * Moves the listing's comment count by hand.
+ *
+ * The server broadcasts the real number to everyone watching the listing, but
+ * only a screen that joined the room hears it — and the person who just wrote
+ * the comment should not have to wait for a round trip to see their own count
+ * go up. Replies do not count: "4 comments" on a card means four
+ * conversations, not four lines, which is the same rule the server counts by.
+ */
+const bumpCommentCount = (listingId: string, delta: number) => {
+  patchCachedListing(listingId, (listing) => ({
+    commentCount: Math.max(0, listing.commentCount + delta),
+  }));
+};
+
 export function usePostComment(listingId: string) {
   return useMutation({
     mutationFn: ({
@@ -72,6 +88,7 @@ export function usePostComment(listingId: string) {
     }) => commentsApi.create(listingId, body, parentId, image),
     onSuccess: (_comment, { parentId }) => {
       refresh(listingId);
+      if (!parentId) bumpCommentCount(listingId, 1);
       // A reply changes an expanded list that the thread refresh does not own.
       if (parentId) {
         void queryClient.invalidateQueries({
@@ -105,6 +122,7 @@ export function useDeleteComment(listingId: string) {
     onSuccess: (_res, comment) => {
       toast.successKey("comments.deleted");
       refresh(listingId);
+      if (!comment.parentId) bumpCommentCount(listingId, -1);
       if (comment.parentId) {
         void queryClient.invalidateQueries({
           queryKey: repliesKey(listingId, comment.parentId),

@@ -7,20 +7,18 @@ import {
   forwardRef,
   useImperativeHandle,
 } from "react";
-import { Platform, StyleSheet, Text, View, Pressable } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import MapView, {
   Circle as MapCircle,
   Marker,
   Polygon,
   Region,
-  type LatLng,
   type MapPressEvent,
   type MarkerDragStartEndEvent,
 } from "react-native-maps";
 import { MAP_PROVIDER } from "./provider";
-import { Image } from "expo-image";
 import Svg, { Circle, Rect, Text as SvgText } from "react-native-svg";
-import { radii, spacing } from "../../theme/tokens";
+import { spacing } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 import { useT } from "../../i18n";
 import {
@@ -41,8 +39,8 @@ import {
 } from "./maps";
 import { useMarkerTracking } from "./useMarkerTracking";
 import { usePriceFormatter, useSpecsFormatter } from "../listings/utils/format";
-import { resolveMediaUrl } from "../../lib/media-url";
 import { MapIconButton } from "./MapIconButton";
+import { ListingPreviewSheet } from "./ListingPreviewSheet";
 import { MyLocationButton } from "./MyLocationButton";
 import { useMyLocation } from "../listings/hooks/useMyLocation";
 
@@ -87,9 +85,6 @@ interface Props {
   /** Tints that control — the panel is open, or a radius is applied. */
   radiusActive?: boolean;
 }
-
-// Height of the preview card, so the locate button can clear it.
-const CARD_HEIGHT = 110;
 
 /** Hard ceiling on live map views: every feature is a native marker (and
  *  often a polygon), and past a couple hundred iOS kills the app for memory
@@ -235,10 +230,8 @@ export const ListingsMap = memo(
     const [selected, setSelected] = useState<MapPolygonFeature | null>(null);
     const overlayPressedAt = useRef(0);
     const { locate, loading: locating } = useMyLocation();
-    const { colors, text, shadow } = useTheme();
+    const { colors } = useTheme();
     const t = useT();
-    const formatPrice = usePriceFormatter();
-    const formatSpecs = useSpecsFormatter();
 
     useImperativeHandle(ref, () => ({
       animateTo: (latitude, longitude) => {
@@ -263,6 +256,13 @@ export const ListingsMap = memo(
       },
       [onSelectionChange],
     );
+
+    /** The card's close button. Unconditional: the reader asked for it, so
+     *  the grace window below has no business second-guessing them. */
+    const clearPreview = useCallback(() => {
+      setSelected(null);
+      onSelectionChange?.(false);
+    }, [onSelectionChange]);
 
     /** Dismisses the preview — unless the "dismiss" is the tail of the tap
      *  that just opened it. */
@@ -386,7 +386,7 @@ export const ListingsMap = memo(
                 <PolygonWithLabel
                   key={f.id}
                   feature={f}
-                  onPress={() => selectFeature(f)}
+                  onSelect={selectFeature}
                 />
               ))}
 
@@ -395,17 +395,16 @@ export const ListingsMap = memo(
               .slice(0, MAX_RENDERED_FEATURES)
               .map((c) =>
                 c.single ? (
-                  <PriceMarker
+                  <PointMarker
                     key={c.single.listingId}
-                    coordinate={toLatLng(c.single.centroid.coordinates)}
-                    label={formatPrice(c.single.price, c.single.currency)}
-                    onPress={() => onPressListing(c.single!.listingId)}
+                    feature={c.single}
+                    onPress={onPressListing}
                   />
                 ) : (
                   <ClusterMarker
                     key={c.key}
                     cluster={c}
-                    onPress={() => zoomToCluster(c)}
+                    onZoom={zoomToCluster}
                   />
                 ),
               )}
@@ -476,72 +475,30 @@ export const ListingsMap = memo(
           ) : null}
         </View>
 
-        <MyLocationButton
-          onPress={goToMyLocation}
-          loading={locating}
-          bottomOffset={
-            bottomInset +
-            (selected ? CARD_HEIGHT + spacing.lg + spacing.md : spacing.xl)
-          }
-        />
+        {/* Stood down while a listing's card is open. The card fills the
+            bottom of the map, and a control that had to climb above it would
+            end up somewhere that means nothing — the card is what the reader
+            is looking at, and it closes in one tap. */}
+        {!selected ? (
+          <MyLocationButton
+            onPress={goToMyLocation}
+            loading={locating}
+            bottomOffset={bottomInset + spacing.xl}
+          />
+        ) : null}
 
+        {/* Polygon mode only, as before: a tap on a drawn parcel opens this
+            card, while a price bubble at point zoom still goes straight to
+            the listing. */}
         {selected ? (
-          <Pressable
-            onPress={() => onPressListing(selected.id)}
-            accessibilityRole="button"
-            style={{
-              position: "absolute",
-              left: spacing.md,
-              right: spacing.md,
-              bottom: spacing.md + bottomInset,
-              flexDirection: "row",
-              backgroundColor: colors.surface,
-              borderRadius: radii.lg,
-              borderWidth: 1,
-              borderColor: colors.border,
-              overflow: "hidden",
-              ...shadow.raised,
-            }}
-          >
-            <View
-              style={{
-                width: 120,
-                height: CARD_HEIGHT,
-                backgroundColor: colors.surfaceRaised,
-              }}
-            >
-              {selected.thumbUrl ? (
-                <Image
-                  source={{ uri: resolveMediaUrl(selected.thumbUrl) }}
-                  style={{ width: "100%", height: "100%" }}
-                  contentFit="cover"
-                  cachePolicy="memory-disk"
-                />
-              ) : null}
-            </View>
-
-            <View
-              style={{
-                flex: 1,
-                padding: spacing.md,
-                justifyContent: "center",
-                gap: 4,
-              }}
-            >
-              <Text style={{ ...text.heading, color: colors.primary }}>
-                {formatPrice(selected.price, selected.currency)}
-              </Text>
-              <Text style={text.body} numberOfLines={1}>
-                {selected.title ?? t("listings.untitled")}
-              </Text>
-              <Text style={text.caption} numberOfLines={1}>
-                {formatSpecs(selected)}
-              </Text>
-              <Text style={{ ...text.caption, color: colors.primary }}>
-                {t("listings.viewDetails")}
-              </Text>
-            </View>
-          </Pressable>
+          <ListingPreviewSheet
+            feature={selected}
+            onOpen={onPressListing}
+            onClose={clearPreview}
+            // Deliberately ignores `bottomInset`: the card takes the strip
+            // the screen's own chrome floats in, which steps aside for it.
+            bottomInset={0}
+          />
         ) : null}
       </View>
     );
@@ -550,14 +507,17 @@ export const ListingsMap = memo(
 
 const PolygonWithLabel = memo(function PolygonWithLabel({
   feature,
-  onPress,
+  onSelect,
 }: {
   feature: MapPolygonFeature;
-  onPress: () => void;
+  /** Takes the feature, so the parent can hand down one stable callback for
+   *  every polygon instead of a fresh closure per render. */
+  onSelect: (feature: MapPolygonFeature) => void;
 }) {
   const { colors } = useTheme();
   const formatPrice = usePriceFormatter();
   const formatSpecs = useSpecsFormatter();
+  const onPress = useCallback(() => onSelect(feature), [onSelect, feature]);
 
   // Only the outline is dropped when the ring is unusable or absent (PIN
   // listings carry no boundary at all) — the bubble below still places the
@@ -579,7 +539,8 @@ const PolygonWithLabel = memo(function PolygonWithLabel({
       {/* Guard: backend types centroid as nullable — no bubble without one */}
       {feature.centroid ? (
         <PriceMarker
-          coordinate={toLatLng(feature.centroid.coordinates)}
+          latitude={feature.centroid.coordinates[1]}
+          longitude={feature.centroid.coordinates[0]}
           label={formatPrice(feature.price, feature.currency)}
           // Polygons only exist zoomed in, where there is room on screen for
           // more than the price — zoomed-out point markers stay price-only.
@@ -595,14 +556,15 @@ const PolygonWithLabel = memo(function PolygonWithLabel({
  *  Tapping it dives into that neighbourhood. */
 const ClusterMarker = memo(function ClusterMarker({
   cluster,
-  onPress,
+  onZoom,
 }: {
   cluster: PointCluster;
-  onPress: () => void;
+  onZoom: (cluster: PointCluster) => void;
 }) {
   const { colors } = useTheme();
   const t = useT();
   const tracking = useMarkerTracking();
+  const onPress = useCallback(() => onZoom(cluster), [onZoom, cluster]);
   // Bigger circles for bigger neighbourhoods, gently.
   const size = Math.min(56, 38 + Math.floor(Math.log10(cluster.count) * 12));
 
@@ -660,19 +622,59 @@ const ClusterMarker = memo(function ClusterMarker({
   );
 });
 
+/**
+ * One listing's price bubble in points mode.
+ *
+ * A wrapper purely so the bubble's props are stable: the cluster objects come
+ * from a useMemo, so passing the feature down and building the handler here
+ * means a marker only re-renders when its own listing changes — not every
+ * time somebody types a letter into the search box above the map.
+ */
+const PointMarker = memo(function PointMarker({
+  feature,
+  onPress,
+}: {
+  feature: MapPointFeature;
+  onPress: (listingId: string) => void;
+}) {
+  const formatPrice = usePriceFormatter();
+  const handlePress = useCallback(
+    () => onPress(feature.listingId),
+    [onPress, feature.listingId],
+  );
+
+  return (
+    <PriceMarker
+      latitude={feature.centroid.coordinates[1]}
+      longitude={feature.centroid.coordinates[0]}
+      label={formatPrice(feature.price, feature.currency)}
+      onPress={handlePress}
+    />
+  );
+});
+
 const PriceMarker = memo(function PriceMarker({
-  coordinate,
+  latitude,
+  longitude,
   label,
   sublabel,
   onPress,
 }: {
-  coordinate: LatLng;
+  // Two numbers rather than a LatLng: a fresh object here is a fresh prop,
+  // and a fresh prop is a marker that re-renders whenever anything on the
+  // screen does. Everything a marker receives has to compare by value.
+  latitude: number;
+  longitude: number;
   label: string;
   /** Second, smaller line (e.g. "80 m² · 3 xona") — shown when zoomed in. */
   sublabel?: string;
   onPress: () => void;
 }) {
   const { colors } = useTheme();
+  const coordinate = useMemo(
+    () => ({ latitude, longitude }),
+    [latitude, longitude],
+  );
   // A marker with custom children that starts at tracksViewChanges={false}
   // renders blank on Android — it is snapshotted before its child lays out.
   // Tracking stays on until that first layout, then off so panning is smooth.

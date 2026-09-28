@@ -223,6 +223,9 @@ export interface RadiusFilter {
 export interface ViewportFilters {
   /** Case-insensitive substring match on the listing address. */
   address?: string;
+  /** Free search over title AND address — the search box. Narrows alongside
+   *  `address` rather than replacing it. */
+  q?: string;
   category?: PropertyCategory;
   /** USD bounds; either side may be open. */
   priceMin?: number;
@@ -235,8 +238,10 @@ export interface FeedFilters {
   category?: PropertyCategory;
   priceMin?: number;
   priceMax?: number;
-  /** Searches title and address. */
+  /** Searches title and address — the search box. */
   q?: string;
+  /** Address only — the funnel sheet's own field. Both may be set. */
+  address?: string;
   /** The same circle the map draws — the list must agree with it. */
   radius?: RadiusFilter | null;
   sort?: "newest" | "priceAsc" | "priceDesc";
@@ -289,6 +294,8 @@ export const listingApi = {
     });
     appendCommonFilters(params, filters);
     if (filters.q?.trim()) params.set("q", filters.q.trim());
+    if (filters.address?.trim())
+      params.set("address", filters.address.trim());
     if (filters.sort) params.set("sort", filters.sort);
     return api<Listing[]>(`/listings?${params}`, { auth: false });
   },
@@ -309,6 +316,7 @@ export const listingApi = {
     });
     appendCommonFilters(params, filters);
     if (filters.address?.trim()) params.set("address", filters.address.trim());
+    if (filters.q?.trim()) params.set("q", filters.q.trim());
     return api<ViewportResponse>(`/listings/map?${params}`, { auth: false });
   },
 

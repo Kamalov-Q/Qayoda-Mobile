@@ -11,6 +11,7 @@ import { spacing, radii, type } from "../../../theme/tokens";
 import { useTheme } from "../../../theme/useTheme";
 import { useT } from "../../../i18n";
 import { MapIconButton } from "../../map/MapIconButton";
+import { NavigateButton } from "../../map/NavigateButton";
 import { useMyLocation } from "../hooks/useMyLocation";
 
 interface Props {
@@ -172,6 +173,15 @@ export function ListingLocationMap({ coordinates, centroid, address }: Props) {
           <Text style={{ ...text.caption, flex: 1 }} numberOfLines={2}>
             {address}
           </Text>
+          {/* Beside the address rather than on the map above it: the preview
+              is one tap target that opens the full map, and a button sitting
+              on it would be a second one competing for the same finger. */}
+          <NavigateButton
+            latitude={region.latitude}
+            longitude={region.longitude}
+            label={address}
+            compact
+          />
         </View>
       ) : null}
 
@@ -313,6 +323,21 @@ function FullListingMap({
               onPress={() => zoomBy(2)}
             />
           </View>
+
+          {/* The one thing this map cannot do itself: hand the place to
+              whatever the reader navigates with. Bottom-left, labelled and
+              filled — it is the only control here that leaves the app, and
+              the reason most people open a full-screen map at all. */}
+          <NavigateButton
+            latitude={region.latitude}
+            longitude={region.longitude}
+            label={title}
+            style={{
+              position: "absolute",
+              left: spacing.md,
+              bottom: insets.bottom + spacing.xl,
+            }}
+          />
 
           {/* Jump to me; the listing marker stays put, so panning back is one
               swipe. Frames BOTH when the two are close enough to share one. */}

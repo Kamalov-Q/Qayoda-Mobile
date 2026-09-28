@@ -573,6 +573,9 @@ export const uz = {
   },
 
   location: {
+    navigate: "Yo'nalish",
+    navigateTitle: "Qaysi ilovada ochamiz?",
+    navigateFailed: "Xarita ilovasini ochib bo'lmadi",
     title: "Joylashuv",
     myLocation: "Mening joylashuvim",
     previewHint: "Joylashuvingizni xaritada ko'rsatamiz",
@@ -611,6 +614,7 @@ export const uz = {
     radius: "Radius",
     radiusOn: "Radius bo'yicha qidirish",
     radiusWithin: "Shu radiusda",
+    radiusFromHere: "Markaz — xarita ko'rsatayotgan joy; uni xaritada surish mumkin",
     radiusHint: "Markazni ko'chirish uchun nishonni torting yoki xaritaga bosing",
     radiusAll: "Hammasi",
     radiusApply: "Qo'llash",

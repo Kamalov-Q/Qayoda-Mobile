@@ -10,7 +10,15 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "uz.uynest.app"
+      "bundleIdentifier": "uz.uynest.app",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "yandexnavi",
+          "yandexmaps",
+          "comgooglemaps",
+          "maps"
+        ]
+      }
     },
     "android": {
       "package": "uz.uynest.app",
