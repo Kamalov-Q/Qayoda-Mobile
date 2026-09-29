@@ -89,12 +89,30 @@ export function useCategories() {
     [bySlug],
   );
 
+  /**
+   * Whether the post form asks new build or resale. Admin-managed per
+   * category, like the floor rule: a plot of land is neither, and the server
+   * refuses the value for a category that does not ask.
+   */
+  const hasBuildingType = useCallback(
+    (slug: string) => bySlug.get(slug)?.buildingTypeCapable ?? false,
+    [bySlug],
+  );
+
+  /** Whether it asks about the state of repair. Off for land. */
+  const hasRepairType = useCallback(
+    (slug: string) => bySlug.get(slug)?.repairTypeCapable ?? false,
+    [bySlug],
+  );
+
   return {
     categories,
     bySlug,
     nameOf,
     iconOf,
     hasFloors,
+    hasBuildingType,
+    hasRepairType,
     /** True only while there is nothing to show yet (no saved copy either). */
     isLoading: query.isLoading,
     isError: query.isError,

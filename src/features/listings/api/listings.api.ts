@@ -50,6 +50,10 @@ export interface Category {
   sortOrder: number;
   /** Whether a listing in it has "floor 4 of 9". */
   floorCapable: boolean;
+  /** Whether the post form asks new build or resale. Off for land. */
+  buildingTypeCapable: boolean;
+  /** Whether it asks about the state of repair. Off for land. */
+  repairTypeCapable: boolean;
 }
 
 export interface Offer {

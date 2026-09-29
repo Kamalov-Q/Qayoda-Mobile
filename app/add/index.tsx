@@ -322,6 +322,8 @@ export default function AddListingScreen() {
     nameOf,
     iconOf,
     hasFloors: canHaveFloors,
+    hasBuildingType: canHaveBuildingType,
+    hasRepairType: canHaveRepairType,
     isLoading: categoriesLoading,
     refetch: refetchCategories,
   } = useCategories();
@@ -404,7 +406,8 @@ export default function AddListingScreen() {
 
   const [repairOpen, setRepairOpen] = useState(false);
   const repairOptions = useMemo<Option<RepairType | "">[]>(
-    () => REPAIR_TYPES.map((value) => ({ value, label: t(REPAIR_LABELS[value]) })),
+    () =>
+      REPAIR_TYPES.map((value) => ({ value, label: t(REPAIR_LABELS[value]) })),
     [t],
   );
 
@@ -483,6 +486,16 @@ export default function AddListingScreen() {
         : "";
 
   const showFloors = selectedCategory ? canHaveFloors(selectedCategory) : false;
+  // Which of the optional questions this category asks at all. Admins set
+  // these per category (the same switch as the floor rule), and the server
+  // refuses a value for a question the category does not ask — so hiding the
+  // field and clearing it are the same decision.
+  const showBuildingType = selectedCategory
+    ? canHaveBuildingType(selectedCategory)
+    : false;
+  const showRepairType = selectedCategory
+    ? canHaveRepairType(selectedCategory)
+    : false;
   const floorsDeclared = useWatch({ control, name: "hasFloors" }) === "yes";
 
   const resetFloorFields = () => {
@@ -499,6 +512,12 @@ export default function AddListingScreen() {
    */
   const changeCategory = (next: PropertyCategory) => {
     setCategory(next);
+
+    // An answer to a question the new category does not ask would ride along
+    // in the payload and be refused by the server.
+    if (!canHaveBuildingType(next)) setValue("buildingType", "");
+    if (!canHaveRepairType(next)) setValue("repairType", "");
+
     if (canHaveFloors(next) === showFloors) return;
     setValue("hasFloors", canHaveFloors(next) ? "yes" : "no");
     resetFloorFields();
@@ -734,12 +753,12 @@ export default function AddListingScreen() {
           />
         </Section>
 
-        {/* Shown for every category. Gating it on floors hid it from houses,
-            dachas and buildings — all of which are built, and all of which
-            sellers describe as new or secondary. Land is the one odd case,
-            and since the field is optional a seller of land simply skips it
-            rather than being told what their plot is. */}
-        <Section title={t("add.buildingTypeTitle")}>
+        {/* Asked wherever the category says so — which is every category
+            with walls, and not land. It used to be asked for everything, so
+            a seller listing a plot was offered "new build or resale" about a
+            field. Admins decide per category now. */}
+        {showBuildingType ? (
+          <Section title={t("add.buildingTypeTitle")}>
             <Controller
               control={control}
               name="buildingType"
@@ -752,69 +771,72 @@ export default function AddListingScreen() {
                 />
               )}
             />
-        </Section>
+          </Section>
+        ) : null}
 
         {/* Six levels, so a sheet rather than a grid: "ta'mirlangan" covers
             everything from fresh paint to a designer fit-out, and the gap
-            between them is most of the price. */}
-        <Section title={t("add.repairTitle")}>
-          <Controller
-            control={control}
-            name="repairType"
-            render={({ field: { value, onChange } }) => (
-              <>
-                <Pressable
-                  onPress={() => setRepairOpen(true)}
-                  accessibilityRole="button"
-                  style={({ pressed }) => ({
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: spacing.sm,
-                    height: sizing.control,
-                    paddingHorizontal: spacing.md,
-                    borderRadius: radii.lg,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    backgroundColor: pressed
-                      ? colors.surfaceRaised
-                      : colors.surface,
-                  })}
-                >
-                  <Ionicons
-                    name="construct-outline"
-                    size={18}
-                    color={colors.textMuted}
-                  />
-                  <Text
-                    style={{
-                      ...text.body,
-                      flex: 1,
-                      color: value ? colors.text : colors.textFaint,
-                    }}
+            between them is most of the price. Land has none of them. */}
+        {showRepairType ? (
+          <Section title={t("add.repairTitle")}>
+            <Controller
+              control={control}
+              name="repairType"
+              render={({ field: { value, onChange } }) => (
+                <>
+                  <Pressable
+                    onPress={() => setRepairOpen(true)}
+                    accessibilityRole="button"
+                    style={({ pressed }) => ({
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: spacing.sm,
+                      height: sizing.control,
+                      paddingHorizontal: spacing.md,
+                      borderRadius: radii.lg,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: pressed
+                        ? colors.surfaceRaised
+                        : colors.surface,
+                    })}
                   >
-                    {value
-                      ? t(REPAIR_LABELS[value])
-                      : t("add.repairPlaceholder")}
-                  </Text>
-                  <Ionicons
-                    name="chevron-down"
-                    size={16}
-                    color={colors.textFaint}
-                  />
-                </Pressable>
+                    <Ionicons
+                      name="construct-outline"
+                      size={18}
+                      color={colors.textMuted}
+                    />
+                    <Text
+                      style={{
+                        ...text.body,
+                        flex: 1,
+                        color: value ? colors.text : colors.textFaint,
+                      }}
+                    >
+                      {value
+                        ? t(REPAIR_LABELS[value])
+                        : t("add.repairPlaceholder")}
+                    </Text>
+                    <Ionicons
+                      name="chevron-down"
+                      size={16}
+                      color={colors.textFaint}
+                    />
+                  </Pressable>
 
-                <SelectSheet
-                  visible={repairOpen}
-                  title={t("add.repairTitle")}
-                  options={repairOptions}
-                  value={value}
-                  onSelect={onChange}
-                  onClose={() => setRepairOpen(false)}
-                />
-              </>
-            )}
-          />
-        </Section>
+                  <SelectSheet
+                    visible={repairOpen}
+                    title={t("add.repairTitle")}
+                    options={repairOptions}
+                    value={value}
+                    onSelect={onChange}
+                    onClose={() => setRepairOpen(false)}
+                  />
+                </>
+              )}
+            />
+          </Section>
+        ) : null}
 
         <Controller
           control={control}
