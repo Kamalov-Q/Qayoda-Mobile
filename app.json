@@ -72,6 +72,7 @@
       ],
       "expo-font",
       "expo-image",
+      "expo-video",
       "expo-status-bar",
       "expo-web-browser"
     ],

@@ -29,6 +29,9 @@ import { useAuthStore } from "../../src/features/auth/store/auth.store";
 import { useLatestListings } from "../../src/features/listings/hooks/useLatestListings";
 import { ListingCard } from "../../src/features/listings/components/ListingCard";
 import { ConnectionBadge } from "../../src/features/chat/components/ConnectionBadge";
+import { StoryTray } from "../../src/features/stories/components/StoryTray";
+import { useStoryTray } from "../../src/features/stories/hooks/useStories";
+import { requirePhone } from "../../src/features/auth/guest";
 
 const ACTIONS = [
   {
@@ -90,6 +93,8 @@ export default function HomeScreen() {
   const { colors, text } = useTheme();
   const t = useT();
   const name = useAuthStore((s) => s.user?.name);
+  const authed = useAuthStore((s) => s.status === "authenticated");
+  const { groups } = useStoryTray();
 
   return (
     <Screen style={{ padding: 0 }} edges={TAB_EDGES}>
@@ -116,12 +121,25 @@ export default function HomeScreen() {
               <BrandMark />
               <ConnectionBadge />
             </View>
-            <View style={{ gap: 2 }}>
-              <Text style={text.display}>
-                {name ? t("home.greetingName", { name }) : t("home.greeting")}
-              </Text>
-              <Text style={text.caption}>{t("home.tagline")}</Text>
-            </View>
+            {/* The greeting kept its line, not the screen's whole top: the
+                stories below it are what changes hour to hour, and the top
+                of a home screen belongs to whatever is new. */}
+            <Text style={text.caption}>
+              {name ? t("home.greetingName", { name }) : t("home.greeting")} ·{" "}
+              {t("home.tagline")}
+            </Text>
+
+            <StoryTray
+              groups={groups}
+              canPost={authed}
+              onOpen={(index) =>
+                router.push({
+                  pathname: "/stories",
+                  params: { group: String(index) },
+                })
+              }
+              onCompose={() => requirePhone(() => router.push("/stories/new"))}
+            />
           </View>
         </Rise>
 
