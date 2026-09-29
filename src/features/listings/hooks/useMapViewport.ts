@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BBox,
   listingApi,
@@ -24,6 +24,16 @@ export function useMapViewport(
   });
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // A camera that settles as the screen is torn down leaves a timer holding a
+  // setState for a component nobody is looking at. Harmless, but it is a
+  // pending wake-up and a wasted render either way.
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
 
   const onRegionChange = useCallback((bbox: BBox, zoom: number) => {
     if (timer.current) clearTimeout(timer.current);

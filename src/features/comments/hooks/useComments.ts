@@ -21,8 +21,14 @@ const repliesKey = (listingId: string, commentId: string) =>
 export function useComments(listingId: string | undefined, enabled = true) {
   const query = useInfiniteQuery({
     queryKey: commentsKey(listingId ?? ""),
-    queryFn: ({ pageParam }) =>
-      commentsApi.list(listingId!, COMMENTS_PAGE, pageParam),
+    queryFn: async ({ pageParam }) => {
+      const page = await commentsApi.list(listingId!, COMMENTS_PAGE, pageParam);
+      // Every page carries the same total, so this is the same write whichever
+      // one lands — and it fires on the refetch after a post or a delete,
+      // which is what moves the number on the cards.
+      syncCommentCount(listingId!, page.total);
+      return page;
+    },
     initialPageParam: 0,
     getNextPageParam: (lastPage, pages) =>
       lastPage.items.length < COMMENTS_PAGE
@@ -61,18 +67,21 @@ const refresh = (listingId: string) => {
 };
 
 /**
- * Moves the listing's comment count by hand.
+ * Keeps the listing's comment count in step with the thread itself.
  *
- * The server broadcasts the real number to everyone watching the listing, but
- * only a screen that joined the room hears it — and the person who just wrote
- * the comment should not have to wait for a round trip to see their own count
- * go up. Replies do not count: "4 comments" on a card means four
- * conversations, not four lines, which is the same rule the server counts by.
+ * The count is written from the page's OWN `total`, which the server derives
+ * the same way it derives `listings.comment_count`: top-level comments only,
+ * replies excluded — "4 comments" on a card means four conversations, not
+ * four lines.
+ *
+ * Absolute, never a delta. Both this and the server's live broadcast write
+ * the same kind of value, so it does not matter which arrives first or
+ * whether both do. A delta alongside a broadcast is what made a new comment
+ * count twice and a deleted one take the count to zero: the socket set the
+ * true number, and then the mutation added one more on top of it.
  */
-const bumpCommentCount = (listingId: string, delta: number) => {
-  patchCachedListing(listingId, (listing) => ({
-    commentCount: Math.max(0, listing.commentCount + delta),
-  }));
+const syncCommentCount = (listingId: string, total: number) => {
+  patchCachedListing(listingId, { commentCount: total });
 };
 
 export function usePostComment(listingId: string) {
@@ -88,7 +97,6 @@ export function usePostComment(listingId: string) {
     }) => commentsApi.create(listingId, body, parentId, image),
     onSuccess: (_comment, { parentId }) => {
       refresh(listingId);
-      if (!parentId) bumpCommentCount(listingId, 1);
       // A reply changes an expanded list that the thread refresh does not own.
       if (parentId) {
         void queryClient.invalidateQueries({
@@ -122,7 +130,6 @@ export function useDeleteComment(listingId: string) {
     onSuccess: (_res, comment) => {
       toast.successKey("comments.deleted");
       refresh(listingId);
-      if (!comment.parentId) bumpCommentCount(listingId, -1);
       if (comment.parentId) {
         void queryClient.invalidateQueries({
           queryKey: repliesKey(listingId, comment.parentId),

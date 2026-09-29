@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { listingApi } from "../api/listings.api";
 import { patchCachedListing } from "../utils/listing-cache";
-import { getListingsSocket } from "@/src/lib/listings-socket";
+import { getListingsSocket, watchListing } from "@/src/lib/listings-socket";
 
 /**
  * What the server pushes when one of a listing's counters moves. Every field
@@ -82,16 +82,15 @@ export function useListingLive(
     };
 
     socket.on("listing:stats", onStats);
-    socket.emit("listing:watch", { listingId });
-    // A reconnect starts in no rooms at all, so the watch has to be re-sent.
-    const rejoin = () => socket.emit("listing:watch", { listingId });
-    socket.on("connect", rejoin);
+    // Counted rather than emitted here: the map's card and the detail page
+    // can watch the same listing at once, and whichever closed first used to
+    // leave the other subscribed to nothing.
+    const unwatch = watchListing(listingId);
 
     return () => {
       alive = false;
       socket.off("listing:stats", onStats);
-      socket.off("connect", rejoin);
-      socket.emit("listing:unwatch", { listingId });
+      unwatch();
     };
   }, [listingId, recordView, queryClient]);
 }

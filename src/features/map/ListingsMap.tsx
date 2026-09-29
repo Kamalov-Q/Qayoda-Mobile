@@ -41,6 +41,7 @@ import { useMarkerTracking } from "./useMarkerTracking";
 import { usePriceFormatter, useSpecsFormatter } from "../listings/utils/format";
 import { MapIconButton } from "./MapIconButton";
 import { ListingPreviewSheet } from "./ListingPreviewSheet";
+import { ListingStackSheet } from "./ListingStackSheet";
 import { MyLocationButton } from "./MyLocationButton";
 import { useMyLocation } from "../listings/hooks/useMyLocation";
 
@@ -113,6 +114,66 @@ const clampDelta = (d: number) => Math.min(MAX_DELTA, Math.max(MIN_DELTA, d));
 /** A grid cell is roughly this fraction of the screen — two bubbles closer
  *  than that overlap anyway, so they merge into one numbered cluster. */
 const CLUSTER_GRID_DIVISIONS = 4;
+
+/**
+ * The same idea at polygon zoom, far finer: a twelfth of the screen is about
+ * 30pt, which is close enough that one price bubble sits on top of another.
+ * Anything looser would merge parcels that are plainly separate — down here
+ * the point is only to stop a listing hiding behind its neighbour.
+ */
+const BUBBLE_GRID_DIVISIONS = 12;
+
+/** One price bubble's worth of listings — usually exactly one. */
+interface BubbleGroup {
+  key: string;
+  latitude: number;
+  longitude: number;
+  features: MapPolygonFeature[];
+}
+
+/**
+ * Buckets the drawn parcels by where their bubbles would land.
+ *
+ * Only bubbles merge; every outline is still drawn from the full list. A
+ * group of one renders exactly as before, so the common case is untouched.
+ *
+ * A plain grid, so two parcels that are close but fall either side of a cell
+ * boundary keep their own bubbles. That is the old behaviour — slightly
+ * overlapping pins — and it degrades gracefully; the case this exists for is
+ * listings at the SAME point, which always land in the same cell.
+ */
+function groupBubbles(
+  features: MapPolygonFeature[],
+  region: Region,
+): BubbleGroup[] {
+  const cell = Math.max(region.longitudeDelta / BUBBLE_GRID_DIVISIONS, 1e-9);
+  const buckets = new Map<string, BubbleGroup>();
+
+  for (const feature of features) {
+    const coords = feature.centroid?.coordinates;
+    if (!coords) continue;
+
+    const [lng, lat] = coords;
+    const key = `${Math.floor(lng / cell)}:${Math.floor(lat / cell)}`;
+    const bucket = buckets.get(key);
+
+    if (bucket) {
+      bucket.features.push(feature);
+      // The bubble sits on the first of them rather than on the average of
+      // the group: a marker that drifts as listings load is worse than one
+      // that is a few metres off the middle.
+    } else {
+      buckets.set(key, {
+        key,
+        latitude: lat,
+        longitude: lng,
+        features: [feature],
+      });
+    }
+  }
+
+  return [...buckets.values()];
+}
 
 interface PointCluster {
   key: string;
@@ -228,10 +289,15 @@ export const ListingsMap = memo(
     // Mirrored into state so the clusters recompute when the camera settles.
     const [settledRegion, setSettledRegion] = useState<Region>(TASHKENT_REGION);
     const [selected, setSelected] = useState<MapPolygonFeature | null>(null);
+    /** Several listings share a spot and the reader tapped their bubble. */
+    const [stack, setStack] = useState<BubbleGroup | null>(null);
     const overlayPressedAt = useRef(0);
     const { locate, loading: locating } = useMyLocation();
     const { colors } = useTheme();
     const t = useT();
+    // Once for the whole map — see `bubbleViews`.
+    const formatPrice = usePriceFormatter();
+    const formatSpecs = useSpecsFormatter();
 
     useImperativeHandle(ref, () => ({
       animateTo: (latitude, longitude) => {
@@ -251,7 +317,20 @@ export const ListingsMap = memo(
     const selectFeature = useCallback(
       (feature: MapPolygonFeature) => {
         overlayPressedAt.current = Date.now();
+        setStack(null);
         setSelected(feature);
+        onSelectionChange?.(true);
+      },
+      [onSelectionChange],
+    );
+
+    /** A stacked bubble opens the list of what is under it, not one of them:
+     *  picking for the reader would be picking at random. */
+    const openStack = useCallback(
+      (group: BubbleGroup) => {
+        overlayPressedAt.current = Date.now();
+        setSelected(null);
+        setStack(group);
         onSelectionChange?.(true);
       },
       [onSelectionChange],
@@ -261,6 +340,7 @@ export const ListingsMap = memo(
      *  the grace window below has no business second-guessing them. */
     const clearPreview = useCallback(() => {
       setSelected(null);
+      setStack(null);
       onSelectionChange?.(false);
     }, [onSelectionChange]);
 
@@ -270,6 +350,7 @@ export const ListingsMap = memo(
       if (Date.now() - overlayPressedAt.current < OVERLAY_PRESS_GRACE_MS)
         return;
       setSelected(null);
+      setStack(null);
       onSelectionChange?.(false);
     }, [onSelectionChange]);
 
@@ -333,6 +414,69 @@ export const ListingsMap = memo(
       [data, settledRegion],
     );
 
+    const bubbles = useMemo(
+      () =>
+        data?.mode === "polygons"
+          ? groupBubbles(
+              data.features.slice(0, MAX_RENDERED_FEATURES),
+              settledRegion,
+            )
+          : [],
+      [data, settledRegion],
+    );
+
+    /**
+     * Every bubble's text, formatted here rather than inside each marker.
+     *
+     * A price needs the display currency and the day's rate; reading those is
+     * a store subscription plus a react-query observer. Done per marker that
+     * is one of each per pin on screen — a hundred observers on one query,
+     * every one of them re-rendering when it notifies. Done here it is one,
+     * and the markers still compare cheaply because what they receive is a
+     * string.
+     */
+    const bubbleViews = useMemo(
+      () =>
+        bubbles.map((group) => {
+          if (group.features.length === 1) {
+            const feature = group.features[0];
+            return {
+              key: feature.id,
+              group,
+              feature,
+              label: formatPrice(feature.price, feature.currency),
+              sublabel: formatSpecs(feature) || undefined,
+            };
+          }
+
+          // The lowest, so the bubble is not a promise the cheapest listing
+          // here cannot keep. "from" says there are dearer ones behind it.
+          const cheapest = group.features.reduce((low: MapPolygonFeature, f) =>
+            Number(f.price) < Number(low.price) ? f : low,
+          );
+          return {
+            key: group.key,
+            group,
+            feature: null,
+            label: `${t("map.priceFrom")} ${formatPrice(cheapest.price, cheapest.currency)}`,
+            sublabel: t("map.stackCount", { count: group.features.length }),
+          };
+        }),
+      [bubbles, formatPrice, formatSpecs, t],
+    );
+
+    /** The same, for the price bubbles at point zoom. */
+    const clusterViews = useMemo(
+      () =>
+        clusters.slice(0, MAX_RENDERED_FEATURES).map((cluster) => ({
+          cluster,
+          label: cluster.single
+            ? formatPrice(cluster.single.price, cluster.single.currency)
+            : "",
+        })),
+      [clusters, formatPrice],
+    );
+
     const zoomToCluster = useCallback((c: PointCluster) => {
       mapRef.current?.animateToRegion(
         {
@@ -379,35 +523,56 @@ export const ListingsMap = memo(
           // being torn down by the tap that opened it.
           moveOnMarkerPress={false}
         >
+          {/* Every parcel draws its own outline; the bubbles are grouped, so
+              two listings at one address cannot hide behind each other. */}
           {data?.mode === "polygons" &&
             data.features
               .slice(0, MAX_RENDERED_FEATURES)
               .map((f) => (
-                <PolygonWithLabel
+                <ParcelOutline
                   key={f.id}
                   feature={f}
                   onSelect={selectFeature}
                 />
               ))}
 
+          {bubbleViews.map((view) =>
+            view.feature ? (
+              <ParcelBubble
+                key={view.key}
+                feature={view.feature}
+                label={view.label}
+                sublabel={view.sublabel}
+                onSelect={selectFeature}
+              />
+            ) : (
+              <StackBubble
+                key={view.key}
+                group={view.group}
+                label={view.label}
+                sublabel={view.sublabel ?? ""}
+                onSelect={openStack}
+              />
+            ),
+          )}
+
           {data?.mode === "points" &&
-            clusters
-              .slice(0, MAX_RENDERED_FEATURES)
-              .map((c) =>
-                c.single ? (
-                  <PointMarker
-                    key={c.single.listingId}
-                    feature={c.single}
-                    onPress={onPressListing}
-                  />
-                ) : (
-                  <ClusterMarker
-                    key={c.key}
-                    cluster={c}
-                    onZoom={zoomToCluster}
-                  />
-                ),
-              )}
+            clusterViews.map(({ cluster, label }) =>
+              cluster.single ? (
+                <PointMarker
+                  key={cluster.single.listingId}
+                  feature={cluster.single}
+                  label={label}
+                  onPress={onPressListing}
+                />
+              ) : (
+                <ClusterMarker
+                  key={cluster.key}
+                  cluster={cluster}
+                  onZoom={zoomToCluster}
+                />
+              ),
+            )}
 
           {/* Last inside the map so the ring sits over the parcels it is
               narrowing rather than under them. */}
@@ -490,6 +655,14 @@ export const ListingsMap = memo(
         {/* Polygon mode only, as before: a tap on a drawn parcel opens this
             card, while a price bubble at point zoom still goes straight to
             the listing. */}
+        {stack ? (
+          <ListingStackSheet
+            features={stack.features}
+            onSelect={selectFeature}
+            onClose={clearPreview}
+          />
+        ) : null}
+
         {selected ? (
           <ListingPreviewSheet
             feature={selected}
@@ -505,7 +678,15 @@ export const ListingsMap = memo(
   }),
 );
 
-const PolygonWithLabel = memo(function PolygonWithLabel({
+/**
+ * One parcel's boundary.
+ *
+ * Drawn per listing even where several share a spot — the outlines are what
+ * distinguishes them, and two plots that overlap on screen still have
+ * different edges. Only their PRICE BUBBLES merge (see BubbleGroup), because
+ * two bubbles at one point are just one bubble with the other hidden behind.
+ */
+const ParcelOutline = memo(function ParcelOutline({
   feature,
   onSelect,
 }: {
@@ -515,40 +696,93 @@ const PolygonWithLabel = memo(function PolygonWithLabel({
   onSelect: (feature: MapPolygonFeature) => void;
 }) {
   const { colors } = useTheme();
-  const formatPrice = usePriceFormatter();
-  const formatSpecs = useSpecsFormatter();
   const onPress = useCallback(() => onSelect(feature), [onSelect, feature]);
 
-  // Only the outline is dropped when the ring is unusable or absent (PIN
-  // listings carry no boundary at all) — the bubble below still places the
-  // listing on the map, which beats it vanishing entirely.
+  // Dropped when the ring is unusable or absent (PIN listings carry no
+  // boundary at all) — the bubble still places the listing on the map, which
+  // beats it vanishing entirely.
   const ring = feature.geom?.coordinates[0];
+  if (!ring || !isDrawableRing(ring)) return null;
 
   return (
-    <>
-      {ring && isDrawableRing(ring) ? (
-        <Polygon
-          coordinates={ringToLatLngs(ring)}
-          strokeColor={colors.primary}
-          strokeWidth={2}
-          fillColor={withAlpha(colors.primary, 0.35)}
-          tappable
-          onPress={onPress}
-        />
-      ) : null}
-      {/* Guard: backend types centroid as nullable — no bubble without one */}
-      {feature.centroid ? (
-        <PriceMarker
-          latitude={feature.centroid.coordinates[1]}
-          longitude={feature.centroid.coordinates[0]}
-          label={formatPrice(feature.price, feature.currency)}
-          // Polygons only exist zoomed in, where there is room on screen for
-          // more than the price — zoomed-out point markers stay price-only.
-          sublabel={formatSpecs(feature) || undefined}
-          onPress={onPress}
-        />
-      ) : null}
-    </>
+    <Polygon
+      coordinates={ringToLatLngs(ring)}
+      strokeColor={colors.primary}
+      strokeWidth={2}
+      fillColor={withAlpha(colors.primary, 0.35)}
+      tappable
+      onPress={onPress}
+    />
+  );
+});
+
+/**
+ * A single listing's price bubble, in polygon mode.
+ *
+ * Its text is handed in already formatted. Formatting needs the display
+ * currency and the day's exchange rate, and reading those is a store
+ * subscription and a QUERY OBSERVER — per marker, which at a hundred markers
+ * is a hundred of each, all re-rendering together whenever the rate query
+ * notifies. The map does it once for everything it draws.
+ */
+const ParcelBubble = memo(function ParcelBubble({
+  feature,
+  label,
+  sublabel,
+  onSelect,
+}: {
+  feature: MapPolygonFeature;
+  label: string;
+  sublabel?: string;
+  onSelect: (feature: MapPolygonFeature) => void;
+}) {
+  const onPress = useCallback(() => onSelect(feature), [onSelect, feature]);
+
+  if (!feature.centroid) return null;
+
+  return (
+    <PriceMarker
+      latitude={feature.centroid.coordinates[1]}
+      longitude={feature.centroid.coordinates[0]}
+      label={label}
+      // Polygons only exist zoomed in, where there is room on screen for more
+      // than the price — zoomed-out point markers stay price-only.
+      sublabel={sublabel}
+      onPress={onPress}
+    />
+  );
+});
+
+/**
+ * The bubble for several listings sharing one spot: the cheapest price, and
+ * how many others are under it.
+ *
+ * Two flats in one building, or the same plot advertised twice, put their
+ * markers at the same coordinate — where one simply hides the other, and the
+ * count above the map says two while the map shows one.
+ */
+const StackBubble = memo(function StackBubble({
+  group,
+  label,
+  sublabel,
+  onSelect,
+}: {
+  group: BubbleGroup;
+  label: string;
+  sublabel: string;
+  onSelect: (group: BubbleGroup) => void;
+}) {
+  const onPress = useCallback(() => onSelect(group), [onSelect, group]);
+
+  return (
+    <PriceMarker
+      latitude={group.latitude}
+      longitude={group.longitude}
+      label={label}
+      sublabel={sublabel}
+      badge={group.features.length}
+      onPress={onPress}
+    />
   );
 });
 
@@ -632,12 +866,13 @@ const ClusterMarker = memo(function ClusterMarker({
  */
 const PointMarker = memo(function PointMarker({
   feature,
+  label,
   onPress,
 }: {
   feature: MapPointFeature;
+  label: string;
   onPress: (listingId: string) => void;
 }) {
-  const formatPrice = usePriceFormatter();
   const handlePress = useCallback(
     () => onPress(feature.listingId),
     [onPress, feature.listingId],
@@ -647,7 +882,7 @@ const PointMarker = memo(function PointMarker({
     <PriceMarker
       latitude={feature.centroid.coordinates[1]}
       longitude={feature.centroid.coordinates[0]}
-      label={formatPrice(feature.price, feature.currency)}
+      label={label}
       onPress={handlePress}
     />
   );
@@ -658,6 +893,7 @@ const PriceMarker = memo(function PriceMarker({
   longitude,
   label,
   sublabel,
+  badge,
   onPress,
 }: {
   // Two numbers rather than a LatLng: a fresh object here is a fresh prop,
@@ -668,6 +904,8 @@ const PriceMarker = memo(function PriceMarker({
   label: string;
   /** Second, smaller line (e.g. "80 m² · 3 xona") — shown when zoomed in. */
   sublabel?: string;
+  /** How many listings this one bubble stands for, when it is more than one. */
+  badge?: number;
   onPress: () => void;
 }) {
   const { colors } = useTheme();
@@ -685,10 +923,18 @@ const PriceMarker = memo(function PriceMarker({
   // Android — the snapshot is measured narrower than the text renders,
   // especially with the OS font scale up. Fixed metrics make the bitmap
   // deterministic; allowFontScaling=false keeps the estimate honest.
-  const width = Math.ceil(
-    Math.max(label.length * 9.2, (sublabel?.length ?? 0) * 6.4) + 28,
-  );
+  // The count rides at the right end of the pill, in a disc of its own. Room
+  // is reserved for it in the width rather than hung off the corner: the
+  // marker is anchored by its centre, and a badge outside the canvas would
+  // shift the whole bubble off the point it is marking.
+  const badgeSpace = badge ? 26 : 0;
+  const width =
+    Math.ceil(
+      Math.max(label.length * 9.2, (sublabel?.length ?? 0) * 6.4) + 28,
+    ) + badgeSpace;
   const height = sublabel ? 46 : 33;
+  /** Text centres over the pill MINUS the badge, so it does not sit crooked. */
+  const textCenter = (width + 4 - badgeSpace) / 2;
 
   return (
     <Marker
@@ -728,7 +974,7 @@ const PriceMarker = memo(function PriceMarker({
             fill={colors.primary}
           />
           <SvgText
-            x={(width + 4) / 2}
+            x={textCenter}
             y={sublabel ? (height + 4) / 2 - 7 : (height + 4) / 2}
             fill="#FFFFFF"
             fontSize={15}
@@ -740,7 +986,7 @@ const PriceMarker = memo(function PriceMarker({
           </SvgText>
           {sublabel ? (
             <SvgText
-              x={(width + 4) / 2}
+              x={textCenter}
               y={(height + 4) / 2 + 9}
               fill="#FFFFFF"
               fontSize={10.5}
@@ -751,6 +997,27 @@ const PriceMarker = memo(function PriceMarker({
             >
               {sublabel}
             </SvgText>
+          ) : null}
+          {badge ? (
+            <>
+              <Circle
+                cx={width + 4 - badgeSpace / 2 - 3}
+                cy={(height + 4) / 2}
+                r={11}
+                fill="#FFFFFF"
+              />
+              <SvgText
+                x={width + 4 - badgeSpace / 2 - 3}
+                y={(height + 4) / 2}
+                fill={colors.primary}
+                fontSize={12}
+                fontWeight="bold"
+                textAnchor="middle"
+                alignmentBaseline="central"
+              >
+                {badge}
+              </SvgText>
+            </>
           ) : null}
         </Svg>
       </View>
