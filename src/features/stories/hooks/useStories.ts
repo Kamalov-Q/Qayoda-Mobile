@@ -29,6 +29,21 @@ export function useStoryTray() {
   return { ...query, groups: query.data?.groups ?? [] };
 }
 
+/**
+ * One person's stories, for their profile. Asking for the archive is
+ * harmless on somebody else's profile — the server simply ignores it.
+ */
+export function useUserStories(userId: string | undefined, isMe: boolean) {
+  const query = useQuery({
+    queryKey: ["stories", "by-user", userId, isMe] as const,
+    queryFn: () => storiesApi.byUser(userId!, isMe),
+    enabled: !!userId,
+    staleTime: 30_000,
+  });
+
+  return { ...query, items: query.data?.items ?? [] };
+}
+
 export function useStory(id: string | undefined) {
   return useQuery({
     queryKey: storyKey(id ?? ""),

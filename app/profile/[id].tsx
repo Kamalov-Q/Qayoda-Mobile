@@ -53,6 +53,7 @@ import { useToggleBlock } from "../../src/features/blocks/hooks/useBlocks";
 import { confirm } from "../../src/lib/alerts";
 import { useAuthStore } from "../../src/features/auth/store/auth.store";
 import { PresenceStatus } from "../../src/features/chat/components/PresenceStatus";
+import { ProfileStories } from "../../src/features/stories/components/ProfileStories";
 
 /** The order the purpose sheet lists them in — the same order the rest of the
  *  app uses, narrowed to what the seller actually has. */
@@ -261,10 +262,6 @@ export default function UserProfileScreen() {
         ) : null}
       </View>
 
-      {/* What this seller is worth knowing by, in their own numbers. Only
-          things actually counted: no "0 sales" column that can never move. */}
-      {data ? <StatsRow stats={stats} /> : null}
-
       {/* The two things anyone opens a seller's profile to do, side by side,
           with the number itself underneath — the call button dials it, and
           the line below is for the reader who wants to copy it or simply see
@@ -335,6 +332,15 @@ export default function UserProfileScreen() {
           {prettyPhone(data.phoneNumber)}
         </Text>
       ) : null}
+
+      {/* What they have up right now, above the numbers: a story is the
+          most perishable thing on this screen. Your own profile also shows
+          the ones that have run out. */}
+      {id ? <ProfileStories userId={id} isMe={isSelf} /> : null}
+
+      {/* What this seller is worth knowing by, in their own numbers. Only
+          things actually counted: no "0 sales" column that can never move. */}
+      {data ? <StatsRow stats={stats} /> : null}
 
       {/* Blocking lives at the bottom of the profile, the way it does in
           every messenger: it is the last thing you decide about someone, and

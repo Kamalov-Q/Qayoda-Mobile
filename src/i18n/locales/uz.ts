@@ -590,6 +590,10 @@ export const uz = {
   },
 
   stories: {
+    seeViewers: "Kim ko'rgan",
+    archiveTitle: "Hikoyalar arxivi",
+    archiveHint: "Muddati tugaganlarini faqat siz ko'rasiz",
+    expired: "Tugagan",
     title: "Hikoyalar",
     add: "Qo'shish",
     mine: "Siz",
@@ -762,6 +766,7 @@ export const uz = {
   },
 
   errors: {
+    fileTooLarge: "Fayl juda katta — {{mb}} MB dan oshmasin",
     categoryUnknown: "Bu tur endi mavjud emas — boshqa turni tanlang",
     floorsNotAllowed: "Bu turdagi e'lon uchun qavat ko'rsatilmaydi",
     otpInvalid: "Kod noto'g'ri yoki muddati tugagan",

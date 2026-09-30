@@ -6,6 +6,7 @@ import Animated, {
   withTiming,
   Easing,
 } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 import { radii, spacing } from "@/src/theme/tokens";
 
 interface Props {
@@ -52,7 +53,12 @@ export const StoryProgress = memo(function StoryProgress({
         1,
         { duration: Math.max(remaining, 0), easing: Easing.linear },
         (finished) => {
-          if (finished) onDone();
+          // A withTiming callback IS A WORKLET: it runs on the UI thread,
+          // where calling a plain JS function is not allowed and takes the
+          // app down with it. `scheduleOnRN` hands it back to JS — which is
+          // what every other animation in this codebase does.
+          "worklet";
+          if (finished) scheduleOnRN(onDone);
         },
       ),
     );

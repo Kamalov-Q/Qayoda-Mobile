@@ -39,6 +39,17 @@ export const StoryViewersSheet = memo(function StoryViewersSheet({
   const insets = useSafeAreaInsets();
   const { data, isLoading } = useStoryViewers(storyId, visible);
 
+  // Who reacted, and with what. The list is ordered by when people watched,
+  // so a reaction three rows down is easy to miss — the header says how many
+  // there are and which emoji came back, which is the part a poster
+  // actually wants.
+  const reactions = (data?.items ?? []).filter((i) => i.reaction);
+  const emojiTally = reactions.reduce<Record<string, number>>((acc, item) => {
+    const emoji = item.reaction!;
+    acc[emoji] = (acc[emoji] ?? 0) + 1;
+    return acc;
+  }, {});
+
   return (
     <Modal
       visible={visible}
@@ -82,6 +93,24 @@ export const StoryViewersSheet = memo(function StoryViewersSheet({
           <Text style={{ ...text.heading, flex: 1 }}>
             {t("stories.viewers")} · {data?.total ?? 0}
           </Text>
+          {/* The reactions at a glance, before the names. */}
+          {Object.entries(emojiTally).map(([emoji, count]) => (
+            <View
+              key={emoji}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 2,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                borderRadius: radii.pill,
+                backgroundColor: colors.surfaceRaised,
+              }}
+            >
+              <Text style={{ fontSize: 13 }}>{emoji}</Text>
+              <Text style={text.caption}>{count}</Text>
+            </View>
+          ))}
         </View>
 
         {/* Said plainly, because a list of names is exactly the thing people

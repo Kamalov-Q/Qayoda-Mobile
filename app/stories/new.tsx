@@ -12,6 +12,7 @@ import {
 import { router, Stack } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
+import { useVideoPlayer, VideoView } from "expo-video";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Screen,
@@ -26,7 +27,11 @@ import { toast } from "../../src/components/ui/Toast";
 import { errorMessage } from "../../src/lib/api-error";
 import { useMyListings } from "../../src/features/listings/hooks/useMyListings";
 import { usePostStory } from "../../src/features/stories/hooks/useStories";
-import { uploadStoryMedia } from "../../src/features/stories/api/story-upload";
+import {
+  MAX_STORY_MB,
+  measureStoryMedia,
+  uploadStoryMedia,
+} from "../../src/features/stories/api/story-upload";
 import {
   STORY_BACKGROUNDS,
   STORY_BODY_MAX,
@@ -94,6 +99,16 @@ export default function NewStoryScreen() {
     if (result.canceled) return;
 
     const asset = result.assets[0];
+
+    // Checked here rather than after the upload: a phone pushing a 60MB
+    // video over mobile data deserves to be told before it spends the five
+    // minutes, not after the proxy refuses it.
+    const { tooLarge } = await measureStoryMedia(asset.uri);
+    if (tooLarge) {
+      toast.error(t("errors.fileTooLarge", { mb: MAX_STORY_MB }));
+      return;
+    }
+
     setMedia({
       localUri: asset.uri,
       kind,
@@ -174,10 +189,10 @@ export default function NewStoryScreen() {
         >
           {media ? (
             media.kind === "VIDEO" ? (
-              <View style={{ alignItems: "center", gap: spacing.sm }}>
-                <Ionicons name="videocam" size={38} color={colors.primary} />
-                <Text style={text.caption}>{media.fileName}</Text>
-              </View>
+              // The video itself, playing and looping. An icon and a cache
+              // filename told the poster nothing about what they had picked —
+              // which is the one thing this box exists to show.
+              <VideoPreview uri={media.localUri} />
             ) : (
               <Image
                 source={{ uri: media.localUri }}
@@ -344,6 +359,26 @@ export default function NewStoryScreen() {
         onClose={() => setHoursOpen(false)}
       />
     </Screen>
+  );
+}
+
+/** The picked video, looping silently — a preview, not a player. */
+function VideoPreview({ uri }: { uri: string }) {
+  const player = useVideoPlayer(uri, (p) => {
+    p.loop = true;
+    // Muted: the composer is a place to look at what you picked, and a
+    // preview that shouts is a preview people close.
+    p.muted = true;
+    p.play();
+  });
+
+  return (
+    <VideoView
+      player={player}
+      style={{ width: "100%", height: "100%" }}
+      contentFit="cover"
+      nativeControls={false}
+    />
   );
 }
 

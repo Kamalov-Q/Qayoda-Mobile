@@ -588,6 +588,10 @@ export const ru: Dictionary = {
   },
 
   stories: {
+    seeViewers: "Кто смотрел",
+    archiveTitle: "Архив историй",
+    archiveHint: "Истёкшие видите только вы",
+    expired: "Истекла",
     title: "Истории",
     add: "Добавить",
     mine: "Вы",
@@ -759,6 +763,7 @@ export const ru: Dictionary = {
   },
 
   errors: {
+    fileTooLarge: "Файл слишком большой — не больше {{mb}} МБ",
     categoryUnknown: "Этот тип больше недоступен — выберите другой",
     floorsNotAllowed: "Для этого типа объявления этаж не указывается",
     otpInvalid: "Код неверный или устарел",

@@ -42,10 +42,21 @@ export async function errorFromResponse(
   const body = (await res.json().catch(() => ({}))) as ErrorBody;
   const message = Array.isArray(body.message) ? body.message[0] : body.message;
 
+  // 413 is the one status that does not always reach us as JSON: the proxy in
+  // front of the API rejects an oversized body itself, with an HTML page, so
+  // there is no message to read. Given a code, the app can still say what
+  // actually happened instead of "request failed".
+  const code =
+    typeof body.code === "string"
+      ? body.code
+      : res.status === 413
+        ? "FILE_TOO_LARGE"
+        : undefined;
+
   return new ApiError(
     res.status,
     message ?? fallback,
-    typeof body.code === "string" ? body.code : undefined,
+    code,
     typeof body.retryAfter === "number" ? body.retryAfter : undefined,
   );
 }

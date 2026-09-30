@@ -94,11 +94,26 @@ export interface CreateStoryInput {
 /** The reactions the viewer offers. Telegram's set, near enough. */
 export const STORY_REACTIONS = ["❤️", "🔥", "👍", "😍", "👏", "😮"] as const;
 
+/** A story on a profile, which may have run out. */
+export interface ProfileStory extends Story {
+  expired: boolean;
+}
+
 export const storiesApi = {
   /** Public: a signed-out reader sees the same stories, none of them seen. */
   tray: () => api<{ groups: StoryGroup[] }>("/stories", { auth: false }),
 
   get: (id: string) => api<StoryDetail>(`/stories/${id}`, { auth: false }),
+
+  /**
+   * What a profile shows. `includeExpired` only does anything on your own
+   * profile — the archive is a private record of what you put up, not a way
+   * to read back what somebody else meant to be temporary.
+   */
+  byUser: (userId: string, includeExpired = false) =>
+    api<{ archive: boolean; items: ProfileStory[] }>(
+      `/stories/by-user/${userId}${includeExpired ? "?includeExpired=true" : ""}`,
+    ),
 
   create: (input: CreateStoryInput) =>
     api<StoryDetail>("/stories", { method: "POST", body: input }),

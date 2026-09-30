@@ -47,6 +47,9 @@ const BY_CODE: Record<string, TranslationKey> = {
   PASSWORD_NOT_SET: "errors.passwordNotSet",
   ACCOUNT_NOT_FOUND: "errors.accountNotFound",
   CURRENT_PASSWORD_WRONG: "errors.currentPasswordWrong",
+  // Set by errorFromResponse when the proxy rejects the body before the API
+  // ever sees it — see there.
+  FILE_TOO_LARGE: "errors.fileTooLarge",
 };
 
 export function errorMessage(error: unknown): string {
