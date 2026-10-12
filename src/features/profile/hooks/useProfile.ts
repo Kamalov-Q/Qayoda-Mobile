@@ -1,4 +1,5 @@
 // src/features/profile/hooks/useProfile.ts
+import { useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { profileApi, Profile } from "../api/profile.api";
 import { queryClient } from "../../../lib/query-client";
@@ -10,10 +11,49 @@ export const PROFILE_KEY = ["profile"] as const;
 
 export function useProfile() {
   const authed = useAuthStore((s) => s.status === "authenticated");
-  return useQuery({
+  const query = useQuery({
     queryKey: PROFILE_KEY,
     queryFn: profileApi.get,
     enabled: authed,
+  });
+
+  // The session user is a copy minted at sign-in, and half the app draws the
+  // badge and the name from it. Nothing refreshed it but a token refresh, so
+  // somebody verified this morning kept seeing an unverified account until
+  // they signed out and in again. Whenever the real profile lands, the copy
+  // follows it.
+  const profile = query.data;
+  useEffect(() => {
+    if (profile) syncSession(profile);
+  }, [profile]);
+
+  return query;
+}
+
+/** Writes the parts of a profile the session user also carries. */
+function syncSession(profile: Profile) {
+  const { accessToken, user, setSession } = useAuthStore.getState();
+  if (!accessToken || !user) return;
+
+  if (
+    user.name === profile.name &&
+    user.surname === profile.surname &&
+    user.avatarUrl === profile.avatarUrl &&
+    user.phoneNumber === profile.phoneNumber &&
+    user.isVerifiedRealtor === profile.isVerifiedRealtor
+  ) {
+    // Nothing moved. Setting it anyway would publish a new object to every
+    // subscriber of the store on every profile fetch.
+    return;
+  }
+
+  setSession(accessToken, {
+    ...user,
+    name: profile.name,
+    surname: profile.surname,
+    avatarUrl: profile.avatarUrl,
+    phoneNumber: profile.phoneNumber,
+    isVerifiedRealtor: profile.isVerifiedRealtor,
   });
 }
 
@@ -26,16 +66,7 @@ export function useProfile() {
  */
 function applyProfile(profile: Profile) {
   queryClient.setQueryData(PROFILE_KEY, profile);
-
-  const { accessToken, user, setSession } = useAuthStore.getState();
-  if (accessToken && user) {
-    setSession(accessToken, {
-      ...user,
-      name: profile.name,
-      surname: profile.surname,
-      avatarUrl: profile.avatarUrl,
-    });
-  }
+  syncSession(profile);
 }
 
 export function useUpdateProfile() {

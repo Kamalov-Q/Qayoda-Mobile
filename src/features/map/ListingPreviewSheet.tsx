@@ -16,6 +16,7 @@ import {
   htmlToText,
 } from "../listings/utils/format";
 import type { MapPolygonFeature } from "../listings/api/listings.api";
+import { VerifiedBadge } from "../users/components/VerifiedBadge";
 
 interface Props {
   /** What the map already knows — enough to paint the card immediately. */
@@ -121,7 +122,7 @@ export const ListingPreviewSheet = memo(function ListingPreviewSheet({
           {ownerName ?? t("listings.seller")}
         </Text>
         {owner?.isVerifiedRealtor ? (
-          <Ionicons name="shield-checkmark" size={15} color={colors.primary} />
+          <VerifiedBadge size={16} />
         ) : null}
         <Pressable
           onPress={onClose}

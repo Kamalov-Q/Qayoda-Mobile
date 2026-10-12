@@ -9,9 +9,12 @@ import { useState } from "react";
 import {
   KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
+  ScrollView,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useMutation } from "@tanstack/react-query";
@@ -57,6 +60,7 @@ export function ReportSheet<R extends string>({
   const t = useT();
   const [reason, setReason] = useState<R | null>(null);
   const [comment, setComment] = useState("");
+  const { height } = useWindowDimensions();
 
   const close = () => {
     onClose();
@@ -99,7 +103,9 @@ export function ReportSheet<R extends string>({
           justifyContent: "flex-end",
           backgroundColor: colors.overlay,
         }}
-        behavior="padding"
+        // Android resizes the window for the keyboard on its own; adding
+        // padding on top of that pushes the sheet off the screen.
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <Pressable
           style={{ position: "absolute", inset: 0 }}
@@ -111,6 +117,13 @@ export function ReportSheet<R extends string>({
         <View
           accessibilityViewIsModal
           style={{
+            // Capped well short of the screen, and the reasons scroll
+            // inside it. Six reasons, a comment box and a keyboard add up to
+            // more than a phone is tall — unbounded, the sheet filled
+            // everything above the keyboard and stopped reading as a sheet
+            // at all: no backdrop above it, no rounded edge in view, just a
+            // second screen with a list on it.
+            maxHeight: height * 0.6,
             backgroundColor: colors.surface,
             borderTopLeftRadius: radii.xxl,
             borderTopRightRadius: radii.xxl,
@@ -123,75 +136,93 @@ export function ReportSheet<R extends string>({
             ...shadow.card,
           }}
         >
+          <View style={{ alignItems: "center", marginTop: -spacing.xs }}>
+            <View
+              style={{
+                width: 36,
+                height: 4,
+                borderRadius: radii.pill,
+                backgroundColor: colors.border,
+              }}
+            />
+          </View>
+
           <View style={{ gap: 2 }}>
             <Text style={text.heading}>{title}</Text>
             <Text style={text.caption}>{subtitle}</Text>
           </View>
 
-          <View style={{ gap: 2 }}>
-            {reasons.map((key) => {
-              const selected = reason === key;
-              return (
-                <Pressable
-                  key={key}
-                  onPress={() => setReason(key)}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected }}
-                  style={({ pressed }) => ({
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: spacing.md,
-                    paddingVertical: 10,
-                    paddingHorizontal: spacing.sm,
-                    borderRadius: radii.lg,
-                    backgroundColor: pressed
-                      ? colors.surfaceRaised
-                      : selected
-                        ? colors.primarySoft
-                        : "transparent",
-                  })}
-                >
-                  <Ionicons
-                    name={selected ? "radio-button-on" : "radio-button-off"}
-                    size={20}
-                    color={selected ? colors.primary : colors.textFaint}
-                  />
-                  <Text
-                    style={{
-                      ...text.body,
-                      flex: 1,
-                      color: selected ? colors.primary : colors.text,
-                      fontWeight: selected ? "600" : "400",
-                    }}
+          <ScrollView
+            style={{ flexShrink: 1 }}
+            contentContainerStyle={{ gap: spacing.md, paddingBottom: 2 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={{ gap: 2 }}>
+              {reasons.map((key) => {
+                const selected = reason === key;
+                return (
+                  <Pressable
+                    key={key}
+                    onPress={() => setReason(key)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
+                    style={({ pressed }) => ({
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: spacing.md,
+                      paddingVertical: 10,
+                      paddingHorizontal: spacing.sm,
+                      borderRadius: radii.lg,
+                      backgroundColor: pressed
+                        ? colors.surfaceRaised
+                        : selected
+                          ? colors.primarySoft
+                          : "transparent",
+                    })}
                   >
-                    {labelFor(key)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+                    <Ionicons
+                      name={selected ? "radio-button-on" : "radio-button-off"}
+                      size={20}
+                      color={selected ? colors.primary : colors.textFaint}
+                    />
+                    <Text
+                      style={{
+                        ...text.body,
+                        flex: 1,
+                        color: selected ? colors.primary : colors.text,
+                        fontWeight: selected ? "600" : "400",
+                      }}
+                    >
+                      {labelFor(key)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
 
-          {reason === "OTHER" ? (
-            <TextInput
-              value={comment}
-              onChangeText={setComment}
-              placeholder={t("report.otherPlaceholder")}
-              placeholderTextColor={colors.textFaint}
-              multiline
-              maxLength={500}
-              style={{
-                ...text.body,
-                minHeight: 88,
-                textAlignVertical: "top",
-                padding: spacing.md,
-                borderRadius: radii.lg,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.surfaceRaised,
-                color: colors.text,
-              }}
-            />
-          ) : null}
+            {reason === "OTHER" ? (
+              <TextInput
+                value={comment}
+                onChangeText={setComment}
+                placeholder={t("report.otherPlaceholder")}
+                placeholderTextColor={colors.textFaint}
+                multiline
+                maxLength={500}
+                style={{
+                  ...text.body,
+                  minHeight: 72,
+                  textAlignVertical: "top",
+                  padding: spacing.md,
+                  borderRadius: radii.lg,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.surfaceRaised,
+                  color: colors.text,
+                }}
+              />
+            ) : null}
+          </ScrollView>
 
           <Button
             title={t("report.submit")}

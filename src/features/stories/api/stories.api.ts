@@ -91,6 +91,18 @@ export interface CreateStoryInput {
   hours?: StoryHours;
 }
 
+/** Why a story can be reported — mirrors STORY_REPORT_REASONS on the server.
+ *  Labels live under `storyReport.*`. */
+export const STORY_REPORT_REASONS = [
+  "SPAM",
+  "SCAM",
+  "INAPPROPRIATE",
+  "HARASSMENT",
+  "COPYRIGHT",
+  "OTHER",
+] as const;
+export type StoryReportReason = (typeof STORY_REPORT_REASONS)[number];
+
 /** The reactions the viewer offers. Telegram's set, near enough. */
 export const STORY_REACTIONS = ["❤️", "🔥", "👍", "😍", "👏", "😮"] as const;
 
@@ -136,6 +148,26 @@ export const storiesApi = {
     api<{ total: number; items: StoryViewer[] }>(
       `/stories/${id}/viewers?limit=${limit}&offset=${offset}`,
     ),
+
+  /**
+   * Passes a story into a chat.
+   *
+   * The server builds the message and stamps the story's author onto it, so
+   * the bubble carries the same "forwarded from" header — and the same link
+   * to their profile — that a forwarded chat message does. The client cannot
+   * set that attribution, which is why this is not a plain sendMessage.
+   */
+  forward: (id: string, conversationId: string) =>
+    api<{ id: string }>(`/stories/${id}/forward`, {
+      method: "POST",
+      body: { conversationId },
+    }),
+
+  report: (id: string, reason: StoryReportReason, comment?: string) =>
+    api<{ success: boolean }>(`/stories/${id}/report`, {
+      method: "POST",
+      body: { reason, ...(comment ? { comment } : {}) },
+    }),
 
   remove: (id: string) =>
     api<{ success: boolean }>(`/stories/${id}`, { method: "DELETE" }),

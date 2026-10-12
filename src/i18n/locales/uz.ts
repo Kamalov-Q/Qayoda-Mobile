@@ -215,6 +215,18 @@ export const uz = {
       "Shikoyat yuborilsa, moderatorlar shu suhbat yozishmalarini ko'rishi mumkin.",
   },
 
+  storyReport: {
+    title: "Hikoya haqida shikoyat",
+    subtitle: "Nima uchun bu hikoya haqida xabar bermoqchisiz?",
+    SPAM: "Spam yoki reklama",
+    SCAM: "Firibgarlik",
+    INAPPROPRIATE: "Nomaqbul kontent",
+    HARASSMENT: "Haqorat yoki tahdid",
+    COPYRIGHT: "Mualliflik huquqi buzilgan",
+    OTHER: "Boshqa sabab",
+    already: "Siz bu hikoya haqida allaqachon xabar bergansiz",
+  },
+
   report: {
     action: "Shikoyat qilish",
     title: "Shikoyat qilish",
@@ -311,6 +323,40 @@ export const uz = {
     reviewsEmptyHint: "Ko'rgan joyingizni baholang — u shu yerda ko'rinadi.",
   },
 
+  verify: {
+    hint: "Ko'k belgi oling va ishonchni oshiring",
+    title: "Profilni tasdiqlash",
+    heading: "Shaxsingizni tasdiqlaymiz",
+    intro:
+      "Ko'k belgi e'lonlaringiz va hikoyalaringiz yonida turadi. U xaridorga " +
+      "bitta narsani aytadi: ro'yxatdan o'tgan odam bilan gaplashyapsiz.",
+    passportFront: "Pasportning asosiy sahifasi",
+    passportBack: "Pasportning orqa sahifasi",
+    selfie: "Pasport bilan birga selfi",
+    ruleLight: "Hujjat to'liq kadrga sig'sin, raqamlari o'qilsin",
+    ruleFace: "Selfida yuzingiz ham, hujjat ham aniq ko'rinsin",
+    ruleBlurry: "Xira, qorong'i yoki qirqilgan rasm qaytariladi",
+    privacy:
+      "Hujjatlaringizni faqat moderatorlar ko'radi, boshqa foydalanuvchilarga " +
+      "hech qachon ko'rsatilmaydi",
+    timeline: "Odatda 1-3 ish kunida javob beramiz",
+    submit: "Tekshiruvga yuborish",
+    sent: "Arizangiz qabul qilindi",
+    sentAt: "Yuborilgan:",
+    pendingTitle: "Tekshiruvda",
+    pendingBody:
+      "Moderator hujjatlaringizni ko'rib chiqmoqda. Javob shu yerda va " +
+      "Yordam markazida paydo bo'ladi.",
+    verifiedTitle: "Shaxsingiz tasdiqlandi",
+    verifiedBody:
+      "Ismingiz yonida endi ko'k belgi turadi — e'lonlaringiz va " +
+      "hikoyalaringizda ham ko'rinadi.",
+    rejectedTitle: "Ariza qaytarildi",
+    rejectedBody: "Moderator hujjatlarni qabul qilmadi.",
+    tryAgain: "Qaytadan yuborish",
+    badge: "Tasdiqlangan",
+  },
+
   support: {
     title: "Yordam markazi",
     hint: "Savolingiz bormi? Bizga yozing",
@@ -382,6 +428,9 @@ export const uz = {
     description: "Tavsif",
     editImages: "Rasmlarni tahrirlash",
     imagesUpdated: "Rasmlar yangilandi",
+    edit: "Tahrirlash",
+    editListing: "E'lonni tahrirlash",
+    updatedSuccess: "E'lon muvaffaqiyatli yangilandi",
 
     archive: "E'lonni arxivlash",
     archiveConfirmTitle: "Arxivlash",
@@ -489,6 +538,11 @@ export const uz = {
     description: "Tavsif",
     descriptionPlaceholder:
       "Ta'mir, qo'shnilar, infratuzilma haqida qisqacha yozing",
+    coordinates: "Koordinatalar",
+    latitude: "Kenglik (Latitude)",
+    longitude: "Uzunlik (Longitude)",
+    latitudePlaceholder: "41.2995",
+    longitudePlaceholder: "69.2401",
     boundary: "Joy chegarasi",
     noBoundary: "Chegara chizilmagan",
     drawOnMap: "Xaritada chizish",
@@ -590,6 +644,17 @@ export const uz = {
   },
 
   stories: {
+    copyLink: "Havolani nusxalash",
+    linkCopied: "Havola nusxalandi",
+    saved: "Galereyaga saqlandi",
+    save: "Saqlash",
+    report: "Shikoyat",
+    reportTitle: "Nega shikoyat qilyapsiz?",
+    reported: "Shikoyat yuborildi",
+    forward: "Yuborish",
+    more: "Yana",
+    sound: "Ovoz",
+    muted: "Ovozsiz",
     seeViewers: "Kim ko'rgan",
     archiveTitle: "Hikoyalar arxivi",
     archiveHint: "Muddati tugaganlarini faqat siz ko'rasiz",
@@ -672,6 +737,7 @@ export const uz = {
     statSaved: "Saqlangan",
     links: "Tezkor havolalar",
     linkMyListings: "Mening e'lonlarim",
+    linkWallet: "Balansni to'ldirish",
     linkSaved: "Saqlangan e'lonlar",
     linkAdd: "Yangi e'lon joylash",
     linkAbout: "Ilova haqida",
@@ -796,5 +862,25 @@ export const uz = {
     unknown: "Noma'lum xatolik yuz berdi",
     validation: "Kiritilgan ma'lumotlar noto'g'ri",
     tooManyRequests: "Juda ko'p urinish. Biroz kuting.",
+  },
+
+  wallet: {
+    topupTitle: "Balansni to'ldirish",
+    historyTitle: "To'lov tarixi",
+    balance: "Balans",
+    enterAmount: "Summani kiriting",
+    paymentMethods: "To'lov usullari",
+    bankCards: "Bank kartalari orqali",
+    paymeSubtitle: "Uzcard va Humo orqali tezkor to'lov",
+    clickSubtitle: "Barcha bank kartalari bilan to'lash",
+    uzumSubtitle: "Uzum Bank va istalgan karta orqali",
+    paynetSubtitle: "Naqd pul va terminallar orqali",
+    badgeInstant: "Tezkor",
+    badgeZeroFee: "0% komissiya",
+    badgePopular: "Mashhur",
+    badgeCash: "Naqd pul",
+    paynet: "Naqd pul bilan (Paynet)",
+    topupButton: "To'ldirish",
+    noHistory: "Sizda hali to'lov tarixi yo'q",
   },
 } as const;

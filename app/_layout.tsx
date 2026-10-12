@@ -191,6 +191,10 @@ export default function RootLayout() {
               name="change-password"
               options={{ title: t("auth.changePassword") }}
             />
+            <Stack.Screen
+              name="verify-profile"
+              options={{ title: t("verify.title") }}
+            />
             {/* Pushed over whatever the reader was doing when the phone gate
                 stopped them, so it keeps the header's way back. */}
             <Stack.Screen
@@ -213,6 +217,14 @@ export default function RootLayout() {
             <Stack.Screen
               name="chat/[id]"
               options={{ title: t("chat.title") }}
+            />
+            <Stack.Screen
+              name="wallet/index"
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="wallet/history"
+              options={{ headerShown: false }}
             />
           </Stack>
         ) : (

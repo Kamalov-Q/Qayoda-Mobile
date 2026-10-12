@@ -2,6 +2,7 @@
 // review carries its edit and delete actions here rather than in a menu — it
 // is one row among a handful, and hiding them costs a tap for no gain.
 import { View, Text, Pressable } from "react-native";
+import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "@/src/components/ui";
 import { spacing, radii } from "@/src/theme/tokens";
@@ -22,6 +23,16 @@ export function ReviewCard({ review, own, onEdit, onDelete }: Props) {
   const { colors, text } = useTheme();
   const language = useLanguage();
   const t = useT();
+  const router = useRouter();
+
+  const authorId = review.authorId ?? review.author?.id;
+  const openProfile = () => {
+    if (own) {
+      router.push("/(tabs)/account");
+    } else if (authorId) {
+      router.push(`/profile/${authorId}`);
+    }
+  };
 
   const name =
     [review.author?.name, review.author?.surname].filter(Boolean).join(" ") ||
@@ -44,11 +55,28 @@ export function ReviewCard({ review, own, onEdit, onDelete }: Props) {
       }}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-        <Avatar uri={review.author?.avatarThumbUrl} name={name} size={36} />
+        <Pressable
+          onPress={openProfile}
+          disabled={!own && !authorId}
+          accessibilityRole="button"
+          accessibilityLabel={name}
+          style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
+        >
+          <Avatar uri={review.author?.avatarThumbUrl} name={name} size={36} />
+        </Pressable>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={text.bodyStrong} numberOfLines={1}>
-            {own ? t("reviews.you") : name}
-          </Text>
+          <Pressable
+            onPress={openProfile}
+            disabled={!own && !authorId}
+            style={({ pressed }) => ({
+              alignSelf: "flex-start",
+              opacity: pressed ? 0.75 : 1,
+            })}
+          >
+            <Text style={text.bodyStrong} numberOfLines={1}>
+              {own ? t("reviews.you") : name}
+            </Text>
+          </Pressable>
           <View
             style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}
           >

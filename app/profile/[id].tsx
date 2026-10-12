@@ -13,8 +13,6 @@ import { router, useLocalSearchParams, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Screen,
-  Avatar,
-  Button,
   EmptyState,
   FilterPill,
   ImageViewer,
@@ -47,8 +45,9 @@ import type {
   OfferPurpose,
 } from "../../src/features/listings/api/listings.api";
 import { usePresence } from "../../src/features/chat/hooks/usePresence";
-import { useConversations } from "../../src/features/chat/hooks/useConversations";
-import { requirePhone } from "../../src/features/auth/guest";
+import { useChatTarget } from "../../src/features/chat/hooks/useChatTarget";
+import { type ActionIcon } from "../../src/features/users/components/ActionIcons";
+import { ProfileHeader } from "../../src/features/users/components/ProfileHeader";
 import { useToggleBlock } from "../../src/features/blocks/hooks/useBlocks";
 import { confirm } from "../../src/lib/alerts";
 import { useAuthStore } from "../../src/features/auth/store/auth.store";
@@ -74,7 +73,6 @@ export default function UserProfileScreen() {
   const [viewingAvatar, setViewingAvatar] = useState(false);
   const presence = usePresence(id);
   const viewerId = useAuthStore((st) => st.user?.id);
-  const { data: conversations } = useConversations();
   const [filters, setFilters] = useState<OwnerListingFilters>({});
   const [sheet, setSheet] = useState<null | "purpose" | "category" | "sort">(
     null,
@@ -105,7 +103,7 @@ export default function UserProfileScreen() {
   const blocked = !!data?.blockedByMe;
   const toggleBlock = useToggleBlock();
 
-  const onToggleBlock = () => {
+  const onToggleBlock = useCallback(() => {
     if (!id) return;
     if (blocked) {
       toggleBlock.mutate({ userId: id, block: false });
@@ -120,19 +118,61 @@ export default function UserProfileScreen() {
       destructive: true,
       onConfirm: () => toggleBlock.mutate({ userId: id, block: true }),
     });
-  };
+  }, [id, blocked, toggleBlock]);
 
-  // An existing thread with this person wins; otherwise their newest listing
-  // is the thing to start one about.
-  const chatTarget = useMemo(() => {
-    if (!id || id === viewerId) return null;
+  /**
+   * How to write to this person — the shared rule, not a copy of it.
+   *
+   * The copy that used to live here read the list on screen, so turning on a
+   * filter that matched nothing took the Write button away with it. The
+   * hook reads what they have posted in all, which is what "start a
+   * conversation with them" has always meant.
+   */
+  const { target: chatTarget, openChat } = useChatTarget(id);
 
-    const existing = conversations?.find((c) => c.other.id === id);
-    if (existing) return { kind: "existing" as const, id: existing.id };
+  /**
+   * What is on offer about this person right now. A blocked profile keeps
+   * only the way to unblock: while the block stands there is no phone
+   * number to ring and no thread to open.
+   */
+  const actions = useMemo<ActionIcon[]>(() => {
+    if (!data || isSelf) return [];
 
-    const listing = listings[0];
-    return listing ? { kind: "new" as const, listingId: listing.id } : null;
-  }, [id, viewerId, conversations, listings]);
+    const list: ActionIcon[] = [];
+
+    if (!blocked && data.phoneNumber) {
+      list.push({
+        key: "call",
+        icon: "call",
+        label: t("userProfile.call"),
+        // Swallowed: a device with no dialer would otherwise take the screen
+        // down on a tap.
+        onPress: () =>
+          Linking.openURL(
+            `tel:${data.phoneNumber!.replace(/[^\d+]/g, "")}`,
+          ).catch(() => {}),
+      });
+    }
+
+    if (!blocked && chatTarget) {
+      list.push({
+        key: "message",
+        icon: "chatbubble-ellipses",
+        label: t("userProfile.write"),
+        onPress: openChat,
+      });
+    }
+
+    list.push({
+      key: "block",
+      icon: blocked ? "lock-open" : "ban",
+      label: t(blocked ? "blocks.unblock" : "blocks.block"),
+      destructive: !blocked,
+      onPress: onToggleBlock,
+    });
+
+    return list;
+  }, [data, isSelf, blocked, chatTarget, openChat, onToggleBlock, t]);
 
   const openListing = useCallback(
     (listingId: string) => router.push(`/listing/${listingId}`),
@@ -218,107 +258,51 @@ export default function UserProfileScreen() {
 
   const header = (
     <View style={{ gap: spacing.lg, paddingBottom: spacing.lg }}>
-      <View style={{ alignItems: "center", gap: spacing.sm }}>
-        {/* avatarUrl first, thumb as the fallback — the thumb is what the chat
-            list already had, so a profile opened from there paints instantly
-            from cache while the full-size version loads.
+      {/* Everything you can do about this person rides in as `actions`:
+          ring them, write to them, shut them out. Each is dropped when it
+          cannot work, because a button that can only fail is worse than no
+          button — and the number itself is spelled out below for whoever
+          wants to copy it rather than dial it.
 
-            Tappable only when there is a photo: the initials fallback has no
-            bigger version to open. */}
-        <Pressable
-          onPress={() => photo && setViewingAvatar(true)}
-          disabled={!photo}
-          accessibilityRole={photo ? "imagebutton" : "image"}
-          accessibilityLabel={t("profile.viewPhoto")}
-          style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
-        >
-          <Avatar
-            uri={photo}
-            name={data?.fullName}
-            size={104}
-            online={presence?.online}
-          />
-        </Pressable>
-        <Text style={{ ...text.display, textAlign: "center" }}>{name}</Text>
-        {/* Presence is what blocking is for: the server already withholds
-            it, and this keeps the row from rendering an empty state. */}
-        {blocked ? (
-          <Text style={{ ...text.caption, color: colors.textMuted }}>
-            {t("blocks.youBlocked")}
-          </Text>
-        ) : (
-          <PresenceStatus presence={presence} />
-        )}
-
-        {data ? (
-          <Text style={text.caption}>
-            {t("userProfile.memberSince", {
-              date: new Date(data.createdAt).toLocaleDateString(language, {
-                year: "numeric",
-                month: "long",
-              }),
-            })}
-          </Text>
-        ) : null}
-      </View>
-
-      {/* The two things anyone opens a seller's profile to do, side by side,
-          with the number itself underneath — the call button dials it, and
-          the line below is for the reader who wants to copy it or simply see
-          who they are about to ring.
-
-          Writing reopens the conversation you already have with this person,
-          or starts one on their newest advert — which is what you would have
-          tapped through to anyway. Each half is dropped when it cannot work,
-          because a button that can only fail is worse than no button. */}
-      {data && !isSelf && !blocked && (data.phoneNumber || chatTarget) ? (
-        <View style={{ flexDirection: "row", gap: spacing.sm }}>
-          {data.phoneNumber ? (
-            <View style={{ flex: 1 }}>
-              <Button
-                title={t("userProfile.call")}
-                icon="call-outline"
-                variant="secondary"
-                // Swallowed: a device with no dialer (a simulator, a tablet)
-                // would otherwise crash the screen on a tap.
-                onPress={() =>
-                  Linking.openURL(
-                    `tel:${data.phoneNumber!.replace(/[^\d+]/g, "")}`,
-                  ).catch(() => {})
-                }
-              />
-            </View>
-          ) : null}
-          {chatTarget ? (
-            <View style={{ flex: 1 }}>
-              <Button
-                title={t("userProfile.write")}
-                icon="chatbubble-ellipses-outline"
-                onPress={() =>
-                  requirePhone(() =>
-                    chatTarget.kind === "existing"
-                      ? // No `prefill`: that seeds the composer with the
-                        // listing-enquiry boilerplate, which is right when
-                        // you arrive from an advert and wrong when you arrive
-                        // from a person you were already talking to.
-                        router.push({
-                          pathname: "/chat/[id]",
-                          params: { id: chatTarget.id },
-                        })
-                      : router.push({
-                          pathname: "/chat/[id]",
-                          params: {
-                            id: "new",
-                            listingId: chatTarget.listingId,
-                          },
-                        }),
-                  )
-                }
-              />
-            </View>
-          ) : null}
-        </View>
-      ) : null}
+          Blocking used to sit alone at the foot of the screen. It reads
+          better beside the rest: these are all decisions about the same
+          person, and scrolling past their whole inventory to find the one
+          that ends the conversation was a strange way to arrange them. */}
+      <ProfileHeader
+        userId={id}
+        // avatarUrl first, thumb as the fallback — the thumb is what the
+        // chat list already had, so a profile opened from there paints
+        // instantly from cache while the full-size version loads.
+        avatarUri={photo}
+        name={name}
+        verified={data?.isVerifiedRealtor}
+        online={presence?.online}
+        onPressPhoto={photo ? () => setViewingAvatar(true) : undefined}
+        subtitle={
+          // Presence is what blocking is for: the server already withholds
+          // it, and this keeps the row from rendering an empty state.
+          blocked ? (
+            <Text style={{ ...text.caption, color: colors.textMuted }}>
+              {t("blocks.youBlocked")}
+            </Text>
+          ) : (
+            <PresenceStatus presence={presence} />
+          )
+        }
+        meta={
+          data ? (
+            <Text style={text.caption}>
+              {t("userProfile.memberSince", {
+                date: new Date(data.createdAt).toLocaleDateString(language, {
+                  year: "numeric",
+                  month: "long",
+                }),
+              })}
+            </Text>
+          ) : null
+        }
+        actions={actions}
+      />
 
       {data?.phoneNumber && !isSelf && !blocked ? (
         <Text
@@ -341,40 +325,6 @@ export default function UserProfileScreen() {
       {/* What this seller is worth knowing by, in their own numbers. Only
           things actually counted: no "0 sales" column that can never move. */}
       {data ? <StatsRow stats={stats} /> : null}
-
-      {/* Blocking lives at the bottom of the profile, the way it does in
-          every messenger: it is the last thing you decide about someone, and
-          it should not sit next to the button that writes to them. */}
-      {data && !isSelf ? (
-        <Pressable
-          onPress={onToggleBlock}
-          disabled={toggleBlock.isPending}
-          accessibilityRole="button"
-          style={({ pressed }) => ({
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: spacing.sm,
-            paddingVertical: spacing.md,
-            opacity: pressed ? 0.6 : 1,
-          })}
-        >
-          <Ionicons
-            name={blocked ? "lock-open-outline" : "ban-outline"}
-            size={16}
-            color={blocked ? colors.primary : colors.danger}
-          />
-          <Text
-            style={{
-              ...text.caption,
-              fontWeight: "600",
-              color: blocked ? colors.primary : colors.danger,
-            }}
-          >
-            {t(blocked ? "blocks.unblock" : "blocks.block")}
-          </Text>
-        </Pressable>
-      ) : null}
 
       {/* Their listings, and the three ways to cut them down. The sheets are
           built from the seller's own inventory: a purpose or a category they

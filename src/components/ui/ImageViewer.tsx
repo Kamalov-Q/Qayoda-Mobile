@@ -80,7 +80,9 @@ async function saveToLibrary(uri: string) {
   });
 
   try {
-    await MediaLibrary.saveToLibraryAsync(file.uri);
+    // Asset.create, not saveToLibraryAsync: the latter is the legacy API and
+    // SDK 57 throws a deprecation error from it rather than only warning.
+    await MediaLibrary.Asset.create(file.uri);
     toast.successKey("chat.imageSaved");
   } finally {
     // Cleanup must never turn a saved photo into an error.

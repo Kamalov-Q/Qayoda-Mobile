@@ -25,10 +25,12 @@ import { useT, type Language } from "../src/i18n";
 import { useIsAuthed } from "../src/features/auth/guest";
 import { SignInMethods } from "../src/features/auth/components/SignInMethods";
 import { useSupportUnread } from "../src/features/support/hooks/useSupport";
+import { useVerification } from "../src/features/verification/hooks/useVerification";
 import { MiniLocationMap } from "../src/features/map/MiniLocationMap";
 
 export default function SettingsScreen() {
   const supportUnread = useSupportUnread();
+  const verification = useVerification();
   const authed = useIsAuthed();
   const { colors, text } = useTheme();
   const t = useT();
@@ -67,8 +69,61 @@ export default function SettingsScreen() {
   return (
     <Screen edges={HEADER_EDGES}>
       <View style={{ gap: spacing.xl, paddingBottom: spacing.xl }}>
-        {/* First, and only when signed in: it is the one part of settings
-            that is about what you did rather than how the app behaves. */}
+        {/* First: the badge is the thing on this screen that changes how
+            other people see you, and it is the reason most people open
+            settings from a profile at all. */}
+        {authed ? (
+          <Section title={t("verify.title")}>
+            <Pressable
+              onPress={() => router.push("/verify-profile")}
+              accessibilityRole="button"
+              accessibilityLabel={t("verify.title")}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing.md,
+                padding: spacing.md,
+                borderRadius: radii.lg,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: pressed ? colors.surfaceRaised : colors.surface,
+              })}
+            >
+              <Ionicons
+                name={
+                  verification.data?.isVerified
+                    ? "checkmark-circle"
+                    : "shield-checkmark-outline"
+                }
+                size={20}
+                color={colors.primary}
+              />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={text.bodyStrong}>{t("verify.title")}</Text>
+                {/* Says where you stand rather than repeating the heading:
+                    somebody who applied last night wants that answer here,
+                    not one screen further in. */}
+                <Text style={text.caption}>
+                  {verification.data?.isVerified
+                    ? t("verify.verifiedTitle")
+                    : verification.data?.request?.status === "PENDING"
+                      ? t("verify.pendingTitle")
+                      : verification.data?.request?.status === "REJECTED"
+                        ? t("verify.rejectedTitle")
+                        : t("verify.hint")}
+                </Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={colors.textFaint}
+              />
+            </Pressable>
+          </Section>
+        ) : null}
+
+        {/* Then, and only when signed in: the one part of settings that is
+            about what you did rather than how the app behaves. */}
         {authed ? (
           <Section title={t("activity.title")}>
             <Pressable

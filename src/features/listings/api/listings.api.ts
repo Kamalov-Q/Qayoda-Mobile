@@ -211,6 +211,29 @@ export interface CreateListingInput {
   images: ImageInput[];
 }
 
+export interface UpdateListingInput {
+  category?: PropertyCategory;
+  sellerType?: "OWNER" | "REALTOR";
+  buildingType?: "NEW" | "SECONDARY";
+  repairType?: RepairType;
+  title?: string;
+  descriptionHtml?: string;
+  rooms?: number;
+  floor?: number | null;
+  totalFloors?: number | null;
+  address?: string;
+  properties?: string[];
+  contactPhone?: string;
+  areaM2?: number;
+  offers?: {
+    purpose: OfferPurpose;
+    price: number;
+    currency: string;
+  }[];
+  /** Dropped pin or centroid coordinates, [lng, lat]. */
+  point?: [number, number];
+}
+
 /**
  * A search circle. The server measures to the listing's centroid, so a parcel
  * is in or out by its middle — and all three fields must travel together: a
@@ -352,6 +375,12 @@ export const listingApi = {
   create: (input: CreateListingInput) =>
     api<Listing>(`/listings`, {
       method: "POST",
+      body: input,
+    }),
+
+  update: (id: string, input: UpdateListingInput) =>
+    api<Listing>(`/listings/${id}`, {
+      method: "PATCH",
       body: input,
     }),
 

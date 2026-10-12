@@ -17,7 +17,6 @@ import {
   Card,
   EmptyState,
   HEADER_EDGES,
-  Avatar,
 } from "../../../src/components/ui";
 import { spacing, radii } from "../../../src/theme/tokens";
 import { useTheme } from "../../../src/theme/useTheme";
@@ -38,7 +37,11 @@ import { ListingImageCarousel } from "../../../src/features/listings/components/
 import { ListingLocationMap } from "../../../src/features/listings/components/ListingLocationMap";
 import { SimilarListings } from "../../../src/features/listings/components/SimilarListings";
 import { ReportListingSheet } from "../../../src/features/listings/components/ReportListingSheet";
+import { ListingEditModal } from "../../../src/features/listings/components/ListingEditModal";
 import { useConversations } from "../../../src/features/chat/hooks/useConversations";
+import { ActionIcons } from "../../../src/features/users/components/ActionIcons";
+import { VerifiedBadge } from "../../../src/features/users/components/VerifiedBadge";
+import { StoryAvatar } from "../../../src/features/stories/components/StoryAvatar";
 import { OfferBadge } from "../../../src/features/listings/components/OfferBadge";
 import {
   htmlToText,
@@ -78,6 +81,7 @@ export default function ListingDetailScreen() {
   const { nameOf: categoryName } = useCategories();
   const { nameOf: amenityName } = useAmenities();
   const [reporting, setReporting] = useState(false);
+  const [editing, setEditing] = useState(false);
   // For "Xabar yozish": an existing thread about THIS listing reopens instead
   // of drafting a duplicate — the server would merge them on send anyway, but
   // reopening shows the history immediately.
@@ -118,6 +122,35 @@ export default function ListingDetailScreen() {
   }
 
   const isOwner = !!userId && userId === listing.ownerId;
+
+  /**
+   * Writing to the seller from their row.
+   *
+   * Built from what this screen already has rather than through
+   * useChatTarget, which would fetch their whole profile for one answer.
+   * The rule is the same: an existing thread with them wins, otherwise the
+   * listing in front of you is the thing to start one about — and here that
+   * is a better subject than their newest advert would be.
+   */
+  const ownerId = listing.owner?.id;
+  // Anybody but yourself: there is always something to write about, because
+  // this listing is itself the subject when no thread exists yet.
+  const canWriteToOwner = !isOwner && !!ownerId;
+
+  const openOwnerChat = () =>
+    requirePhone(() => {
+      const existing = conversations?.find((c) => c.other.id === ownerId);
+      // No `prefill`: the boilerplate opener belongs to the big enquiry
+      // button below, which is about the advert. This is about the person.
+      router.push(
+        existing
+          ? { pathname: "/chat/[id]", params: { id: existing.id } }
+          : {
+              pathname: "/chat/[id]",
+              params: { id: "new", listingId: listing.id },
+            },
+      );
+    });
 
   // A seller who never filled in their name still needs something to tap.
   const ownerName =
@@ -275,6 +308,14 @@ export default function ListingDetailScreen() {
                     next: !isSaved,
                   })
                 }
+              />
+            ) : null}
+
+            {isOwner ? (
+              <PhotoAction
+                icon="create-outline"
+                label={t("listings.edit")}
+                onPress={() => setEditing(true)}
               />
             ) : null}
 
@@ -457,6 +498,12 @@ export default function ListingDetailScreen() {
           {isOwner ? (
             <View style={{ gap: spacing.sm }}>
               <Button
+                title={t("listings.editListing")}
+                icon="create-outline"
+                variant="primary"
+                onPress={() => setEditing(true)}
+              />
+              <Button
                 title={t("listings.editImages")}
                 icon="images-outline"
                 variant="secondary"
@@ -484,6 +531,15 @@ export default function ListingDetailScreen() {
                   Through requireAuth: the profile endpoint needs a session,
                   so a guest is sent to sign in rather than to a 401. */}
               {listing.owner ? (
+                /* A row, not the full profile header: this is a line ABOUT
+                   somebody on a page about a flat, and blowing it up to a
+                   104pt portrait pushed the thing the reader came for off
+                   the screen. The profile it opens is where the full
+                   treatment lives.
+
+                   Through requireAuth: the profile endpoint needs a
+                   session, so a guest is sent to sign in rather than to a
+                   401. */
                 <Pressable
                   onPress={() =>
                     requireAuth(() =>
@@ -505,7 +561,11 @@ export default function ListingDetailScreen() {
                       : colors.surface,
                   })}
                 >
-                  <Avatar
+                  {/* Rings when they have a story up, and opens it on tap
+                      rather than the profile — the avatar is the story's
+                      affordance everywhere else in the app. */}
+                  <StoryAvatar
+                    userId={listing.owner.id}
                     uri={
                       listing.owner.avatarThumbUrl ?? listing.owner.avatarUrl
                     }
@@ -525,15 +585,12 @@ export default function ListingDetailScreen() {
                         {ownerName}
                       </Text>
                       {listing.owner.isVerifiedRealtor ? (
-                        <Ionicons
-                          name="checkmark-circle"
-                          size={16}
-                          color={colors.primary}
-                        />
+                        <VerifiedBadge size={17} />
                       ) : null}
                     </View>
-                    {/* Presence when it is known, otherwise how long they have
-                        been on the app — both answer "can I trust a reply?" */}
+                    {/* Presence when it is known, otherwise how long they
+                        have been on the app — both answer "can I trust a
+                        reply?" */}
                     {ownerPresence ? (
                       <PresenceStatus presence={ownerPresence} />
                     ) : (
@@ -549,6 +606,19 @@ export default function ListingDetailScreen() {
                       </Text>
                     )}
                   </View>
+                  {canWriteToOwner ? (
+                    <ActionIcons
+                      actions={[
+                        {
+                          key: "message",
+                          icon: "chatbubble-ellipses",
+                          label: t("userProfile.write"),
+                          onPress: openOwnerChat,
+                        },
+                      ]}
+                      size={38}
+                    />
+                  ) : null}
                   <Ionicons
                     name="chevron-forward"
                     size={18}
@@ -618,6 +688,12 @@ export default function ListingDetailScreen() {
         listingId={listing.id}
         visible={reporting}
         onClose={() => setReporting(false)}
+      />
+
+      <ListingEditModal
+        listing={listing}
+        visible={editing}
+        onClose={() => setEditing(false)}
       />
     </Screen>
   );

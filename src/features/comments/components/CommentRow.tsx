@@ -3,6 +3,7 @@
 // one everybody already knows how to read.
 import { memo, useCallback, useState } from "react";
 import { View, Text, Pressable } from "react-native";
+import { useRouter } from "expo-router";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "@/src/components/ui";
@@ -69,6 +70,14 @@ export const CommentRow = memo(function CommentRow({
     [onToggleLike, comment],
   );
 
+  const router = useRouter();
+  const authorId = comment.authorId ?? comment.author?.id;
+  const openProfile = useCallback(() => {
+    if (authorId) {
+      router.push(`/profile/${authorId}`);
+    }
+  }, [authorId, router]);
+
   return (
     <View
       style={{
@@ -78,11 +87,19 @@ export const CommentRow = memo(function CommentRow({
         paddingVertical: spacing.sm,
       }}
     >
-      <Avatar
-        uri={comment.author?.avatarThumbUrl}
-        name={name}
-        size={inset ? 28 : 36}
-      />
+      <Pressable
+        onPress={openProfile}
+        disabled={!authorId}
+        accessibilityRole="button"
+        accessibilityLabel={name}
+        style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
+      >
+        <Avatar
+          uri={comment.author?.avatarThumbUrl}
+          name={name}
+          size={inset ? 28 : 36}
+        />
+      </Pressable>
 
       <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
         {/* Name and time on their own line: inline with the body they wrapped
@@ -97,9 +114,21 @@ export const CommentRow = memo(function CommentRow({
           {/* The name yields, the timestamp does not. Without flexShrink the
               name takes whatever width it wants and pushes the time out past
               the column, underneath the heart. */}
-          <Text style={{ ...text.bodyStrong, flexShrink: 1 }} numberOfLines={1}>
-            {name}
-          </Text>
+          <Pressable
+            onPress={openProfile}
+            disabled={!authorId}
+            style={({ pressed }) => ({
+              flexShrink: 1,
+              opacity: pressed ? 0.75 : 1,
+            })}
+          >
+            <Text
+              style={{ ...text.bodyStrong }}
+              numberOfLines={1}
+            >
+              {name}
+            </Text>
+          </Pressable>
           <Text style={{ ...text.caption, flexShrink: 0 }} numberOfLines={1}>
             {timeAgo(comment.createdAt)}
             {edited ? ` · ${t("comments.edited")}` : ""}

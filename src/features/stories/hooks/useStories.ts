@@ -80,6 +80,10 @@ export function useDeleteStory() {
     mutationFn: (id: string) => storiesApi.remove(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: TRAY_KEY });
+      // And the archive on the profile, which is where an expired story is
+      // deleted from — the tray never held it, so invalidating only the tray
+      // left the tile on screen.
+      void queryClient.invalidateQueries({ queryKey: ["stories", "by-user"] });
     },
     onError: (error) => toast.error(errorMessage(error)),
   });

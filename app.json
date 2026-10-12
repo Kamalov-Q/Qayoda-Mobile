@@ -59,7 +59,7 @@
       [
         "expo-media-library",
         {
-          "savePhotosPermission": "Suhbatdagi rasmlarni galereyangizga saqlash uchun ruxsat kerak.",
+          "savePhotosPermission": "Suhbat va hikoyalardagi rasm va videolarni galereyangizga saqlash uchun ruxsat kerak.",
           "photosPermission": "E'lon va suhbat uchun rasm tanlashda galereyangizdan foydalanamiz."
         }
       ],

@@ -215,6 +215,18 @@ export const ru: Dictionary = {
       "После жалобы модераторы смогут увидеть переписку в этом чате.",
   },
 
+  storyReport: {
+    title: "Жалоба на историю",
+    subtitle: "Почему вы жалуетесь на эту историю?",
+    SPAM: "Спам или реклама",
+    SCAM: "Мошенничество",
+    INAPPROPRIATE: "Неприемлемый контент",
+    HARASSMENT: "Оскорбления или угрозы",
+    COPYRIGHT: "Нарушение авторских прав",
+    OTHER: "Другая причина",
+    already: "Вы уже жаловались на эту историю",
+  },
+
   report: {
     action: "Пожаловаться",
     title: "Пожаловаться",
@@ -311,6 +323,40 @@ export const ru: Dictionary = {
     reviewsEmptyHint: "Оцените объект, который смотрели — он появится здесь.",
   },
 
+  verify: {
+    hint: "Получите синий значок и больше доверия",
+    title: "Подтверждение профиля",
+    heading: "Подтвердим вашу личность",
+    intro:
+      "Синий значок стоит рядом с вашими объявлениями и историями. Он " +
+      "говорит покупателю одно: перед ним реальный человек.",
+    passportFront: "Главная страница паспорта",
+    passportBack: "Оборотная страница паспорта",
+    selfie: "Селфи вместе с паспортом",
+    ruleLight: "Документ целиком в кадре, цифры читаются",
+    ruleFace: "На селфи видно и лицо, и документ",
+    ruleBlurry: "Размытые, тёмные и обрезанные фото вернём",
+    privacy:
+      "Ваши документы видят только модераторы и никогда — другие " +
+      "пользователи",
+    timeline: "Обычно отвечаем за 1–3 рабочих дня",
+    submit: "Отправить на проверку",
+    sent: "Заявка принята",
+    sentAt: "Отправлено:",
+    pendingTitle: "На проверке",
+    pendingBody:
+      "Модератор смотрит ваши документы. Ответ появится здесь и в " +
+      "Поддержке.",
+    verifiedTitle: "Личность подтверждена",
+    verifiedBody:
+      "Рядом с именем теперь синий значок — он виден и в объявлениях, и в " +
+      "историях.",
+    rejectedTitle: "Заявка возвращена",
+    rejectedBody: "Модератор не принял документы.",
+    tryAgain: "Отправить заново",
+    badge: "Подтверждён",
+  },
+
   support: {
     title: "Поддержка",
     hint: "Есть вопрос? Напишите нам",
@@ -382,6 +428,9 @@ export const ru: Dictionary = {
     description: "Описание",
     editImages: "Изменить фотографии",
     imagesUpdated: "Фотографии обновлены",
+    edit: "Редактировать",
+    editListing: "Редактировать объявление",
+    updatedSuccess: "Объявление успешно обновлено",
 
     archive: "Архивировать объявление",
     archiveConfirmTitle: "Архивация",
@@ -487,6 +536,11 @@ export const ru: Dictionary = {
     description: "Описание",
     descriptionPlaceholder:
       "Коротко о ремонте, соседях и инфраструктуре района",
+    coordinates: "Координаты",
+    latitude: "Широта (Latitude)",
+    longitude: "Долгота (Longitude)",
+    latitudePlaceholder: "41.2995",
+    longitudePlaceholder: "69.2401",
     boundary: "Границы участка",
     noBoundary: "Границы не отмечены",
     drawOnMap: "Отметить на карте",
@@ -588,6 +642,17 @@ export const ru: Dictionary = {
   },
 
   stories: {
+    copyLink: "Скопировать ссылку",
+    linkCopied: "Ссылка скопирована",
+    saved: "Сохранено в галерею",
+    save: "Сохранить",
+    report: "Пожаловаться",
+    reportTitle: "На что жалуетесь?",
+    reported: "Жалоба отправлена",
+    forward: "Переслать",
+    more: "Ещё",
+    sound: "Звук",
+    muted: "Без звука",
     seeViewers: "Кто смотрел",
     archiveTitle: "Архив историй",
     archiveHint: "Истёкшие видите только вы",
@@ -670,6 +735,7 @@ export const ru: Dictionary = {
     statSaved: "Избранное",
     links: "Быстрые ссылки",
     linkMyListings: "Мои объявления",
+    linkWallet: "Пополнение баланса",
     linkSaved: "Избранные объявления",
     linkAdd: "Разместить объявление",
     linkAbout: "О приложении",
@@ -793,5 +859,25 @@ export const ru: Dictionary = {
     unknown: "Произошла неизвестная ошибка",
     validation: "Введены неверные данные",
     tooManyRequests: "Слишком много попыток. Подождите немного.",
+  },
+
+  wallet: {
+    topupTitle: "Пополнение баланса",
+    historyTitle: "История платежей",
+    balance: "Баланс",
+    enterAmount: "Введите сумму",
+    paymentMethods: "Способы оплаты",
+    bankCards: "Банковской картой",
+    paymeSubtitle: "Оплата через Uzcard и Humo",
+    clickSubtitle: "Оплата любыми банковскими картами",
+    uzumSubtitle: "Uzum Bank и любые карты",
+    paynetSubtitle: "Наличными и через терминалы",
+    badgeInstant: "Мгновенно",
+    badgeZeroFee: "0% комиссия",
+    badgePopular: "Популярно",
+    badgeCash: "Наличные",
+    paynet: "Наличными (Paynet)",
+    topupButton: "Пополнить",
+    noHistory: "У вас пока нет истории платежей",
   },
 };

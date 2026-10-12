@@ -12,7 +12,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { radii, spacing } from "@/src/theme/tokens";
 import { useTheme } from "@/src/theme/useTheme";
 import { useT } from "@/src/i18n";
-import { Avatar, EmptyState } from "@/src/components/ui";
+import { Avatar, EmptyState, ErrorBanner } from "@/src/components/ui";
+import { errorMessage } from "@/src/lib/api-error";
 import { useStoryViewers } from "../hooks/useStories";
 
 interface Props {
@@ -37,7 +38,7 @@ export const StoryViewersSheet = memo(function StoryViewersSheet({
   const { colors, text } = useTheme();
   const t = useT();
   const insets = useSafeAreaInsets();
-  const { data, isLoading } = useStoryViewers(storyId, visible);
+  const { data, isLoading, isError, error } = useStoryViewers(storyId, visible);
 
   // Who reacted, and with what. The list is ordered by when people watched,
   // so a reaction three rows down is easy to miss — the header says how many
@@ -130,6 +131,14 @@ export const StoryViewersSheet = memo(function StoryViewersSheet({
             style={{ paddingVertical: spacing.xl }}
             color={colors.primary}
           />
+        ) : isError ? (
+          // Said, not swallowed. A failed request used to render as "nobody
+          // watched yet", which is the one wrong answer this sheet can give:
+          // it reads as a fact about your story rather than about the
+          // network.
+          <View style={{ paddingHorizontal: spacing.lg }}>
+            <ErrorBanner message={errorMessage(error)} />
+          </View>
         ) : (
           <FlatList
             data={data?.items ?? []}

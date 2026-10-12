@@ -140,9 +140,11 @@ const StoryRing = memo(function StoryRing({
           alignItems: "center",
           justifyContent: "center",
           borderWidth: RING,
-          // Unseen is the loud state. Seen keeps a ring rather than losing it
-          // entirely, so the row does not change shape as you watch.
-          borderColor: group.hasUnseen ? colors.primary : colors.border,
+          // Watched, and the ring is simply gone — Telegram's rule. The
+          // border stays in the layout as transparent so nothing shifts as
+          // you work along the row; what disappears is the colour, which was
+          // the only thing it was ever saying.
+          borderColor: group.hasUnseen ? colors.primary : "transparent",
         }}
       >
         <View

@@ -5,12 +5,13 @@ import {
   ActivityIndicator,
   Dimensions,
   FlatList,
-  Linking,
   Pressable,
   Text,
   View,
 } from "react-native";
 import { router, useIsFocused, useLocalSearchParams, Stack } from "expo-router";
+import * as ExpoLinking from "expo-linking";
+import * as Clipboard from "expo-clipboard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,16 +19,19 @@ import { radii, spacing, type } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT } from "../../src/i18n";
 import { Avatar } from "../../src/components/ui";
+import { ActionIcons } from "../../src/features/users/components/ActionIcons";
 import { confirm } from "../../src/lib/alerts";
 import { toast } from "../../src/components/ui/Toast";
 import { requireAuth } from "../../src/features/auth/guest";
 import { useChatTarget } from "../../src/features/chat/hooks/useChatTarget";
 import { useRelativeDate } from "../../src/features/listings/utils/format";
+import { useAuthStore } from "../../src/features/auth/store/auth.store";
 import {
   useDeleteStory,
   useMarkStorySeen,
   useReactToStory,
   useStoryTray,
+  useUserStories,
 } from "../../src/features/stories/hooks/useStories";
 import {
   STORY_REACTIONS,
@@ -40,6 +44,13 @@ import {
 } from "../../src/features/stories/components/StoryPlayer";
 import { StoryProgress } from "../../src/features/stories/components/StoryProgress";
 import { StoryViewersSheet } from "../../src/features/stories/components/StoryViewersSheet";
+import {
+  StoryMenuSheet,
+  type StoryMenuItem,
+} from "../../src/features/stories/components/StoryMenuSheet";
+import { StoryForwardSheet } from "../../src/features/stories/components/StoryForwardSheet";
+import { ReportStorySheet } from "../../src/features/stories/components/ReportStorySheet";
+import { saveStoryMedia } from "../../src/features/stories/lib/save-story";
 
 /**
  * A fallback only. The pager measures itself — a page width taken from
@@ -59,43 +70,113 @@ interface Page {
 }
 
 export default function StoriesScreen() {
-  const { group } = useLocalSearchParams<{ group?: string }>();
+  const { group, user, story } = useLocalSearchParams<{
+    group?: string;
+    user?: string;
+    story?: string;
+  }>();
   const { colors } = useTheme();
   const t = useT();
   const insets = useSafeAreaInsets();
   const relativeDate = useRelativeDate();
 
-  const { groups, isLoading } = useStoryTray();
+  const viewerId = useAuthStore((s) => s.user?.id);
 
-  const pages = useMemo<Page[]>(
-    () =>
-      groups.flatMap((g) =>
-        g.stories.map((story) => ({
-          story,
-          author: g.author,
-          isMine: g.isMine,
-        })),
-      ),
-    [groups],
+  /**
+   * Two ways in, so two sources.
+   *
+   * From the tray: everything anybody has up, grouped by poster. From a
+   * profile: that one person's, which on your own profile includes the ones
+   * that have run out — you can still watch back what you posted, which is
+   * what an archive is for.
+   */
+  const fromProfile = !!user;
+  const tray = useStoryTray();
+  const mine = useUserStories(user, !!user && user === viewerId);
+  const isLoading = fromProfile ? mine.isLoading : tray.isLoading;
+
+  /**
+   * Whose story this is.
+   *
+   * Decided from the story's own author id whenever the viewer is known,
+   * rather than trusting the flag the list came with. The tray computes that
+   * flag server-side from whoever the request authenticated as, so a tray
+   * fetched before sign-in finished — or served from cache to a different
+   * account — marks everything as somebody else's, which puts Report on your
+   * own story and takes the bin off it.
+   */
+  const ownedByViewer = useCallback(
+    (story: Story, fallback: boolean) =>
+      viewerId ? story.authorId === viewerId : fallback,
+    [viewerId],
   );
 
-  // Where the tray asked us to start. Read once: the tray reorders itself as
-  // stories are seen, and following that mid-watch would jump the reader.
-  const [start] = useState(() => {
-    const index = Number(group ?? 0);
-    if (!Number.isFinite(index) || index <= 0) return 0;
+  const pages = useMemo<Page[]>(() => {
+    if (fromProfile) {
+      const author = tray.groups.find((g) => g.author?.id === user)?.author;
+      return mine.items.map((s) => ({
+        story: s,
+        // The tray may not hold them (an expired story is in nobody's tray),
+        // so the card is whatever it can supply and the header falls back to
+        // the profile's own name.
+        author: author ?? null,
+        isMine: ownedByViewer(s, user === viewerId),
+      }));
+    }
+
+    return tray.groups.flatMap((g) =>
+      g.stories.map((s) => ({
+        story: s,
+        author: g.author,
+        isMine: ownedByViewer(s, g.isMine),
+      })),
+    );
+  }, [fromProfile, mine.items, tray.groups, user, viewerId, ownedByViewer]);
+
+  /**
+   * Where to open.
+   *
+   * Derived rather than stored: from a profile the link names a story, and
+   * which page that is cannot be known until the pages have loaded. Once the
+   * reader moves, `movedTo` takes over and this stops mattering — the tray
+   * reorders itself as stories are seen, and following that mid-watch would
+   * jump them.
+   */
+  const start = useMemo(() => {
+    if (story) {
+      const found = pages.findIndex((p) => p.story.id === story);
+      return found >= 0 ? found : 0;
+    }
+
+    const groupIndex = Number(group ?? 0);
+    if (!Number.isFinite(groupIndex) || groupIndex <= 0) return 0;
+
     let offset = 0;
-    for (let i = 0; i < index && i < groups.length; i++) {
-      offset += groups[i].stories.length;
+    for (let i = 0; i < groupIndex && i < tray.groups.length; i++) {
+      offset += tray.groups[i].stories.length;
     }
     return offset;
-  });
+  }, [story, group, pages, tray.groups]);
 
-  const [index, setIndex] = useState(start);
+  /** Null until the reader moves; after that it is the page they are on. */
+  const [movedTo, setMovedTo] = useState<number | null>(null);
+  const index = movedTo ?? start;
   /** The pager's real width, measured. 0 until the first layout. */
   const [pageWidth, setPageWidth] = useState(0);
   const [paused, setPaused] = useState(false);
   const [viewersFor, setViewersFor] = useState<string | null>(null);
+  /** Which of the three overlays is up, if any — one at a time by design. */
+  const [sheet, setSheet] = useState<"menu" | "forward" | "report" | null>(
+    null,
+  );
+  /**
+   * Sound, for videos.
+   *
+   * Off to begin with and remembered for the session rather than per story: a
+   * reader who turned the sound on wants the next one audible too, and one
+   * who left it off is probably somewhere they cannot have it.
+   */
+  const [muted, setMuted] = useState(true);
   /**
    * Whether this screen is the one on top.
    *
@@ -122,15 +203,28 @@ export default function StoriesScreen() {
   const react = useReactToStory();
   const remove = useDeleteStory();
 
-  const current = pages[index];
+  // The list mounts before the pages arrive, so `initialScrollIndex` cannot
+  // do this on its own — and moving the pager is an imperative act on a
+  // widget, not a state change.
+  useEffect(() => {
+    if (movedTo === null && start > 0 && pageWidth > 0) {
+      listRef.current?.scrollToOffset({
+        offset: start * pageWidth,
+        animated: false,
+      });
+    }
+  }, [start, movedTo, pageWidth]);
 
-  // The two things you do about a person, wherever you meet them in this
-  // app — the same rule the profile uses for what "message" means.
-  const {
-    target: chatTarget,
-    openChat,
-    phone,
-  } = useChatTarget(current?.author?.id);
+  const [videoBuffering, setVideoBuffering] = useState(false);
+
+  const current = pages[index];
+  /** A story must not run on while the reader is reading a sheet over it or while video is buffering. */
+  const isPaused =
+    paused || !!viewersFor || !!sheet || !isFocused || videoBuffering;
+
+  // What "message this person" means here — the same rule the profile uses,
+  // so the button leads to the same thread from either place.
+  const { target: chatTarget, openChat } = useChatTarget(current?.author?.id);
 
   // Recording a view is what turns the ring grey, so it happens on arrival
   // rather than on finishing — a story you opened is a story you saw.
@@ -152,16 +246,17 @@ export default function StoriesScreen() {
     (next: number) => {
       // Nothing moves while something else is on top — least of all the
       // dismissal at the end.
-      if (!isFocused) return;
+      if (!isFocused || sheet) return;
       if (next < 0) return;
       if (next >= pages.length) {
         close();
         return;
       }
-      setIndex(next);
+      setMovedTo(next);
+      setVideoBuffering(false);
       listRef.current?.scrollToIndex({ index: next, animated: true });
     },
-    [pages.length, close, isFocused],
+    [pages.length, close, isFocused, sheet],
   );
 
   const openProfile = useCallback((userId: string) => {
@@ -185,6 +280,69 @@ export default function StoriesScreen() {
       },
     });
   }, [current, remove, close]);
+
+  /**
+   * What the ⋯ offers, which depends on the story: there is nothing to save
+   * from a text story, and reporting your own makes no sense.
+   */
+  const menuItems = useMemo<StoryMenuItem[]>(() => {
+    if (!current) return [];
+    const mediaUrl = current.story.mediaUrl;
+    const items: StoryMenuItem[] = [];
+
+    if (mediaUrl) {
+      items.push({
+        key: "save",
+        icon: "download-outline",
+        label: t("stories.save"),
+        onPress: () => {
+          setSheet(null);
+          // Fire and forget: saveStoryMedia reports both outcomes itself,
+          // and the story should carry on playing meanwhile.
+          void saveStoryMedia(mediaUrl);
+        },
+      });
+    }
+
+    items.push({
+      key: "forward",
+      icon: "arrow-redo-outline",
+      label: t("stories.forward"),
+      onPress: () => requireAuth(() => setSheet("forward")),
+    });
+
+    items.push({
+      key: "copy",
+      icon: "link-outline",
+      label: t("stories.copyLink"),
+      onPress: () => {
+        setSheet(null);
+        // The app's own scheme, the same link Share builds for a listing.
+        // It opens the viewer straight on this story — and while the story
+        // is up, anybody who has the app can follow it.
+        void Clipboard.setStringAsync(
+          ExpoLinking.createURL(`/stories`, {
+            queryParams: { story: current.story.id },
+          }),
+        )
+          .then(() => toast.successKey("stories.linkCopied"))
+          // A clipboard that refuses is not worth an unhandled rejection.
+          .catch(() => {});
+      },
+    });
+
+    if (!current.isMine) {
+      items.push({
+        key: "report",
+        icon: "flag-outline",
+        label: t("stories.report"),
+        destructive: true,
+        onPress: () => requireAuth(() => setSheet("report")),
+      });
+    }
+
+    return items;
+  }, [current, t]);
 
   if (isLoading && !pages.length) {
     return (
@@ -266,15 +424,22 @@ export default function StoriesScreen() {
                 animated: false,
               });
             }}
-            onMomentumScrollEnd={(e) =>
-              setIndex(Math.round(e.nativeEvent.contentOffset.x / pageWidth))
-            }
+            onMomentumScrollEnd={(e) => {
+              setMovedTo(Math.round(e.nativeEvent.contentOffset.x / pageWidth));
+              setVideoBuffering(false);
+            }}
             renderItem={({ item, index: i }) => (
               <View style={{ width: pageWidth }}>
                 <StoryPlayer
                   story={item.story}
                   active={i === index}
-                  paused={paused || !!viewersFor || !isFocused}
+                  paused={isPaused}
+                  muted={muted}
+                  onBufferingChange={(buffering) => {
+                    if (i === index) {
+                      setVideoBuffering(buffering);
+                    }
+                  }}
                 />
               </View>
             )}
@@ -328,7 +493,7 @@ export default function StoriesScreen() {
           count={pages.length}
           index={index}
           durationMs={durationMs}
-          paused={paused || !!viewersFor || !isFocused}
+          paused={isPaused}
           onDone={() => go(index + 1)}
         />
 
@@ -358,25 +523,64 @@ export default function StoriesScreen() {
               name={current.author?.name}
               size={34}
             />
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, gap: 2 }}>
               <Text
                 style={{ ...type.bodyStrong, fontSize: 14, color: "#FFFFFF" }}
                 numberOfLines={1}
               >
                 {current.isMine ? t("stories.mine") : authorName}
               </Text>
-              <Text
+              <View
                 style={{
-                  ...type.caption,
-                  fontSize: 11,
-                  color: "rgba(255,255,255,0.75)",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: spacing.sm,
                 }}
               >
-                {relativeDate(current.story.createdAt)}
-              </Text>
+                <Text
+                  style={{
+                    ...type.caption,
+                    fontSize: 11,
+                    color: "rgba(255,255,255,0.75)",
+                  }}
+                >
+                  {relativeDate(current.story.createdAt)}
+                </Text>
+                {/* Message only. Calling somebody straight out of their
+                    story is a bigger jump than a story invites, and the
+                    button for it belongs on the profile this row opens —
+                    where the number is also written out. */}
+                {!current.isMine && chatTarget ? (
+                  <ActionIcons
+                    actions={[
+                      {
+                        key: "message",
+                        icon: "chatbubble-ellipses",
+                        label: t("userProfile.write"),
+                        onPress: openChat,
+                      },
+                    ]}
+                    tone="overlay"
+                    size={30}
+                  />
+                ) : null}
+              </View>
             </View>
           </Pressable>
 
+          {/* Only a video has sound to manage, so only a video offers it. */}
+          {current.story.type === "VIDEO" ? (
+            <ChromeButton
+              icon={muted ? "volume-mute" : "volume-high"}
+              label={muted ? t("stories.muted") : t("stories.sound")}
+              onPress={() => setMuted((m) => !m)}
+            />
+          ) : null}
+          <ChromeButton
+            icon="ellipsis-horizontal"
+            label={t("stories.more")}
+            onPress={() => setSheet("menu")}
+          />
           {current.isMine ? (
             <ChromeButton icon="trash-outline" onPress={onDelete} />
           ) : null}
@@ -477,40 +681,6 @@ export default function StoriesScreen() {
           </Pressable>
         ) : (
           <View style={{ gap: spacing.sm }}>
-            {/* Reach the poster without leaving the story — the same pair the
-                profile offers, because a story is often the thing that makes
-                somebody want to ask. */}
-            {chatTarget || phone ? (
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "center",
-                  gap: spacing.sm,
-                }}
-              >
-                {phone ? (
-                  <StoryAction
-                    icon="call-outline"
-                    label={t("userProfile.call")}
-                    // Swallowed: a device with no dialer would otherwise take
-                    // the screen down on a tap.
-                    onPress={() =>
-                      Linking.openURL(
-                        `tel:${phone.replace(/[^\d+]/g, "")}`,
-                      ).catch(() => {})
-                    }
-                  />
-                ) : null}
-                {chatTarget ? (
-                  <StoryAction
-                    icon="chatbubble-ellipses-outline"
-                    label={t("userProfile.write")}
-                    onPress={openChat}
-                  />
-                ) : null}
-              </View>
-            ) : null}
-
             <View
               style={{
                 flexDirection: "row",
@@ -569,6 +739,23 @@ export default function StoriesScreen() {
         )}
       </View>
 
+      {sheet === "menu" ? (
+        <StoryMenuSheet items={menuItems} onClose={() => setSheet(null)} />
+      ) : null}
+
+      {sheet === "forward" ? (
+        <StoryForwardSheet
+          story={current.story}
+          onClose={() => setSheet(null)}
+        />
+      ) : null}
+
+      <ReportStorySheet
+        storyId={current.story.id}
+        visible={sheet === "report"}
+        onClose={() => setSheet(null)}
+      />
+
       {viewersFor ? (
         <StoryViewersSheet
           storyId={viewersFor}
@@ -584,46 +771,15 @@ export default function StoriesScreen() {
   );
 }
 
-/** A labelled action at the foot of a story — call, or write. */
-function StoryAction({
+/** A round control over a photo — white on a scrim, so it reads on anything. */
+function ChromeButton({
   icon,
   label,
   onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      style={({ pressed }) => ({
-        flexDirection: "row",
-        alignItems: "center",
-        gap: spacing.xs,
-        paddingHorizontal: spacing.lg,
-        height: 40,
-        borderRadius: radii.pill,
-        borderWidth: 1,
-        borderColor: "rgba(255,255,255,0.5)",
-        backgroundColor: pressed ? "rgba(0,0,0,0.6)" : "rgba(0,0,0,0.35)",
-      })}
-    >
-      <Ionicons name={icon} size={16} color="#FFFFFF" />
-      <Text style={{ ...type.bodyStrong, fontSize: 14, color: "#FFFFFF" }}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-/** A round control over a photo — white on a scrim, so it reads on anything. */
-function ChromeButton({
-  icon,
-  onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
+  /** For screen readers; close and delete read from their icon well enough. */
+  label?: string;
   onPress: () => void;
 }) {
   return (
@@ -631,6 +787,7 @@ function ChromeButton({
       onPress={onPress}
       hitSlop={8}
       accessibilityRole="button"
+      accessibilityLabel={label}
       style={({ pressed }) => ({
         width: 34,
         height: 34,

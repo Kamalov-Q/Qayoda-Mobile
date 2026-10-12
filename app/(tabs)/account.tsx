@@ -2,7 +2,6 @@
 import { useState } from "react";
 import { Text, View, Pressable } from "react-native";
 import { router, type Href } from "expo-router";
-import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Screen,
@@ -14,15 +13,18 @@ import {
 } from "../../src/components/ui";
 import { spacing, radii, type } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
-import { useT, type TranslationKey } from "../../src/i18n";
+import { useT, useLanguage, type TranslationKey } from "../../src/i18n";
 import { confirm } from "../../src/lib/alerts";
 import { useAuthStore } from "../../src/features/auth/store/auth.store";
 import { useLogout } from "../../src/features/auth/hooks/useAuth";
 import { useIsAuthed } from "../../src/features/auth/guest";
 import { GuestPrompt } from "../../src/features/auth/components/GuestPrompt";
 import { useProfile } from "../../src/features/profile/hooks/useProfile";
+import { ProfileStories } from "../../src/features/stories/components/ProfileStories";
 import { resolveMediaUrl } from "../../src/lib/media-url";
 import { useListingCounts } from "../../src/features/listings/hooks/useMyListings";
+import { ProfileHeader } from "../../src/features/users/components/ProfileHeader";
+import { VirtualCard } from "../../src/features/wallet/components/VirtualCard";
 
 const LINKS = [
   {
@@ -30,6 +32,12 @@ const LINKS = [
     labelKey: "profile.linkMyListings" as TranslationKey,
     icon: "business-outline",
     href: "/(tabs)/places" as Href,
+  },
+  {
+    key: "wallet",
+    labelKey: "profile.linkWallet" as TranslationKey,
+    icon: "wallet-outline",
+    href: "/wallet" as unknown as Href,
   },
   {
     key: "saved",
@@ -54,8 +62,9 @@ const LINKS = [
 export default function AccountScreen() {
   const user = useAuthStore((s) => s.user);
   const logout = useLogout();
-  const { text, colors, shadow } = useTheme();
+  const { text, colors } = useTheme();
   const t = useT();
+  const language = useLanguage();
 
   // Counts reuse the queries the other tabs already keep warm, so this screen
   // costs no extra requests once either has been visited.
@@ -73,7 +82,6 @@ export default function AccountScreen() {
   const [viewingAvatar, setViewingAvatar] = useState(false);
   const activeCount = counts?.mineActive;
 
-
   // Each language is written in itself — someone who has the app stuck in a
   // language they can't read needs to recognise their own on this list.
 
@@ -85,36 +93,31 @@ export default function AccountScreen() {
     return (
       <Screen style={{ paddingTop: spacing.md }} edges={TAB_EDGES}>
         <View style={{ gap: spacing.xl }}>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <Text style={text.display}>{t("tabs.profile")}</Text>
-          {/* App-shaped things (sign-in methods, location, theme, language,
-              about) live behind the gear, like the platform convention. */}
-          <Pressable
-            onPress={() => router.push("/settings")}
-            accessibilityRole="button"
-            accessibilityLabel={t("settings.title")}
-            hitSlop={8}
-            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
           >
-            <Ionicons name="settings-outline" size={24} color={colors.text} />
-          </Pressable>
-        </View>
+            <Text style={text.display}>{t("tabs.profile")}</Text>
+            {/* App-shaped things (sign-in methods, location, theme, language,
+              about) live behind the gear, like the platform convention. */}
+            <Pressable
+              onPress={() => router.push("/settings")}
+              accessibilityRole="button"
+              accessibilityLabel={t("settings.title")}
+              hitSlop={8}
+              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            >
+              <Ionicons name="settings-outline" size={24} color={colors.text} />
+            </Pressable>
+          </View>
           <GuestPrompt />
         </View>
       </Screen>
     );
   }
-
-  const initials = [user?.name, user?.surname]
-    .filter(Boolean)
-    .map((s) => s![0]?.toUpperCase())
-    .join("");
 
   const onLogout = () =>
     confirm({
@@ -149,128 +152,113 @@ export default function AccountScreen() {
           </Pressable>
         </View>
 
-        {/* Identity block reads as a banner rather than a list row: it is the
-            only content on this screen that is about the person, not a setting.
-            The stats strip lives inside it — the numbers are also about them. */}
-        <View
-          style={{
-            backgroundColor: colors.surface,
-            borderRadius: radii.xxl,
-            borderWidth: 1,
-            borderColor: colors.border,
-            overflow: "hidden",
-            ...shadow.card,
-          }}
-        >
-          {/* Pencil sits on the banner itself: editing identity belongs where
-              the identity is shown, not among the quick links below. */}
-          <Pressable
-            onPress={() => router.push("/profile/edit")}
-            accessibilityRole="button"
-            accessibilityLabel={t("profile.edit")}
-            hitSlop={8}
-            style={({ pressed }) => ({
-              position: "absolute",
-              top: spacing.sm,
-              right: spacing.sm,
-              zIndex: 1,
-              width: 36,
-              height: 36,
-              borderRadius: radii.pill,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: pressed ? colors.surfaceRaised : "transparent",
-            })}
-          >
-            <Ionicons name="create-outline" size={20} color={colors.primary} />
-          </Pressable>
-
-          <View
-            style={{
-              alignItems: "center",
-              gap: spacing.md,
-              paddingVertical: spacing.lg,
-              paddingHorizontal: spacing.md,
-            }}
-          >
-            {/* Tappable only when there is a photo to open: a circle with two
-                initials in it has no bigger version, and a press effect that
-                leads nowhere is worse than none. */}
+        {/* The same component the public profile uses, so this tab and
+            /profile/[id] cannot drift apart again. No actions: there is
+            nothing to do about yourself that belongs beside your own name. */}
+        <ProfileHeader
+          userId={user?.id}
+          avatarUri={avatarUri ?? null}
+          name={[user?.name, user?.surname].filter(Boolean).join(" ")}
+          // The live profile first: the session copy was minted at sign-in
+          // and still says no for somebody approved this morning.
+          verified={profile?.isVerifiedRealtor ?? user?.isVerifiedRealtor}
+          onPressPhoto={
+            fullAvatarUri ? () => setViewingAvatar(true) : undefined
+          }
+          // The same two lines the public profile carries, so the two
+          // headers are the same height and the same shape. Presence has no
+          // meaning about yourself, so line one is how people reach you.
+          subtitle={
+            <Text style={text.caption} numberOfLines={1}>
+              {user?.phoneNumber ?? user?.email}
+            </Text>
+          }
+          meta={
+            profile ? (
+              <Text style={text.caption}>
+                {t("userProfile.memberSince", {
+                  date: new Date(profile.createdAt).toLocaleDateString(
+                    language,
+                    { year: "numeric", month: "long" },
+                  ),
+                })}
+              </Text>
+            ) : null
+          }
+          photoBadge={
+            /* On the photo rather than off in a corner: editing your
+               identity belongs where the identity is. */
             <Pressable
-              onPress={() => fullAvatarUri && setViewingAvatar(true)}
-              disabled={!fullAvatarUri}
-              accessibilityRole={fullAvatarUri ? "imagebutton" : "image"}
-              accessibilityLabel={t("profile.viewPhoto")}
+              onPress={() => router.push("/profile/edit")}
+              accessibilityRole="button"
+              accessibilityLabel={t("profile.edit")}
+              hitSlop={8}
               style={({ pressed }) => ({
-                width: 76,
-                height: 76,
+                position: "absolute",
+                right: -2,
+                bottom: -2,
+                width: 34,
+                height: 34,
                 borderRadius: radii.pill,
-                backgroundColor: colors.primarySoft,
-                borderWidth: 1,
-                borderColor: colors.primaryBorder,
                 alignItems: "center",
                 justifyContent: "center",
-                overflow: "hidden",
-                opacity: pressed ? 0.8 : 1,
+                borderWidth: 2,
+                borderColor: colors.bg,
+                backgroundColor: pressed
+                  ? colors.primaryPressed
+                  : colors.primary,
               })}
             >
-              {avatarUri ? (
-                <Image
-                  source={{ uri: avatarUri }}
-                  style={{ width: "100%", height: "100%" }}
-                  contentFit="cover"
-                />
-              ) : initials ? (
-                <Text
-                  style={{
-                    ...type.display,
-                    fontSize: 26,
-                    color: colors.primary,
-                  }}
-                >
-                  {initials}
-                </Text>
-              ) : (
-                <Ionicons name="person" size={32} color={colors.primary} />
-              )}
+              <Ionicons name="pencil" size={15} color="#FFFFFF" />
             </Pressable>
+          }
+        />
 
-            <View style={{ alignItems: "center", gap: 2 }}>
-              <Text style={text.heading} numberOfLines={1}>
-                {user?.name} {user?.surname}
-              </Text>
-              <Text style={text.caption} numberOfLines={1}>
-                {user?.phoneNumber ?? user?.email}
-              </Text>
-            </View>
-          </View>
+        {/* Your own stories, including the ones that have run out — the
+            same strip your public profile shows, because this tab is the
+            other place you look at yourself. Renders nothing when you have
+            never posted one. */}
+        {user?.id ? <ProfileStories userId={user.id} isMe /> : null}
 
-          <View
-            style={{
-              flexDirection: "row",
-              borderTopWidth: 1,
-              borderTopColor: colors.border,
-            }}
-          >
-            <StatCell
-              label={t("profile.statListings")}
-              value={counts?.mine}
-              onPress={() => router.push("/(tabs)/places")}
-            />
-            <StatCell
-              label={t("profile.statActive")}
-              value={activeCount}
-              divider
-              onPress={() => router.push("/(tabs)/places")}
-            />
-            <StatCell
-              label={t("profile.statSaved")}
-              value={counts?.saved}
-              divider
-              onPress={() => router.push("/saved")}
-            />
-          </View>
+        {/* The numbers, in the panel the public profile uses — but these
+            are yours, so each column is a way in rather than a fact. */}
+        <View
+          style={{
+            flexDirection: "row",
+            backgroundColor: colors.surfaceRaised,
+            borderRadius: radii.lg,
+            overflow: "hidden",
+          }}
+        >
+          <StatCell
+            label={t("profile.statListings")}
+            value={counts?.mine}
+            onPress={() => router.push("/(tabs)/places")}
+          />
+          <StatCell
+            label={t("profile.statActive")}
+            value={activeCount}
+            divider
+            onPress={() => router.push("/(tabs)/places")}
+          />
+          <StatCell
+            label={t("profile.statSaved")}
+            value={counts?.saved}
+            divider
+            onPress={() => router.push("/saved")}
+          />
         </View>
+
+        {/* Growen City Virtual Card (Tap to flip UZS <-> USD, top-up button opens wallet) */}
+        <VirtualCard
+          phone={user?.phoneNumber}
+          userId={user?.id}
+          name={[user?.name, user?.surname].filter(Boolean).join(" ")}
+          balance={0}
+          variant="compact"
+          onPressTopup={() => router.push("/wallet" as any)}
+          topupLabel={t("wallet.topupButton")}
+        />
 
         <Section title={t("profile.links")}>
           <Card flush>
@@ -313,7 +301,6 @@ export default function AccountScreen() {
           onPress={onLogout}
           loading={logout.isPending}
         />
-
       </View>
 
       {/* Mounted only while open, so a dismissed viewer cannot hold the last

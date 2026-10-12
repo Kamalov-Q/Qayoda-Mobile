@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo } from "react";
 import { FlatList, Pressable, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
@@ -9,7 +9,6 @@ import { useT } from "@/src/i18n";
 import { resolveMediaUrl } from "@/src/lib/media-url";
 import { STORY_BACKGROUNDS } from "../api/stories.api";
 import { useUserStories } from "../hooks/useStories";
-import { StoryViewersSheet } from "./StoryViewersSheet";
 
 const TILE_W = 84;
 const TILE_H = 120;
@@ -37,7 +36,6 @@ export const ProfileStories = memo(function ProfileStories({
   const { text } = useTheme();
   const t = useT();
   const { items } = useUserStories(userId, isMe);
-  const [viewersFor, setViewersFor] = useState<string | null>(null);
 
   if (!items.length) return null;
 
@@ -64,17 +62,14 @@ export const ProfileStories = memo(function ProfileStories({
           return (
             <Pressable
               /**
-               * On your own profile a tile opens WHO WATCHED IT, which is the
-               * question a poster has about a story they already know the
-               * contents of — and the only way to reach that list for one
-               * that has run out. On anybody else's it plays the story.
+               * A tile plays its own story, which is what tapping a picture of
+               * a story means anywhere else. The viewer opens on that one and
+               * carries on through the rest of this person's — and on your own
+               * it is also where "who watched it" lives, including for the
+               * ones that have run out.
                */
               onPress={() =>
-                isMe
-                  ? setViewersFor(item.id)
-                  : item.expired
-                    ? undefined
-                    : router.push("/stories")
+                router.push(`/stories?user=${userId}&story=${item.id}`)
               }
               disabled={!isMe && item.expired}
               accessibilityRole="button"
@@ -215,18 +210,6 @@ export const ProfileStories = memo(function ProfileStories({
         <Text style={{ ...text.caption, marginLeft: spacing.xs }}>
           {t("stories.archiveHint")}
         </Text>
-      ) : null}
-
-      {viewersFor ? (
-        <StoryViewersSheet
-          storyId={viewersFor}
-          visible
-          onClose={() => setViewersFor(null)}
-          onOpenProfile={(id) => {
-            setViewersFor(null);
-            router.push(`/profile/${id}`);
-          }}
-        />
       ) : null}
     </View>
   );
