@@ -9,6 +9,7 @@ import { usePriceFormatter, useSpecsFormatter } from "../utils/format";
 import { primaryOffer } from "../utils/offers";
 import { ListingCardBase } from "./ListingCardBase";
 import { ListingGridCard } from "./ListingGridCard";
+import { TopBadge, isTop } from "@/src/features/tariffs/components/TopBadge";
 
 /**
  * Where the card is being drawn, which is all a caller should have to say:
@@ -89,6 +90,10 @@ export const ListingCard = memo(function ListingCard({
     overlay:
       listing.status !== "ACTIVE" ? (
         <StatusBadge status={listing.status} />
+      ) : isTop(listing.promotedUntil) ? (
+        // One overlay slot, and a listing that is off the map has something
+        // more urgent to say than that it was promoted.
+        <TopBadge promotedUntil={listing.promotedUntil} />
       ) : null,
     onPress: () => onPress(listing.id),
   };

@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { radii, spacing, type } from "@/src/theme/tokens";
 import { useTheme } from "@/src/theme/useTheme";
 import { useT } from "@/src/i18n";
+import { Skeleton } from "@/src/components/ui";
 import { resolveMediaUrl } from "@/src/lib/media-url";
 import { STORY_BACKGROUNDS, type StoryGroup } from "../api/stories.api";
 
@@ -23,6 +24,8 @@ interface Props {
   groups: StoryGroup[];
   /** Whether to offer the "add yours" tile — signed-in readers only. */
   canPost: boolean;
+  /** True while the first fetch is out and there is nothing to draw yet. */
+  loading?: boolean;
   onOpen: (index: number) => void;
   onCompose: () => void;
 }
@@ -30,11 +33,36 @@ interface Props {
 export const StoryTray = memo(function StoryTray({
   groups,
   canPost,
+  loading,
   onOpen,
   onCompose,
 }: Props) {
   const { colors } = useTheme();
   const t = useT();
+
+  // Placeholders while the tray is still coming. It sits at the very top of
+  // Home, so an empty band here is the first thing a reader sees — and on a
+  // slow connection it looked like the screen had failed rather than that it
+  // was still arriving.
+  if (loading && !groups.length) {
+    return (
+      <View
+        style={{
+          flexDirection: "row",
+          gap: spacing.sm,
+          marginHorizontal: -spacing.lg,
+          paddingHorizontal: spacing.lg,
+        }}
+      >
+        {[0, 1, 2, 3].map((i) => (
+          <View key={i} style={{ alignItems: "center", gap: spacing.xs }}>
+            <Skeleton width={AVATAR} height={AVATAR} radius={radii.pill} />
+            <Skeleton width={AVATAR - 24} height={10} />
+          </View>
+        ))}
+      </View>
+    );
+  }
 
   // Nothing to show and nothing to add: the row would be an empty band.
   if (!groups.length && !canPost) return null;

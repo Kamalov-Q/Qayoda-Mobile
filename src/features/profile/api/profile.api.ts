@@ -7,6 +7,10 @@ import {
 import { appendFilePart } from "../../../lib/form-data";
 import { API_URL } from "../../../lib/env";
 import { useAuthStore } from "../../auth/store/auth.store";
+import type { SocialLinks } from "../../users/lib/social";
+
+export const GENDERS = ["MALE", "FEMALE", "OTHER"] as const;
+export type Gender = (typeof GENDERS)[number];
 
 /** Mirror of the server's ProfileResponse. */
 export interface Profile {
@@ -21,16 +25,41 @@ export interface Profile {
   phoneNumber: string | null;
   language: "uz" | "ru";
   isVerifiedRealtor: boolean;
+  /** ISO date. Only ever on your OWN profile. */
+  birthDate: string | null;
+  /** Whole years, derived server-side from `birthDate`. */
+  age: number | null;
+  gender: Gender | null;
+  address: string | null;
+  bio: string | null;
+  socialLinks: SocialLinks | null;
   createdAt: string;
 }
 
 /**
- * Name and surname only. Phone and email are owned by the sign-in method
- * that verified them — see `authApi.identities` / link / unlink.
+ * Everything the owner can change about themselves. Phone and email are
+ * owned by the sign-in method that verified them — see `authApi.identities`
+ * / link / unlink.
+ *
+ * A PATCH: anything left out is untouched. An empty string in a social
+ * handle clears it, which is how the form removes one.
  */
 export interface UpdateProfileInput {
   name?: string;
   surname?: string;
+  /** `YYYY-MM-DD`. */
+  birthDate?: string;
+  /**
+   * `null` clears the field; omitting it leaves whatever is stored. These
+   * are optional answers, and somebody who gave one must be able to take it
+   * back — an empty string is refused by the server, so clearing has to be
+   * an explicit null.
+   */
+  gender?: Gender | null;
+  /** A region CODE from `useRegions`, or null to clear. */
+  address?: string | null;
+  bio?: string | null;
+  socialLinks?: SocialLinks;
 }
 
 /**

@@ -102,6 +102,16 @@ export interface Listing {
   geom: { type: "Polygon"; coordinates: [number, number][][] } | null;
   centroid: { type: "Point"; coordinates: [number, number] } | null;
   createdAt: string;
+  /**
+   * While this is in the future the listing is TOP and wears the badge.
+   * Null for everything that was never promoted.
+   *
+   * Only the badge is implemented: nothing reorders the feed or the map yet,
+   * so a TOP listing is marked, not ranked.
+   */
+  promotedUntil: string | null;
+  /** Moves on every edit — what the "edited" label is decided from. */
+  updatedAt: string;
   publishedAt: string | null;
   /**
    * The listing's stars, decided server-side and denormalized onto the row so
@@ -232,6 +242,12 @@ export interface UpdateListingInput {
   }[];
   /** Dropped pin or centroid coordinates, [lng, lat]. */
   point?: [number, number];
+  /**
+   * A redrawn boundary — rings of [lng, lat], outer ring first and closed.
+   * Send this OR `point`, never both: the server takes the boundary and
+   * ignores the pin when it gets the pair.
+   */
+  coordinates?: [number, number][][];
 }
 
 /**
@@ -321,8 +337,7 @@ export const listingApi = {
     });
     appendCommonFilters(params, filters);
     if (filters.q?.trim()) params.set("q", filters.q.trim());
-    if (filters.address?.trim())
-      params.set("address", filters.address.trim());
+    if (filters.address?.trim()) params.set("address", filters.address.trim());
     if (filters.sort) params.set("sort", filters.sort);
     return api<Listing[]>(`/listings?${params}`, { auth: false });
   },
@@ -389,6 +404,13 @@ export const listingApi = {
 
   archive: (id: string) =>
     api<{ success: boolean }>(`/listings/${id}`, { method: "DELETE" }),
+
+  /** Buys TOP for one listing, charged from the wallet at the chosen tariff. */
+  promote: (id: string, tariffId: string) =>
+    api<Listing>(`/listings/${id}/promote`, {
+      method: "POST",
+      body: { tariffId },
+    }),
 
   /** Undoes an archive. Returns the listing, now ACTIVE and back on the map. */
   restore: (id: string) =>

@@ -4,6 +4,7 @@ import type {
   OfferPurpose,
   PropertyCategory,
 } from "../../listings/api/listings.api";
+import type { SocialLinks } from "../lib/social";
 
 /** How a profile's listings can be ordered. `newest` is the default. */
 export type OwnerListingSort = "newest" | "oldest" | "priceAsc" | "priceDesc";
@@ -65,6 +66,13 @@ export interface UserProfile {
   avatarThumbUrl: string | null;
   /** Manually verified by an admin. */
   isVerifiedRealtor: boolean;
+  /** Whatever they wrote about themselves. */
+  bio: string | null;
+  /**
+   * Handle or URL per platform. Age, gender and address are NOT public —
+   * the server never sends them here.
+   */
+  socialLinks: SocialLinks | null;
   createdAt: string;
   /**
    * The FIRST PAGE of their ACTIVE listings — drafts and archives stay with

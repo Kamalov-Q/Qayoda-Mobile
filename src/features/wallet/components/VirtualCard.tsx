@@ -9,6 +9,7 @@ import {
 import Svg, { Path, Rect, G } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useT } from "@/src/i18n";
 import {
   CardTheme,
   useCardThemeStore,
@@ -50,12 +51,14 @@ export function formatUserId(id?: string | null): string {
 }
 
 export function formatThousands(val: string | number): string {
-  const num = typeof val === "number" ? val : Number(String(val).replace(/\D/g, "")) || 0;
+  // The API sends "1000.00": keep the decimal point, then drop the tiyin.
+  const num = Math.trunc(typeof val === "number" ? val : Number(String(val).replace(/[^\d.-]/g, "")) || 0);
   return String(num).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 }
 
 export function formatUsd(val: string | number): string {
-  const num = typeof val === "number" ? val : Number(String(val).replace(/\D/g, "")) || 0;
+  // The API sends "1000.00": keep the decimal point, then drop the tiyin.
+  const num = Math.trunc(typeof val === "number" ? val : Number(String(val).replace(/[^\d.-]/g, "")) || 0);
   if (num === 0) return "$0.00";
   const usd = num / UZS_PER_USD;
   return `$${usd.toLocaleString("en-US", {
@@ -101,10 +104,12 @@ export function VirtualCard({
   name,
   variant = "full",
   onPressTopup,
-  topupLabel = "To'ldirish",
+  topupLabel,
   themeOverride,
   interactive = true,
 }: VirtualCardProps) {
+  const t = useT();
+  const resolvedTopupLabel = topupLabel ?? t("wallet.topupLabel");
   const storeTheme = useCardThemeStore((s) => s.currentTheme);
   const theme = themeOverride ?? storeTheme;
 
@@ -159,7 +164,7 @@ export function VirtualCard({
     <Pressable
       onPress={handleFlip}
       accessibilityRole="button"
-      accessibilityLabel="Karta valyutasini almashtirish"
+      accessibilityLabel={t("wallet.flipCurrencyAccessibility")}
       style={styles.cardWrapper}
     >
       {/* Front Face: UZS */}
@@ -208,7 +213,7 @@ export function VirtualCard({
             <View style={styles.currencyBadge}>
               <Ionicons name="swap-horizontal" size={11} color={theme.accent} />
               <Text style={[styles.currencyBadgeText, { color: theme.accent }]}>
-                USD ga
+                {t("wallet.toUsd")}
               </Text>
             </View>
             <View style={styles.virtualPill}>
@@ -222,7 +227,7 @@ export function VirtualCard({
           {!isCompact && <EmvChip />}
 
           <View style={styles.balanceCol}>
-            <Text style={styles.balanceLabel}>Joriy balans</Text>
+            <Text style={styles.balanceLabel}>{t("wallet.currentBalance")}</Text>
             <View style={styles.balanceValueRow}>
               <Text
                 style={[
@@ -260,7 +265,7 @@ export function VirtualCard({
               ]}
             >
               <Ionicons name="add" size={15} color="#FFFFFF" />
-              <Text style={styles.topupBtnText}>{topupLabel}</Text>
+              <Text style={styles.topupBtnText}>{resolvedTopupLabel}</Text>
             </Pressable>
           )}
         </View>
@@ -327,7 +332,7 @@ export function VirtualCard({
             <View style={styles.currencyBadge}>
               <Ionicons name="swap-horizontal" size={11} color={theme.accent} />
               <Text style={[styles.currencyBadgeText, { color: theme.accent }]}>
-                UZS ga
+                {t("wallet.toUzs")}
               </Text>
             </View>
             <View
@@ -348,7 +353,7 @@ export function VirtualCard({
           {!isCompact && <EmvChip />}
 
           <View style={styles.balanceCol}>
-            <Text style={styles.balanceLabel}>Current Balance (USD)</Text>
+            <Text style={styles.balanceLabel}>{t("wallet.currentBalanceUsd")}</Text>
             <View style={styles.balanceValueRow}>
               <Text
                 style={[
@@ -386,7 +391,7 @@ export function VirtualCard({
               ]}
             >
               <Ionicons name="add" size={15} color="#FFFFFF" />
-              <Text style={styles.topupBtnText}>{topupLabel}</Text>
+              <Text style={styles.topupBtnText}>{resolvedTopupLabel}</Text>
             </Pressable>
           )}
         </View>

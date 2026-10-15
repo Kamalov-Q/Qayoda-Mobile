@@ -10,7 +10,7 @@ import { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import * as ImagePicker from "expo-image-picker";
+import { pickFromLibrary } from "../src/lib/image-picker";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen, Card, Button, HEADER_EDGES } from "../src/components/ui";
@@ -71,7 +71,7 @@ export default function VerifyProfileScreen() {
   const [reapplying, setReapplying] = useState(false);
 
   const pick = useCallback(async (key: SlotKey) => {
-    const result = await ImagePicker.launchImageLibraryAsync({
+    const result = await pickFromLibrary({
       mediaTypes: ["images"],
       quality: 1,
     });

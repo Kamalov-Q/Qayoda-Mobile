@@ -55,6 +55,11 @@ import { useAmenities } from "../../../src/features/listings/hooks/useAmenities"
 import { PresenceStatus } from "../../../src/features/chat/components/PresenceStatus";
 import { ReviewsSection } from "../../../src/features/reviews/components/ReviewsSection";
 import { CommentsSection } from "../../../src/features/comments/components/CommentsSection";
+import { PromoteSheet } from "../../../src/features/tariffs/components/PromoteSheet";
+import {
+  TopBadge,
+  isTop,
+} from "../../../src/features/tariffs/components/TopBadge";
 
 /** The six levels, as the detail page names them. */
 const REPAIR_LABELS: Record<RepairType, TranslationKey> = {
@@ -81,6 +86,7 @@ export default function ListingDetailScreen() {
   const { nameOf: categoryName } = useCategories();
   const { nameOf: amenityName } = useAmenities();
   const [reporting, setReporting] = useState(false);
+  const [promoting, setPromoting] = useState(false);
   const [editing, setEditing] = useState(false);
   // For "Xabar yozish": an existing thread about THIS listing reopens instead
   // of drafting a duplicate — the server would merge them on send anyway, but
@@ -225,6 +231,19 @@ export default function ListingDetailScreen() {
     "";
 
   const posted = relativeDate(listing.publishedAt ?? listing.createdAt);
+
+  /**
+   * Whether this listing has been edited since it went up.
+   *
+   * A minute of slack: `updated_at` moves a beat after `created_at` on the
+   * way in — the offers and images are written in the same transaction —
+   * and labelling a brand-new listing "edited" would be a lie about every
+   * listing on the app.
+   */
+  const editedAt = listing.publishedAt ?? listing.createdAt;
+  const wasEdited =
+    new Date(listing.updatedAt).getTime() - new Date(editedAt).getTime() >
+    60_000;
 
   const isArchived = listing.status === "ARCHIVED";
 
@@ -381,7 +400,13 @@ export default function ListingDetailScreen() {
               <MetaStat
                 icon="time-outline"
                 value={posted}
-                label={t("listings.posted")}
+                // Says so where the date is, because "when" and "is this
+                // still what was first written" are the same question.
+                label={
+                  wasEdited
+                    ? `${t("listings.posted")} · ${t("listings.edited")}`
+                    : t("listings.posted")
+                }
               />
             </View>
 
@@ -511,6 +536,36 @@ export default function ListingDetailScreen() {
                   router.push(`/listing/${listing.id}/edit-images`)
                 }
               />
+              {/* TOP, for the owner only. Already-TOP listings say until
+                  when instead of offering it again — buying twice is a
+                  support ticket, not a feature. */}
+              {!isArchived ? (
+                isTop(listing.promotedUntil) ? (
+                  // What they bought and what is left of it: the badge counts
+                  // the days down, the line underneath names the end date.
+                  <View style={{ alignItems: "center", gap: spacing.xs }}>
+                    <TopBadge
+                      promotedUntil={listing.promotedUntil}
+                      showRemaining
+                    />
+                    <Text style={{ ...text.caption, textAlign: "center" }}>
+                      {t("tariffs.topActive", {
+                        date: new Date(
+                          listing.promotedUntil!,
+                        ).toLocaleDateString(language),
+                      })}
+                    </Text>
+                  </View>
+                ) : (
+                  <Button
+                    title={t("tariffs.topBuy")}
+                    icon="flame-outline"
+                    variant="secondary"
+                    onPress={() => setPromoting(true)}
+                  />
+                )
+              ) : null}
+
               {/* One toggle, labelled with what the tap will do. Archived
                   listings still open from "my listings", which is where the
                   way back has to live. */}
@@ -689,6 +744,13 @@ export default function ListingDetailScreen() {
         visible={reporting}
         onClose={() => setReporting(false)}
       />
+
+      {promoting ? (
+        <PromoteSheet
+          listingId={listing.id}
+          onClose={() => setPromoting(false)}
+        />
+      ) : null}
 
       <ListingEditModal
         listing={listing}

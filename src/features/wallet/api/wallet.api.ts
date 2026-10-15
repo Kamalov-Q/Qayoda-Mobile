@@ -35,6 +35,57 @@ export interface WalletOverview {
   providers: TopupProvider[];
 }
 
+export type TxKind =
+  | "TOPUP"
+  | "TOPUP_BONUS"
+  | "LISTING_POST"
+  | "STORY_POST"
+  | "LISTING_PROMOTE"
+  | "REFUND"
+  | "ADMIN_ADJUST";
+
+export interface WalletTransactionItem {
+  id: string;
+  userId: string;
+  amount: string;
+  kind: TxKind;
+  referenceId: string | null;
+  balanceAfter: string;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface WalletTransactionsResponse {
+  items: WalletTransactionItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export type FiscalStatus = "NONE" | "BY_PROVIDER" | "PENDING" | "SENDING" | "SENT" | "FAILED";
+
+/** The provider payment behind a top-up, its bonus or its reversal. */
+export interface TransactionPayment {
+  id: string;
+  /** Our order number — the one Click shows on its receipt. */
+  orderNo: number;
+  provider: TopupProvider;
+  status: PaymentStatus;
+  amount: string;
+  bonusAmount: string;
+  providerTxnId: string | null;
+  fiscalStatus: FiscalStatus;
+  createdAt: string;
+  paidAt: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+}
+
+export interface WalletTransactionDetail extends WalletTransactionItem {
+  listingId: string | null;
+  payment: TransactionPayment | null;
+}
+
 export const walletApi = {
   overview: (): Promise<WalletOverview> => api("/wallet"),
 
@@ -43,4 +94,19 @@ export const walletApi = {
 
   getTopupStatus: (id: string): Promise<TopupStatusResponse> =>
     api(`/wallet/topup/${id}`),
+
+  getTransaction: (id: string): Promise<WalletTransactionDetail> =>
+    api(`/wallet/transactions/${id}`),
+
+  getTransactions: (params?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<WalletTransactionsResponse> => {
+    const search = new URLSearchParams();
+    if (params?.limit) search.set("limit", String(params.limit));
+    if (params?.offset) search.set("offset", String(params.offset));
+    const qs = search.toString();
+    return api(`/wallet/transactions${qs ? `?${qs}` : ""}`);
+  },
 };
+

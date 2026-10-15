@@ -6,7 +6,7 @@ import {
   Text,
   ActivityIndicator,
 } from "react-native";
-import * as ImagePicker from "expo-image-picker";
+import { pickFromLibrary } from "@/src/lib/image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { spacing, radii } from "../../../theme/tokens";
@@ -112,7 +112,7 @@ export const ChatInput = memo(function ChatInput({
   };
 
   const pickImageOrVideo = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
+    const result = await pickFromLibrary({
       mediaTypes: ["images", "videos"],
       quality: 0.9,
     });

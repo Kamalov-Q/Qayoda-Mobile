@@ -18,6 +18,7 @@ import {
   Button,
   Card,
   Section,
+  Skeleton,
   BrandMark,
   Rise,
   TAB_EDGES,
@@ -94,7 +95,7 @@ export default function HomeScreen() {
   const t = useT();
   const name = useAuthStore((s) => s.user?.name);
   const authed = useAuthStore((s) => s.status === "authenticated");
-  const { groups } = useStoryTray();
+  const { groups, isLoading: storiesLoading } = useStoryTray();
 
   return (
     <Screen style={{ padding: 0 }} edges={TAB_EDGES}>
@@ -132,6 +133,7 @@ export default function HomeScreen() {
             <StoryTray
               groups={groups}
               canPost={authed}
+              loading={storiesLoading}
               onOpen={(index) =>
                 router.push({
                   pathname: "/stories",
@@ -284,12 +286,39 @@ export default function HomeScreen() {
 const STRIP_CARD_WIDTH = 200;
 
 function LatestStrip() {
-  const { data } = useLatestListings();
+  const { data, isLoading } = useLatestListings();
   const t = useT();
 
+  // Placeholders while the first fetch is out. This strip is the only real
+  // content above the fold, so rendering nothing left a tall gap under the
+  // hero and the screen read as broken on a slow connection.
+  if (isLoading) {
+    return (
+      <Section title={t("home.latestTitle")}>
+        <View
+          style={{
+            flexDirection: "row",
+            gap: spacing.md,
+            // Matches the list below, so nothing shifts sideways when the
+            // real cards replace these.
+            marginHorizontal: -spacing.lg,
+            paddingHorizontal: spacing.lg,
+          }}
+        >
+          {[0, 1, 2].map((i) => (
+            <View key={i} style={{ width: STRIP_CARD_WIDTH, gap: spacing.sm }}>
+              <Skeleton height={130} radius={radii.lg} />
+              <Skeleton height={14} width="80%" />
+              <Skeleton height={12} width="55%" />
+            </View>
+          ))}
+        </View>
+      </Section>
+    );
+  }
+
   // Silent when empty or failed: the Home screen must not show an error for
-  // a strip that is a bonus, and a skeleton for 10 cards is more motion than
-  // this screen needs.
+  // a strip that is a bonus.
   if (!data?.length) return null;
 
   return (

@@ -1,14 +1,12 @@
 // Extends app.json — everything static stays there; this file only adds what
-// needs an env var. react-native-maps reads the Google Maps key from the native
-// binary (not at runtime), so it is injected here at config time from
-// GOOGLE_MAPS_API_KEY in .env, which is never committed.
+// needs an env var.
 //
-// Expo Go bundles its own key, so this is only required for dev/production
-// builds: without it the map renders as a blank grey grid.
+// Maps need no key: they are MapLibre drawing OpenFreeMap's street tiles
+// (see MAP_STYLE_URL in src/features/map/maps.ts). The MapLibre config plugin
+// is a static entry in app.json.
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
 export default ({ config }: ConfigContext): ExpoConfig => {
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   // Reversed iOS client id, e.g. com.googleusercontent.apps.1234-abcd. The
   // config plugin exists only to register it as a URL scheme so Google can
   // return to the app; Android needs no plugin (package name + SHA-1 in Google
@@ -29,19 +27,5 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           ]
         : []),
     ],
-    ios: {
-      ...config.ios,
-      config: {
-        ...config.ios?.config,
-        ...(apiKey ? { googleMapsApiKey: apiKey } : {}),
-      },
-    },
-    android: {
-      ...config.android,
-      config: {
-        ...config.android?.config,
-        ...(apiKey ? { googleMaps: { apiKey } } : {}),
-      },
-    },
   };
 };

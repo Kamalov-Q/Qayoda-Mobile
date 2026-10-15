@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import { router, Stack } from "expo-router";
-import * as ImagePicker from "expo-image-picker";
+import { pickFromLibrary } from "../../src/lib/image-picker";
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { Ionicons } from "@expo/vector-icons";
@@ -39,6 +39,9 @@ import {
   type StoryHours,
   type StoryType,
 } from "../../src/features/stories/api/stories.api";
+import { PriceBadge } from "../../src/features/tariffs/components/PriceBadge";
+import { useTariffs } from "../../src/features/tariffs/hooks/useTariffs";
+import { useWalletOverview } from "../../src/features/wallet/hooks/useWalletOverview";
 
 interface PickedMedia {
   localUri: string;
@@ -49,6 +52,9 @@ interface PickedMedia {
 export default function NewStoryScreen() {
   const { colors, text } = useTheme();
   const t = useT();
+  // Priced server-side, so the composer reads it rather than knowing it.
+  const { priceOf } = useTariffs();
+  const wallet = useWalletOverview();
 
   const [media, setMedia] = useState<PickedMedia | null>(null);
   const [body, setBody] = useState("");
@@ -71,7 +77,11 @@ export default function NewStoryScreen() {
 
   const listingOptions = useMemo(
     () => [
-      { value: "", label: t("stories.noLink"), icon: "close-circle-outline" as const },
+      {
+        value: "",
+        label: t("stories.noLink"),
+        icon: "close-circle-outline" as const,
+      },
       ...linkable.map((l) => ({
         value: l.id,
         label: l.title ?? t("listings.untitled"),
@@ -92,7 +102,7 @@ export default function NewStoryScreen() {
   );
 
   const pick = async (kind: "IMAGE" | "VIDEO") => {
-    const result = await ImagePicker.launchImageLibraryAsync({
+    const result = await pickFromLibrary({
       mediaTypes: kind === "VIDEO" ? ["videos"] : ["images"],
       quality: 0.9,
     });
@@ -112,7 +122,8 @@ export default function NewStoryScreen() {
     setMedia({
       localUri: asset.uri,
       kind,
-      fileName: asset.fileName ?? (kind === "VIDEO" ? "story.mp4" : "story.jpg"),
+      fileName:
+        asset.fileName ?? (kind === "VIDEO" ? "story.mp4" : "story.jpg"),
     });
   };
 
@@ -329,6 +340,12 @@ export default function NewStoryScreen() {
           onPress={() => setHoursOpen(true)}
         />
 
+        {/* The cost, next to the button that incurs it. */}
+        <PriceBadge
+          price={priceOf("STORY_POST")}
+          balance={wallet.data?.balance}
+        />
+
         <Button
           title={busy ? "" : t("stories.post")}
           icon={busy ? undefined : "send"}
@@ -336,9 +353,7 @@ export default function NewStoryScreen() {
           disabled={!canPost || busy}
           onPress={() => void submit()}
         />
-        {busy ? (
-          <ActivityIndicator color={colors.primary} />
-        ) : null}
+        {busy ? <ActivityIndicator color={colors.primary} /> : null}
       </ScrollView>
 
       <SelectSheet

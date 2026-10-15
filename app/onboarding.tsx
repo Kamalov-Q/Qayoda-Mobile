@@ -5,11 +5,11 @@
 // stack to escape through, and no BackButton is offered.
 import { useMemo, useRef, useState } from "react";
 import { Text, TextInput, View, Pressable } from "react-native";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { router, Redirect } from "expo-router";
-import * as ImagePicker from "expo-image-picker";
+import { pickFromLibrary } from "../src/lib/image-picker";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -31,14 +31,46 @@ import {
   useUploadAvatar,
 } from "../src/features/profile/hooks/useProfile";
 import { resolveMediaUrl } from "../src/lib/media-url";
+import { ProfileDetailsFields } from "../src/features/profile/components/ProfileDetailsFields";
+import {
+  MAX_AGE,
+  MIN_AGE,
+  ageFrom,
+  toIsoDate,
+} from "../src/features/profile/lib/birth-date";
 
 /** Same downscale as the profile screen — the server re-crops anyway. */
 const AVATAR_EDGE = 1024;
 
 const makeSchema = (t: ReturnType<typeof useT>) =>
   z.object({
-    name: z.string().trim().min(2, t("validation.minChars", { count: 2 })),
-    surname: z.string().trim().min(2, t("validation.minChars", { count: 2 })),
+    name: z
+      .string()
+      .trim()
+      .min(2, t("validation.minChars", { count: 2 })),
+    surname: z
+      .string()
+      .trim()
+      .min(2, t("validation.minChars", { count: 2 })),
+    /**
+     * The one new field that is REQUIRED. Validated in two steps so the
+     * message says which thing is wrong: a date that is not a date, versus a
+     * date that would make somebody 4 or 140.
+     */
+    birthDate: z
+      .string()
+      .trim()
+      .min(1, t("profileInfo.birthDateRequired"))
+      .refine((v) => toIsoDate(v) !== null, t("profileInfo.birthDateInvalid"))
+      .refine(
+        (v) => {
+          const age = ageFrom(toIsoDate(v));
+          return age !== null && age >= MIN_AGE && age <= MAX_AGE;
+        },
+        t("profileInfo.ageRange", { min: MIN_AGE, max: MAX_AGE }),
+      ),
+    gender: z.enum(["MALE", "FEMALE", "OTHER"]).or(z.literal("")),
+    address: z.string().trim().max(255).optional(),
   });
 
 type FormData = z.infer<ReturnType<typeof makeSchema>>;
@@ -56,17 +88,33 @@ export default function OnboardingScreen() {
   const {
     control,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { name: user?.name ?? "", surname: user?.surname ?? "" },
+    defaultValues: {
+      name: user?.name ?? "",
+      surname: user?.surname ?? "",
+      birthDate: "",
+      gender: "",
+      address: "",
+    },
   });
+
+  // Watched rather than wrapped in three nested Controllers: these go to one
+  // presentational component, so the form just needs their values and a way
+  // to write them back.
+  const details = useWatch({
+    control,
+    name: ["birthDate", "gender", "address"],
+  }) as [string, FormData["gender"], string | undefined];
+  const [birthDate, gender, address] = details;
 
   // Deep link / reload safety net: this screen means nothing without a session.
   if (!user) return <Redirect href="/(tabs)/home" />;
 
   const pickAvatar = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
+    const result = await pickFromLibrary({
       mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [1, 1],
@@ -90,7 +138,16 @@ export default function OnboardingScreen() {
 
   const onSubmit = handleSubmit((d) =>
     update.mutate(
-      { name: d.name.trim(), surname: d.surname.trim() },
+      {
+        name: d.name.trim(),
+        surname: d.surname.trim(),
+        // Validated above, so the conversion cannot fail here.
+        birthDate: toIsoDate(d.birthDate)!,
+        // Blank means "not saying" — sent as undefined rather than an empty
+        // string, which the server would store as a value.
+        gender: d.gender || undefined,
+        address: d.address?.trim() || undefined,
+      },
       {
         onSuccess: () => {
           // Phone accounts pick their password next; provider-only accounts
@@ -190,6 +247,21 @@ export default function OnboardingScreen() {
                 error={errors.surname?.message}
               />
             )}
+          />
+
+          {/* Who they are, beyond a name. Age is required here and only
+              here — the edit screen takes a patch, so it cannot demand a
+              field that older accounts never supplied. */}
+          <ProfileDetailsFields
+            birthDate={birthDate}
+            onBirthDate={(v) =>
+              setValue("birthDate", v, { shouldValidate: !!errors.birthDate })
+            }
+            birthDateError={errors.birthDate?.message}
+            gender={gender}
+            onGender={(v) => setValue("gender", v)}
+            address={address ?? ""}
+            onAddress={(v) => setValue("address", v)}
           />
 
           {/* The number that signed them in, shown for confidence, not edited. */}

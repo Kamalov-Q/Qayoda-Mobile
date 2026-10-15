@@ -25,6 +25,8 @@ import { resolveMediaUrl } from "../../src/lib/media-url";
 import { useListingCounts } from "../../src/features/listings/hooks/useMyListings";
 import { ProfileHeader } from "../../src/features/users/components/ProfileHeader";
 import { VirtualCard } from "../../src/features/wallet/components/VirtualCard";
+import { useWalletOverview } from "../../src/features/wallet/hooks/useWalletOverview";
+import { SocialRow } from "../../src/features/users/components/SocialRow";
 
 const LINKS = [
   {
@@ -86,6 +88,7 @@ export default function AccountScreen() {
   // language they can't read needs to recognise their own on this list.
 
   const authed = useIsAuthed();
+  const { data: wallet } = useWalletOverview();
 
   // Theme and language are device preferences, not account ones, so a guest
   // keeps them; everything personal collapses into the sign-in prompt.
@@ -214,6 +217,16 @@ export default function AccountScreen() {
           }
         />
 
+        {/* The same two the public profile shows, so you can see what
+            other people see. */}
+        {profile?.bio ? (
+          <Text style={{ ...text.body, textAlign: "center" }}>
+            {profile.bio}
+          </Text>
+        ) : null}
+
+        <SocialRow links={profile?.socialLinks} />
+
         {/* Your own stories, including the ones that have run out — the
             same strip your public profile shows, because this tab is the
             other place you look at yourself. Renders nothing when you have
@@ -254,7 +267,7 @@ export default function AccountScreen() {
           phone={user?.phoneNumber}
           userId={user?.id}
           name={[user?.name, user?.surname].filter(Boolean).join(" ")}
-          balance={0}
+          balance={wallet?.balance ?? 0}
           variant="compact"
           onPressTopup={() => router.push("/wallet" as any)}
           topupLabel={t("wallet.topupButton")}

@@ -1,4 +1,4 @@
-import { API_URL } from "./env";
+import { API_ORIGIN } from "./env";
 
 // Anything that already carries a scheme is final: http(s) from the CDN, but
 // also file:, content:, data: and blob: URIs, which is what the image picker
@@ -12,5 +12,5 @@ export function resolveMediaUrl(
 ): string | undefined {
   if (!url) return undefined;
   if (HAS_SCHEME.test(url)) return url;
-  return `${API_URL}${url.startsWith("/") ? "" : "/"}${url}`;
+  return `${API_ORIGIN}${url.startsWith("/") ? "" : "/"}${url}`;
 }

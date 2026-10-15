@@ -1,4 +1,3 @@
-import * as MediaLibrary from "expo-media-library";
 import { Directory, File, Paths } from "expo-file-system";
 import { notify } from "@/src/lib/alerts";
 import { toast } from "@/src/components/ui/Toast";
@@ -21,8 +20,24 @@ function fileNameFor(url: string): string {
  * asset is in the gallery.
  */
 export async function saveStoryMedia(mediaUrl: string): Promise<void> {
+  // Callers fire and forget, so every failure is reported here — a download,
+  // the gallery or a missing native module must not become an unhandled rejection.
+  try {
+    await save(mediaUrl);
+  } catch (e) {
+    console.warn("[stories] save failed:", e);
+    toast.errorKey("chat.saveImageError");
+  }
+}
+
+async function save(mediaUrl: string): Promise<void> {
   const url = resolveMediaUrl(mediaUrl);
   if (!url) return;
+
+  // Loaded on tap, not at import: expo-media-library binds its native module
+  // when imported, and a client without it must fail only this save — not
+  // the whole stories screen.
+  const MediaLibrary = await import("expo-media-library");
 
   // writeOnly: saving needs no read access, and iOS shows the lighter
   // "add to library" prompt for it.

@@ -7,7 +7,6 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { Image } from "expo-image";
-import * as MediaLibrary from "expo-media-library";
 import { Directory, File, Paths } from "expo-file-system";
 import {
   Gesture,
@@ -60,6 +59,12 @@ function fileNameFor(uri: string): string {
 }
 
 async function saveToLibrary(uri: string) {
+  // Loaded on tap, not at import: expo-media-library binds its native module
+  // the moment it is imported, and a client without it (an Expo Go build from
+  // another SDK patch) then failed every screen that imports ../ui. Here a
+  // missing module only fails this one save, through onSave's error toast.
+  const MediaLibrary = await import("expo-media-library");
+
   // writeOnly: saving needs no read access, and iOS shows the lighter
   // "add to library" prompt for it.
   const permission = await MediaLibrary.requestPermissionsAsync(true);

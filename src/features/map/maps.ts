@@ -2,31 +2,45 @@
 // Map config plus the one place [lng, lat] ⇄ {latitude, longitude} is crossed.
 //
 // The app speaks GeoJSON everywhere — the API stores and returns [lng, lat]
-// rings — while react-native-maps speaks {latitude, longitude}. Convert only at
-// the edge of a map component; nothing outside src/features/map should ever
-// hold a LatLng.
+// rings — while the map components below reason in {latitude, longitude} and
+// in Regions (a centre plus spans). Convert only at the edge of a map
+// component; nothing outside src/features/map should ever hold a LatLng.
 import { Platform } from "react-native";
-import type { LatLng, Region } from "react-native-maps";
+import type { CameraRef, LngLatBounds, ViewState } from "@maplibre/maplibre-react-native";
 import { BBox } from "../listings/api/listings.api";
 import { DEFAULT_BBOX } from "../listings/utils/geo";
 
+export interface LatLng {
+  latitude: number;
+  longitude: number;
+}
+
+/** A centre and the spans around it — what every camera move here is written in. */
+export interface Region extends LatLng {
+  latitudeDelta: number;
+  longitudeDelta: number;
+}
+
 /**
- * react-native-maps ships inside Expo Go, so unlike the old Mapbox setup a dev
- * build is no longer required to draw. Web is the only remaining gap: the
- * package's web entry is react-native-web's UnimplementedView, so map screens
- * still need a fallback there.
+ * MapLibre is a native module, so maps need a development build (Expo Go does
+ * not ship it). Web has no native map at all, so map screens keep their
+ * fallbacks there.
  */
 export const isNativeMapAvailable = Platform.OS !== "web";
 
 /**
+ * The street map every map in the app draws: OpenFreeMap's vector tiles of
+ * OpenStreetMap data — free, no key, the same stack 1Fit runs on. Its credits
+ * (OpenFreeMap, OpenMapTiles, OpenStreetMap) sit behind the map's ⓘ button,
+ * which the licences require to stay visible: never pass attribution={false}.
+ */
+export const MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+
+/**
  * MAP_STYLE_RULE — never put view-level props (pointerEvents, opacity,
- * transform, …) on a <MapView>; put them on a wrapping <View>.
- *
- * iOS recycles native map views. When react-native-maps reuses one it resets
- * its record of the previous props to defaults (RNMapsMapView prepareMapView)
- * before React Native diffs the base view props, so a value set on the old
- * map never gets undone on the new one. `pointerEvents: "none"` on the static
- * listing preview left the next map anywhere in the app ignoring every touch.
+ * transform, …) on a <Map>; put them on a wrapping <View>. Native map views
+ * keep state the React props diff does not see, and a wrapper is the one
+ * place a value like pointerEvents is guaranteed to be undone.
  */
 
 
@@ -140,6 +154,83 @@ export const TASHKENT_REGION: Region = {
   latitudeDelta: 0.01,
   longitudeDelta: 0.01,
 };
+
+// ─── MapLibre edge ─────────────────────────────────────────────────────────
+// The components keep the Region vocabulary they were written in; these are
+// the only places it is translated to MapLibre's [west, south, east, north].
+
+export function regionToBounds(region: Region): LngLatBounds {
+  return [
+    region.longitude - region.longitudeDelta / 2,
+    region.latitude - region.latitudeDelta / 2,
+    region.longitude + region.longitudeDelta / 2,
+    region.latitude + region.latitudeDelta / 2,
+  ];
+}
+
+export function boundsToRegion([west, south, east, north]: LngLatBounds): Region {
+  return {
+    latitude: (south + north) / 2,
+    longitude: (west + east) / 2,
+    latitudeDelta: north - south,
+    longitudeDelta: east - west,
+  };
+}
+
+/** What the map reports when its camera settles, as the Region it used to be. */
+export const viewStateToRegion = (view: Pick<ViewState, "bounds">): Region =>
+  boundsToRegion(view.bounds);
+
+/**
+ * The old animateToRegion: frame exactly this region, animated. A zero
+ * duration is a jump.
+ */
+export function animateToRegion(
+  camera: CameraRef | null | undefined,
+  region: Region,
+  duration: number,
+): void {
+  camera?.fitBounds(regionToBounds(region), { duration });
+}
+
+/** A ring as a GeoJSON Feature — what a map source draws. */
+export function ringFeature(
+  ring: [number, number][],
+  properties: Record<string, unknown> = {},
+  id?: string,
+): GeoJSON.Feature<GeoJSON.Polygon> {
+  // GeoJSON wants the ring closed; the app keeps it open while drawing.
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  const closed =
+    first[0] === last[0] && first[1] === last[1] ? ring : [...ring, first];
+  return {
+    type: "Feature",
+    id,
+    properties,
+    geometry: { type: "Polygon", coordinates: [closed] },
+  };
+}
+
+/**
+ * A circle of `radiusM` metres as a ring — MapLibre has no circle overlay in
+ * metres, so it is drawn as a 64-sided polygon. Same latitude correction as
+ * radiusRegion below: a degree of longitude is shorter this far north.
+ */
+export function circleRing(
+  [lng, lat]: [number, number],
+  radiusM: number,
+  steps = 64,
+): [number, number][] {
+  const dLat = radiusM / M_PER_DEG_LAT;
+  const dLng = dLat / Math.max(Math.cos((lat * Math.PI) / 180), 0.01);
+  const ring: [number, number][] = [];
+  for (let i = 0; i < steps; i++) {
+    const a = (i / steps) * 2 * Math.PI;
+    ring.push([lng + dLng * Math.cos(a), lat + dLat * Math.sin(a)]);
+  }
+  return ring;
+}
 
 /** Palette colours are opaque hex; overlays need them translucent. */
 export function withAlpha(hex: string, alpha: number): string {

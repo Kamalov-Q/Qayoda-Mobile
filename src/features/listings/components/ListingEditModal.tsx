@@ -19,6 +19,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   Button,
+  Card,
   TextField,
   Section,
   SelectGrid,
@@ -40,8 +41,36 @@ import {
 import { useCategories } from "../hooks/useCategories";
 import { useAmenities } from "../hooks/useAmenities";
 import { useUpdateListing } from "../hooks/useUpdateListing";
+import { useImageUpload } from "../hooks/useImageUpload";
+import { ImagePickerGrid } from "./ImagePickerGrid";
+import { PolygonPicker } from "@/src/features/map/PolygonPicker";
+import { PinPicker } from "@/src/features/map/PinPicker";
+import {
+  MIN_POLYGON_POINTS,
+  closeRing,
+  formatAreaM2,
+  polygonAreaM2,
+} from "../utils/geo";
 import { textToHtml } from "../utils/format";
 import { PURPOSE_ICONS } from "../utils/icons";
+
+/**
+ * The stored ring, ready for the editor.
+ *
+ * GeoJSON closes a polygon by repeating its first point last; the editor
+ * keeps the ring open while drawing and closes it again on save. Seeding
+ * without dropping that repeat puts two vertices on the same spot, and the
+ * owner has to find and delete one before the shape behaves.
+ */
+function openRing(ring: [number, number][]): [number, number][] {
+  if (ring.length < 2) return [...ring];
+
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  const closed = first[0] === last[0] && first[1] === last[1];
+
+  return closed ? ring.slice(0, -1) : [...ring];
+}
 
 const PURPOSES = [
   "SALE",
@@ -194,26 +223,6 @@ const makeSchema = (t: ReturnType<typeof useT>) => {
           t("validation.maxChars", { count: DESCRIPTION_MAX }),
         )
         .optional(),
-      latitude: z
-        .string()
-        .trim()
-        .refine(
-          (v) =>
-            !v ||
-            (!isNaN(Number(v)) && Number(v) >= -90 && Number(v) <= 90),
-          t("validation.numbersOnly"),
-        )
-        .optional(),
-      longitude: z
-        .string()
-        .trim()
-        .refine(
-          (v) =>
-            !v ||
-            (!isNaN(Number(v)) && Number(v) >= -180 && Number(v) <= 180),
-          t("validation.numbersOnly"),
-        )
-        .optional(),
     })
     .superRefine((v, ctx) => {
       if (/^\d+$/.test(v.price)) {
@@ -240,11 +249,7 @@ const makeSchema = (t: ReturnType<typeof useT>) => {
           message: t("validation.required"),
         });
       }
-      if (
-        v.floor &&
-        v.totalFloors &&
-        Number(v.floor) > Number(v.totalFloors)
-      ) {
+      if (v.floor && v.totalFloors && Number(v.floor) > Number(v.totalFloors)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["floor"],
@@ -286,6 +291,56 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
   } = useCategories();
 
   const { amenities, nameOf: amenityName } = useAmenities();
+
+  /**
+   * The location, as the post form shapes it: a boundary OR a pin, never
+   * both. A listing drawn as a parcel reopens on POLYGON with its ring; one
+   * dropped as a pin reopens on PIN with its point.
+   *
+   * The stored ring is closed (last point repeats the first) and the editor
+   * works on an open one, so the seed drops that repeat — otherwise every
+   * reopen would add a vertex sitting exactly on another.
+   */
+  const [locMode, setLocMode] = useState<"POLYGON" | "PIN">(
+    listing.geom ? "POLYGON" : "PIN",
+  );
+  const [polygon, setPolygon] = useState<[number, number][]>(() =>
+    openRing(listing.geom?.coordinates?.[0] ?? []),
+  );
+  const [pin, setPin] = useState<[number, number] | null>(
+    listing.centroid?.coordinates ?? null,
+  );
+  /**
+   * Which picker is over the form, if any.
+   *
+   * Rendered inside this modal rather than pushed as a route: the post form
+   * navigates to /add/draw, but a full-screen Modal sits above the navigator,
+   * so a pushed screen would open behind it — and dismissing this modal to
+   * get out of the way would take the half-filled form with it.
+   */
+  const [picker, setPicker] = useState<"polygon" | "pin" | null>(null);
+
+  /**
+   * Photos, seeded with the ones already on the listing so the grid opens
+   * showing them. Tiles start as `existing`: they are already uploaded, and
+   * removing one only drops it from the list sent back.
+   */
+  const {
+    images,
+    pickAndUpload,
+    remove: removeImage,
+    retry: retryImage,
+    reorder: reorderImages,
+    toPayload: imagePayload,
+    isUploading,
+  } = useImageUpload(
+    listing.images.map((img) => ({
+      url: img.url,
+      thumbUrl: img.thumbUrl,
+      width: img.width ?? 0,
+      height: img.height ?? 0,
+    })),
+  );
 
   const [category, setCategory] = useState<PropertyCategory>(listing.category);
   const [properties, setProperties] = useState<string[]>(
@@ -329,14 +384,6 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
       areaM2: listing.areaM2 ? String(listing.areaM2) : "",
       phone: listing.contactPhone ?? "",
       description: listing.descriptionText ?? "",
-      latitude:
-        listing.centroid?.coordinates && listing.centroid.coordinates[1] != null
-          ? String(listing.centroid.coordinates[1])
-          : "",
-      longitude:
-        listing.centroid?.coordinates && listing.centroid.coordinates[0] != null
-          ? String(listing.centroid.coordinates[0])
-          : "",
     },
   });
 
@@ -427,15 +474,35 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
         ? ` / ${t("add.perDay")}`
         : "";
 
+  const hasBoundary = polygon.length >= MIN_POLYGON_POINTS;
+
+  /** The photo list as it stands, in the shape the server stores. */
+  const nextImages = imagePayload();
+  /**
+   * Whether the photos actually moved.
+   *
+   * Compared by url in order, because that is what the server diffs on: a
+   * reorder matters, a no-op does not, and sending an unchanged list makes
+   * it delete and recreate every row and queue the old files for deletion.
+   */
+  const imagesChanged =
+    nextImages.length !== listing.images.length ||
+    nextImages.some((img, i) => img.url !== listing.images[i]?.url);
+
   const onSubmit = (d: FormData) => {
     const description = d.description?.trim();
     const sendFloors = showFloors && d.hasFloors === "yes";
-    const lat = d.latitude?.trim();
-    const lng = d.longitude?.trim();
+
+    // Exactly one of the two, chosen by the toggle — the same rule the post
+    // form follows and the server enforces. Unchanged geometry sends
+    // neither, so a plain price edit does not rewrite the parcel.
+    const ring = locMode === "POLYGON" ? polygon : [];
+    const sendRing = locMode === "POLYGON" && ring.length >= MIN_POLYGON_POINTS;
+    const coordinates: [number, number][][] | undefined = sendRing
+      ? [closeRing(ring)]
+      : undefined;
     const point: [number, number] | undefined =
-      lat && lng && !isNaN(Number(lat)) && !isNaN(Number(lng))
-        ? [Number(lng), Number(lat)]
-        : undefined;
+      !sendRing && locMode === "PIN" && pin ? pin : undefined;
 
     updateMutation.mutate(
       {
@@ -448,14 +515,15 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
           : undefined,
         repairType: d.repairType ? (d.repairType as RepairType) : undefined,
         floor: sendFloors && d.floor ? Number(d.floor) : null,
-        totalFloors:
-          sendFloors && d.totalFloors ? Number(d.totalFloors) : null,
+        totalFloors: sendFloors && d.totalFloors ? Number(d.totalFloors) : null,
         address: d.address?.trim() || undefined,
         properties: properties.length ? properties : [],
         contactPhone: d.phone?.trim() || undefined,
         descriptionHtml: description ? textToHtml(description) : undefined,
         areaM2: d.areaM2 ? Number(d.areaM2) : undefined,
+        coordinates,
         point,
+        images: imagesChanged ? nextImages : undefined,
         offers: [
           {
             purpose: d.purpose,
@@ -527,9 +595,7 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
             borderRadius: radii.pill,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: pressed
-              ? colors.surfaceRaised
-              : colors.surface,
+            backgroundColor: pressed ? colors.surfaceRaised : colors.surface,
           })}
         >
           <Ionicons name="close" size={20} color={colors.textMuted} />
@@ -789,9 +855,7 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
                     <Controller
                       control={control}
                       name="floor"
-                      render={({
-                        field: { value, onChange, onBlur },
-                      }) => (
+                      render={({ field: { value, onChange, onBlur } }) => (
                         <TextField
                           label={t("add.floor")}
                           placeholder={t("add.floorPlaceholder")}
@@ -808,9 +872,7 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
                     <Controller
                       control={control}
                       name="totalFloors"
-                      render={({
-                        field: { value, onChange, onBlur },
-                      }) => (
+                      render={({ field: { value, onChange, onBlur } }) => (
                         <TextField
                           label={t("add.totalFloors")}
                           placeholder={t("add.totalFloorsPlaceholder")}
@@ -849,50 +911,69 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
         />
 
         {/* Coordinates */}
-        <Section title={t("add.coordinates")}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "flex-start",
-              gap: spacing.md,
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <Controller
-                control={control}
-                name="latitude"
-                render={({ field: { value, onChange, onBlur } }) => (
-                  <TextField
-                    label={t("add.latitude")}
-                    placeholder={t("add.latitudePlaceholder")}
-                    keyboardType="numeric"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={errors.latitude?.message}
-                  />
+        {/* The same choice the post form offers, and the same pickers —
+            typed coordinates were the only way to move a listing before,
+            which meant an owner could not fix a boundary at all. */}
+        <Section title={t("add.location")}>
+          <Card>
+            <View style={{ gap: spacing.md }}>
+              <SegmentedControl
+                segments={[
+                  { value: "POLYGON", icon: "analytics-outline" },
+                  { value: "PIN", icon: "pin-outline" },
+                ]}
+                value={locMode}
+                onChange={setLocMode}
+              />
+              <Text style={text.caption}>
+                {t(
+                  locMode === "POLYGON"
+                    ? "add.locationPolygon"
+                    : "add.locationPin",
                 )}
+              </Text>
+              <Text style={text.body}>
+                {locMode === "POLYGON"
+                  ? hasBoundary
+                    ? t("add.boundarySummary", {
+                        count: polygon.length,
+                        area: formatAreaM2(polygonAreaM2(polygon)),
+                      })
+                    : t("add.noBoundary")
+                  : pin
+                    ? // The numbers, not just "a pin is set": on a listing
+                      // that already had one, moving it changed nothing on
+                      // this line, so a correct save looked like no save.
+                      t("add.pinAt", {
+                        lat: pin[1].toFixed(5),
+                        lng: pin[0].toFixed(5),
+                      })
+                    : t("add.noPin")}
+              </Text>
+              <Button
+                title={
+                  locMode === "POLYGON" ? t("add.drawOnMap") : t("add.dropPin")
+                }
+                icon={locMode === "POLYGON" ? "map-outline" : "pin-outline"}
+                variant="secondary"
+                size="sm"
+                onPress={() =>
+                  setPicker(locMode === "POLYGON" ? "polygon" : "pin")
+                }
               />
             </View>
-            <View style={{ flex: 1 }}>
-              <Controller
-                control={control}
-                name="longitude"
-                render={({ field: { value, onChange, onBlur } }) => (
-                  <TextField
-                    label={t("add.longitude")}
-                    placeholder={t("add.longitudePlaceholder")}
-                    keyboardType="numeric"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={errors.longitude?.message}
-                  />
-                )}
-              />
-            </View>
-          </View>
+          </Card>
         </Section>
+
+        {/* Photos, including the ones already on the listing: add, remove,
+            reorder. The first is the cover, as everywhere else. */}
+        <ImagePickerGrid
+          images={images}
+          onAdd={pickAndUpload}
+          onRemove={removeImage}
+          onRetry={retryImage}
+          onReorder={reorderImages}
+        />
 
         {/* Contact Phone */}
         <Controller
@@ -984,13 +1065,57 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
         </View>
         <View style={{ flex: 2 }}>
           <Button
-            title={t("common.save")}
+            title={isUploading ? t("images.uploading") : t("common.save")}
             variant="primary"
             onPress={handleSubmit(onSubmit)}
             loading={updateMutation.isPending}
+            // A half-uploaded photo would be dropped from the payload and
+            // silently lost, so Save waits for the uploads to land.
+            disabled={isUploading}
           />
         </View>
       </View>
+
+      {/* The map, over the form rather than beside it. Absolute inside this
+          sheet, so the form underneath keeps every field it had — navigating
+          to /add/draw the way the post form does would open behind this
+          modal, and dismissing the modal to make room would throw the edit
+          away. */}
+      {picker ? (
+        <View
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundColor: colors.bg,
+          }}
+        >
+          {picker === "polygon" ? (
+            <PolygonPicker
+              initial={polygon}
+              onCancel={() => setPicker(null)}
+              onSave={(points) => {
+                setPolygon(points);
+                // One location per listing: taking the boundary drops the
+                // pin, exactly as the post form does.
+                setPin(null);
+                setLocMode("POLYGON");
+                setPicker(null);
+              }}
+            />
+          ) : (
+            <PinPicker
+              initial={pin}
+              onCancel={() => setPicker(null)}
+              onSave={(point) => {
+                setPin(point);
+                setPolygon([]);
+                setLocMode("PIN");
+                setPicker(null);
+              }}
+            />
+          )}
+        </View>
+      ) : null}
     </Animated.View>
   );
 }

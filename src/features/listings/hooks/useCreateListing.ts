@@ -4,6 +4,7 @@ import { CreateListingInput, listingApi } from "../api/listings.api";
 import { queryClient } from "@/src/lib/query-client";
 import { errorMessage } from "@/src/lib/api-error";
 import { toast } from "@/src/components/ui/Toast";
+import { handleChargeError } from "@/src/features/tariffs/lib/charge-errors";
 
 export function useCreateListing() {
   return useMutation({
@@ -12,9 +13,14 @@ export function useCreateListing() {
       queryClient.invalidateQueries({ queryKey: ["listings", "mine"] });
       queryClient.invalidateQueries({ queryKey: ["listings", "counts"] });
       queryClient.invalidateQueries({ queryKey: ["listings", "viewport"] });
+      // Posting is charged, so the balance just moved.
+      queryClient.invalidateQueries({ queryKey: ["wallet"] });
       toast.successKey("listings.created");
       router.replace(`/listing/${listing.id}`);
     },
+    // Running out of balance is the one refusal with a fix, and it gets a
+    // dialog pointing at it rather than a toast that scrolls away.
+    onError: handleChargeError,
   });
 }
 

@@ -18,6 +18,7 @@ export { BackButton } from "./BackButton";
 export { LanguageSwitcher } from "./LanguageSwitcher";
 export { Card, Section } from "./Card";
 export { EmptyState } from "./EmptyState";
+export { Skeleton } from "./Skeleton";
 export { OptionList, type Option } from "./OptionList";
 export { SelectSheet } from "./SelectSheet";
 export { ToastHost, toast, type ToastType } from "./Toast";

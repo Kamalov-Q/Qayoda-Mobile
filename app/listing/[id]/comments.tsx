@@ -9,7 +9,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
-import * as ImagePicker from "expo-image-picker";
+import { pickFromLibrary } from "../../../src/lib/image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Screen,
@@ -97,7 +97,7 @@ export default function ListingCommentsScreen() {
   };
 
   const pickPhoto = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
+    const result = await pickFromLibrary({
       mediaTypes: ["images"],
       quality: 0.9,
     });

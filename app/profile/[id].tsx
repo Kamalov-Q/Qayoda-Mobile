@@ -53,6 +53,7 @@ import { confirm } from "../../src/lib/alerts";
 import { useAuthStore } from "../../src/features/auth/store/auth.store";
 import { PresenceStatus } from "../../src/features/chat/components/PresenceStatus";
 import { ProfileStories } from "../../src/features/stories/components/ProfileStories";
+import { SocialRow } from "../../src/features/users/components/SocialRow";
 
 /** The order the purpose sheet lists them in — the same order the rest of the
  *  app uses, narrowed to what the seller actually has. */
@@ -303,6 +304,16 @@ export default function UserProfileScreen() {
         }
         actions={actions}
       />
+
+      {/* What they wrote about themselves, and where to find them. Both are
+          the only parts of the new profile fields that are public — age,
+          gender and address were asked for at registration, not written to
+          be published, and the server never sends them here. */}
+      {data?.bio ? (
+        <Text style={{ ...text.body, textAlign: "center" }}>{data.bio}</Text>
+      ) : null}
+
+      <SocialRow links={data?.socialLinks} />
 
       {data?.phoneNumber && !isSelf && !blocked ? (
         <Text

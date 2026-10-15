@@ -4,7 +4,7 @@ import {
   type Socket,
   type SocketOptions,
 } from "socket.io-client";
-import { API_URL } from "./env";
+import { API_ORIGIN } from "./env";
 import { useAuthStore } from "../features/auth/store/auth.store";
 import { refreshSession } from "./api-client";
 
@@ -61,7 +61,7 @@ export function namespaceSocket(
     get() {
       if (socket) return socket;
 
-      socket = io(`${API_URL}${namespace}`, {
+      socket = io(`${API_ORIGIN}${namespace}`, {
         ...OPTIONS,
         ...(auth
           ? {

@@ -226,6 +226,10 @@ export default function RootLayout() {
               name="wallet/history"
               options={{ headerShown: false }}
             />
+            <Stack.Screen
+              name="wallet/transaction/[id]"
+              options={{ headerShown: false }}
+            />
           </Stack>
         ) : (
           // Same emblem as the native splash, so the web boot (which has no

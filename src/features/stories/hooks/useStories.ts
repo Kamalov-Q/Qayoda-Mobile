@@ -7,6 +7,7 @@ import {
 } from "../api/stories.api";
 import { errorMessage } from "@/src/lib/api-error";
 import { toast } from "@/src/components/ui/Toast";
+import { handleChargeError } from "@/src/features/tariffs/lib/charge-errors";
 
 const TRAY_KEY = ["stories", "tray"] as const;
 const storyKey = (id: string) => ["stories", "detail", id] as const;
@@ -68,8 +69,10 @@ export function usePostStory() {
     mutationFn: (input: CreateStoryInput) => storiesApi.create(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: TRAY_KEY });
+      // Posting a story is charged, so the balance just moved.
+      void queryClient.invalidateQueries({ queryKey: ["wallet"] });
     },
-    onError: (error) => toast.error(errorMessage(error)),
+    onError: handleChargeError,
   });
 }
 

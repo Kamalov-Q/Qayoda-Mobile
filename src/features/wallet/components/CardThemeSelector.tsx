@@ -6,15 +6,16 @@ import {
   ScrollView,
   StyleSheet,
   Modal,
-  TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useTheme } from "@/src/theme/useTheme";
+import { useT } from "@/src/i18n";
 import {
   PRESET_CARD_THEMES,
   useCardThemeStore,
 } from "@/src/features/wallet/store/cardTheme.store";
+import { ColorPicker } from "@/src/features/wallet/components/ColorPicker";
 
 const CUSTOM_PALETTE = [
   "#10B981", // Emerald
@@ -37,6 +38,7 @@ const CUSTOM_PALETTE = [
 
 export function CardThemeSelector() {
   const { colors, scheme } = useTheme();
+  const t = useT();
   const { currentTheme, customHex, setThemeById, setCustomColor } =
     useCardThemeStore();
 
@@ -50,12 +52,17 @@ export function CardThemeSelector() {
     setThemeById(id);
   };
 
-  const handleApplyCustom = (hex: string) => {
-    let clean = hex.trim();
-    if (!clean.startsWith("#")) {
-      clean = `#${clean}`;
+  /** Apply a hex color WITHOUT closing the modal (for live picker drags). */
+  const applyColor = (hex: string) => {
+    const clean = hex.startsWith("#") ? hex : `#${hex}`;
+    if (/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(clean)) {
+      setCustomColor(clean);
     }
-    // Basic hex regex
+  };
+
+  /** Apply and close — used by preset swatches. */
+  const handleApplyCustom = (hex: string) => {
+    const clean = hex.trim().startsWith("#") ? hex.trim() : `#${hex.trim()}`;
     if (/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(clean)) {
       try {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -71,11 +78,11 @@ export function CardThemeSelector() {
         <View style={styles.titleLeft}>
           <Ionicons name="color-palette-outline" size={16} color={colors.primary} />
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Karta rangi
+            {t("wallet.cardColor")}
           </Text>
         </View>
         <Text style={[styles.hintText, { color: colors.textMuted }]}>
-          Bosib almashtiring (USD 🔄 UZS)
+          {t("wallet.flipHint")}
         </Text>
       </View>
 
@@ -118,7 +125,7 @@ export function CardThemeSelector() {
             setModalVisible(true);
           }}
           accessibilityRole="button"
-          accessibilityLabel="Maxsus rang tanlash"
+          accessibilityLabel={t("wallet.selectCustomColor")}
           style={({ pressed }) => [
             styles.customButton,
             {
@@ -143,7 +150,7 @@ export function CardThemeSelector() {
               { color: currentTheme.isCustom ? "#FFFFFF" : colors.text },
             ]}
           >
-            Maxsus
+            {t("wallet.customColor")}
           </Text>
         </Pressable>
       </ScrollView>
@@ -174,7 +181,7 @@ export function CardThemeSelector() {
                   color={colors.primary}
                 />
                 <Text style={[styles.modalTitle, { color: colors.text }]}>
-                  Maxsus rang tanlash
+                  {t("wallet.selectCustomColor")}
                 </Text>
               </View>
               <Pressable
@@ -188,7 +195,7 @@ export function CardThemeSelector() {
 
             {/* Quick Swatches Grid */}
             <Text style={[styles.modalSubtitle, { color: colors.textMuted }]}>
-              Tavsiya etilgan ranglar
+              {t("wallet.presetColors")}
             </Text>
             <View style={styles.paletteGrid}>
               {CUSTOM_PALETTE.map((hex) => {
@@ -218,54 +225,31 @@ export function CardThemeSelector() {
               })}
             </View>
 
-            {/* Manual Hex Input */}
-            <Text style={[styles.modalSubtitle, { color: colors.textMuted }]}>
-              HEX kodi
-            </Text>
-            <View
-              style={[
-                styles.hexInputRow,
-                {
-                  backgroundColor:
-                    scheme === "dark" ? colors.surfaceRaised : "#F3F4F6",
-                  borderColor: colors.border,
-                },
+            {/* Visual Color Picker */}
+            <ColorPicker
+              value={inputHex}
+              onChange={(hex) => {
+                setInputHex(hex);
+                applyColor(hex); // live update, does NOT close modal
+              }}
+            />
+
+            {/* Done button */}
+            <Pressable
+              onPress={() => {
+                try {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                } catch {}
+                setModalVisible(false);
+              }}
+              style={({ pressed }) => [
+                styles.doneButton,
+                { backgroundColor: inputHex, opacity: pressed ? 0.85 : 1 },
               ]}
             >
-              <View
-                style={[
-                  styles.previewDot,
-                  {
-                    backgroundColor: inputHex.startsWith("#")
-                      ? inputHex
-                      : `#${inputHex}`,
-                  },
-                ]}
-              />
-              <TextInput
-                value={inputHex}
-                onChangeText={setInputHex}
-                placeholder="#8B5CF6"
-                placeholderTextColor={colors.textFaint}
-                autoCapitalize="characters"
-                maxLength={7}
-                style={[styles.hexTextInput, { color: colors.text }]}
-              />
-              <Pressable
-                onPress={() => handleApplyCustom(inputHex)}
-                style={({ pressed }) => [
-                  styles.applyButton,
-                  {
-                    backgroundColor: colors.text,
-                    opacity: pressed ? 0.8 : 1,
-                  },
-                ]}
-              >
-                <Text style={[styles.applyButtonText, { color: colors.bg }]}>
-                  Qo&apos;llash
-                </Text>
-              </Pressable>
-            </View>
+              <Ionicons name="checkmark" size={17} color="#FFFFFF" />
+              <Text style={styles.doneButtonText}>{t("wallet.apply")}</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -378,35 +362,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  hexInputRow: {
+  doneButton: {
     flexDirection: "row",
     alignItems: "center",
-    height: 46,
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    gap: 8,
+    justifyContent: "center",
+    gap: 7,
+    marginTop: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
   },
-  previewDot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
-  },
-  hexTextInput: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: "600",
-    padding: 0,
-  },
-  applyButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-  },
-  applyButtonText: {
-    fontSize: 12.5,
+  doneButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
     fontWeight: "700",
+    letterSpacing: 0.2,
   },
 });

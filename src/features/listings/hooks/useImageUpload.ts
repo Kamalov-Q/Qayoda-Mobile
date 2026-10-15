@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import * as ImagePicker from "expo-image-picker";
+import { pickFromLibrary } from "@/src/lib/image-picker";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { uploadImages, UploadedImage } from "../../../lib/upload-client";
 import { toast } from "../../../components/ui/Toast";
@@ -125,7 +125,7 @@ export function useImageUpload(initial: UploadedImage[] = []) {
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
+    const result = await pickFromLibrary({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
       selectionLimit: remaining,

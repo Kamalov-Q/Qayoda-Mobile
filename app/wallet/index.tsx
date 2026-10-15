@@ -11,8 +11,10 @@ import {
   Linking,
 } from "react-native";
 import { router } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
 import * as WebBrowser from "expo-web-browser";
 import * as ExpoLinking from "expo-linking";
+import * as Crypto from "expo-crypto";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/src/theme/useTheme";
@@ -30,6 +32,7 @@ import {
 } from "@/src/features/wallet/components/VirtualCard";
 import { CardThemeSelector } from "@/src/features/wallet/components/CardThemeSelector";
 import { walletApi } from "@/src/features/wallet/api/wallet.api";
+import { useWalletOverview } from "@/src/features/wallet/hooks/useWalletOverview";
 
 const QUICK_AMOUNTS = [1_000, 50_000, 100_000, 200_000, 500_000];
 
@@ -40,6 +43,9 @@ export default function WalletTopupScreen() {
   const { colors, scheme } = useTheme();
   const t = useT();
   const user = useAuthStore((s) => s.user);
+  const queryClient = useQueryClient();
+
+  const { data: overview } = useWalletOverview();
 
   // Price cannot be manually edited; driven directly by quick amount selections
   const [selectedAmount, setSelectedAmount] = useState<number>(1_000);
@@ -90,7 +96,7 @@ export default function WalletTopupScreen() {
     }
 
     if (!user?.id) {
-      toast.error("Iltimos, avval tizimga kiring");
+      toast.error(t("wallet.pleaseLogin"));
       return;
     }
 
@@ -113,7 +119,7 @@ export default function WalletTopupScreen() {
 
     // ── PAYME ──────────────────────────────────────────────────────────────
     if (selectedMethod === "PAYME") {
-      toast.info("Payme orqali to'lov tez orada ishga tushadi");
+      toast.info(t("wallet.paymeSubtitle"));
       return;
     }
 
@@ -126,7 +132,7 @@ export default function WalletTopupScreen() {
         const order = await walletApi.createTopup({
           amount: selectedAmount,
           provider: "CLICK",
-          clientId: returnUrl, // pass as clientId for idempotency per attempt
+          clientId: Crypto.randomUUID(),
         });
 
         // 2. Open Click's checkout page in the in-app browser
@@ -144,24 +150,27 @@ export default function WalletTopupScreen() {
               const status = await walletApi.getTopupStatus(order.paymentId);
               if (status.status === "PAID") {
                 clearInterval(poll);
+                queryClient.invalidateQueries({ queryKey: ["wallet"] });
                 toast.success(
-                  `${formatThousands(selectedAmount)} UZS muvaffaqiyatli to'landi! 🎉`
+                  t("wallet.paidSuccess", {
+                    amount: formatThousands(selectedAmount),
+                  })
                 );
               } else if (status.status === "CANCELLED") {
                 clearInterval(poll);
-                toast.error("To'lov bekor qilindi");
+                toast.error(t("wallet.paymentCancelled"));
               } else if (attempts >= 15) {
                 // ~30s timeout
                 clearInterval(poll);
-                toast.info("To'lov tekshirilmoqda — keyinroq qarang");
+                toast.info(t("wallet.paymentPending"));
               }
             } catch {
               clearInterval(poll);
             }
           }, 2000);
         }
-      } catch {
-        toast.error("To'lovni yaratishda xatolik yuz berdi");
+      } catch (err: any) {
+        toast.error(err?.message || t("wallet.paymentCancelled"));
       } finally {
         setLoadingTopup(false);
       }
@@ -202,12 +211,19 @@ export default function WalletTopupScreen() {
             {
               backgroundColor: pressed ? colors.surfaceRaised : colors.surface,
               borderColor: colors.border,
+              opacity: pressed ? 0.85 : 1,
             },
           ]}
         >
+          <Ionicons
+            name="receipt-outline"
+            size={15}
+            color={colors.primary}
+          />
           <Text style={[styles.historyText, { color: colors.text }]}>
             {t("wallet.historyTitle")}
           </Text>
+          <Ionicons name="chevron-forward" size={13} color={colors.textMuted} />
         </Pressable>
       </View>
 
@@ -227,7 +243,7 @@ export default function WalletTopupScreen() {
             phone={user?.phoneNumber}
             userId={user?.id}
             name={userName}
-            balance={0}
+            balance={overview?.balance ?? 0}
             variant="full"
           />
 
@@ -443,6 +459,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+    flexShrink: 1,
+    marginRight: 8,
   },
   backButton: {
     width: 40,
@@ -455,15 +473,22 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: "700",
+    flexShrink: 1,
+    maxWidth: 180,
   },
   historyPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: 20,
     borderWidth: 1,
+    flexShrink: 0,
+    marginRight: 8,
   },
   historyText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: "600",
   },
   scrollContent: {

@@ -1,12 +1,18 @@
 // app/profile/edit.tsx
-import { useMemo, useRef } from "react";
-import { Text, View, TextInput, Pressable, ActivityIndicator } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Text,
+  View,
+  TextInput,
+  Pressable,
+  ActivityIndicator,
+} from "react-native";
 import { router } from "expo-router";
 import { Image } from "expo-image";
-import * as ImagePicker from "expo-image-picker";
+import { pickFromLibrary } from "../../src/lib/image-picker";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { Ionicons } from "@expo/vector-icons";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -29,6 +35,15 @@ import {
   useRemoveAvatar,
 } from "../../src/features/profile/hooks/useProfile";
 import { useAuthStore } from "../../src/features/auth/store/auth.store";
+import { ProfileDetailsFields } from "../../src/features/profile/components/ProfileDetailsFields";
+import {
+  MAX_AGE,
+  MIN_AGE,
+  ageFrom,
+  fromIsoDate,
+  toIsoDate,
+} from "../../src/features/profile/lib/birth-date";
+import type { SocialLinks } from "../../src/features/users/lib/social";
 
 /** Long edge the avatar is downscaled to before upload — the server re-crops
  *  and thumbnails it anyway, so shipping a full camera frame is pure waste. */
@@ -36,8 +51,38 @@ const AVATAR_EDGE = 1024;
 
 const makeSchema = (t: ReturnType<typeof useT>) =>
   z.object({
-    name: z.string().trim().min(2, t("validation.minChars", { count: 2 })),
-    surname: z.string().trim().min(2, t("validation.minChars", { count: 2 })),
+    name: z
+      .string()
+      .trim()
+      .min(2, t("validation.minChars", { count: 2 })),
+    surname: z
+      .string()
+      .trim()
+      .min(2, t("validation.minChars", { count: 2 })),
+    /**
+     * Optional here, unlike registration: this is a patch, and an account
+     * that predates the field has nothing to resend. Still validated when
+     * something IS typed — a half-finished date should not be saved.
+     */
+    birthDate: z
+      .string()
+      .trim()
+      .refine(
+        (v) => !v || toIsoDate(v) !== null,
+        t("profileInfo.birthDateInvalid"),
+      )
+      .refine(
+        (v) => {
+          if (!v) return true;
+          const age = ageFrom(toIsoDate(v));
+          return age !== null && age >= MIN_AGE && age <= MAX_AGE;
+        },
+        t("profileInfo.ageRange", { min: MIN_AGE, max: MAX_AGE }),
+      )
+      .optional(),
+    gender: z.enum(["MALE", "FEMALE", "OTHER"]).or(z.literal("")),
+    address: z.string().trim().max(255).optional(),
+    bio: z.string().trim().max(500).optional(),
   });
 
 type FormData = z.infer<ReturnType<typeof makeSchema>>;
@@ -60,22 +105,89 @@ export default function EditProfileScreen() {
   const {
     control,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { name: "", surname: "" },
+    defaultValues: {
+      name: "",
+      surname: "",
+      birthDate: "",
+      gender: "",
+      address: "",
+      bio: "",
+    },
     // Re-syncs whenever the query resolves (or a mutation writes fresh data),
     // so the form never shows stale values after a cold navigation here.
     values: profile
-      ? { name: profile.name ?? "", surname: profile.surname ?? "" }
+      ? {
+          name: profile.name ?? "",
+          surname: profile.surname ?? "",
+          // Stored ISO, typed DD.MM.YYYY.
+          birthDate: fromIsoDate(profile.birthDate),
+          gender: profile.gender ?? "",
+          address: profile.address ?? "",
+          bio: profile.bio ?? "",
+        }
       : sessionUser
-        ? { name: sessionUser.name ?? "", surname: sessionUser.surname ?? "" }
+        ? {
+            // The session copy carries only the name; the rest arrives with
+            // the profile a moment later and `values` re-syncs then.
+            name: sessionUser.name ?? "",
+            surname: sessionUser.surname ?? "",
+            birthDate: "",
+            gender: "" as const,
+            address: "",
+            bio: "",
+          }
         : undefined,
   });
 
+  const [birthDate, gender, address, bio] = useWatch({
+    control,
+    name: ["birthDate", "gender", "address", "bio"],
+  }) as [
+    string | undefined,
+    FormData["gender"],
+    string | undefined,
+    string | undefined,
+  ];
+
+  /**
+   * Social handles live outside the form.
+   *
+   * Six free-text fields that only ever travel together as one object, with
+   * no validation beyond a length the field itself enforces — threading them
+   * through the resolver would buy nothing and cost six more schema entries.
+   * Seeded from the profile once it lands.
+   */
+  const [socials, setSocials] = useState<SocialLinks>({});
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (!profile || seeded.current) return;
+    seeded.current = true;
+    setSocials(profile.socialLinks ?? {});
+  }, [profile]);
+
   const onSubmit = handleSubmit((d) =>
     update.mutate(
-      { name: d.name.trim(), surname: d.surname.trim() },
+      {
+        name: d.name.trim(),
+        surname: d.surname.trim(),
+        // A birth date is never cleared — there is no "I was not born".
+        birthDate: d.birthDate
+          ? (toIsoDate(d.birthDate) ?? undefined)
+          : undefined,
+        // Explicit null, not undefined: this form holds the whole truth, so
+        // an empty field means the answer was taken back. Undefined would
+        // leave the old value in place and the clear would look broken.
+        gender: d.gender || null,
+        address: d.address || null,
+        bio: d.bio?.trim() || null,
+        // Always sent, because the server replaces the set whole — that is
+        // what makes clearing one possible.
+        socialLinks: socials,
+      },
       { onSuccess: () => router.back() },
     ),
   );
@@ -83,7 +195,7 @@ export default function EditProfileScreen() {
   const avatarBusy = uploadAvatar.isPending || removeAvatar.isPending;
 
   const pickAvatar = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
+    const result = await pickFromLibrary({
       mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [1, 1],
@@ -160,7 +272,11 @@ export default function EditProfileScreen() {
                 />
               ) : initials ? (
                 <Text
-                  style={{ ...type.display, fontSize: 32, color: colors.primary }}
+                  style={{
+                    ...type.display,
+                    fontSize: 32,
+                    color: colors.primary,
+                  }}
                 >
                   {initials}
                 </Text>
@@ -237,6 +353,25 @@ export default function EditProfileScreen() {
               />
             )}
           />
+          {/* The same block the registration screen shows, plus the two
+              things nobody should be asked for at sign-up: a bio and six
+              social handles. */}
+          <ProfileDetailsFields
+            birthDate={birthDate ?? ""}
+            onBirthDate={(v) =>
+              setValue("birthDate", v, { shouldValidate: !!errors.birthDate })
+            }
+            birthDateError={errors.birthDate?.message}
+            gender={gender}
+            onGender={(v) => setValue("gender", v)}
+            address={address ?? ""}
+            onAddress={(v) => setValue("address", v)}
+            bio={bio ?? ""}
+            onBio={(v) => setValue("bio", v)}
+            socials={socials}
+            onSocials={setSocials}
+          />
+
           {/* Phone and email are set by the sign-in method that verified
               them (SMS code, Google), so they render as context, not fields. */}
           <View style={{ gap: spacing.xs }}>
