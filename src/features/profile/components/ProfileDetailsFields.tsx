@@ -26,13 +26,11 @@ import { findPlace, useRegions } from "../api/regions.api";
 const GENDER_ICONS = {
   MALE: "man-outline",
   FEMALE: "woman-outline",
-  OTHER: "person-outline",
 } as const satisfies Record<Gender, keyof typeof Ionicons.glyphMap>;
 
 const GENDER_LABELS = {
   MALE: "profileInfo.genderMale",
   FEMALE: "profileInfo.genderFemale",
-  OTHER: "profileInfo.genderOther",
 } as const;
 
 interface Props {
@@ -40,6 +38,11 @@ interface Props {
   birthDate: string;
   onBirthDate: (value: string) => void;
   birthDateError?: string;
+  /**
+   * Registration demands a birth date; the edit screen takes a patch and
+   * cannot, so the asterisk is the caller's to decide.
+   */
+  birthDateRequired?: boolean;
   gender: Gender | "";
   onGender: (value: Gender | "") => void;
   address: string;
@@ -58,14 +61,16 @@ interface Props {
  * ask for the same things in the same order with the same validation, and
  * two copies would have drifted the first time a label changed.
  *
- * Age is the only required field. Everything else is explicitly marked
- * optional, and a line at the foot says who can see what — a form that asks
- * for an address without saying where it goes gets abandoned.
+ * Only the required fields are marked, with a red asterisk; the optional
+ * ones say nothing. Labelling four of five fields "optional" was more words
+ * than it was guidance. A line at the foot still says who can see what — a
+ * form that asks for an address without saying where it goes gets abandoned.
  */
 export const ProfileDetailsFields = memo(function ProfileDetailsFields({
   birthDate,
   onBirthDate,
   birthDateError,
+  birthDateRequired,
   gender,
   onGender,
   address,
@@ -78,8 +83,8 @@ export const ProfileDetailsFields = memo(function ProfileDetailsFields({
   const { text, colors } = useTheme();
   const t = useT();
 
-  // Typed with "" in the union so the grid can render nothing selected:
-  // the options themselves are only the three real answers.
+  // Typed with "" in the union so the grid can render nothing selected —
+  // which is also how "prefer not to say" is expressed.
   const genderOptions = useMemo<SelectGridOption<Gender | "">[]>(
     () =>
       GENDERS.map((value) => ({
@@ -127,6 +132,7 @@ export const ProfileDetailsFields = memo(function ProfileDetailsFields({
     <View style={{ gap: spacing.lg }}>
       <TextField
         label={t("profileInfo.birthDate")}
+        required={birthDateRequired}
         placeholder={t("profileInfo.birthDatePlaceholder")}
         keyboardType="number-pad"
         value={birthDate}
@@ -138,7 +144,7 @@ export const ProfileDetailsFields = memo(function ProfileDetailsFields({
       />
 
       <Section
-        title={`${t("profileInfo.gender")} · ${t("profileInfo.optional")}`}
+        title={t("profileInfo.gender")}
       >
         <SelectGrid<Gender | "">
           options={genderOptions}
@@ -158,7 +164,7 @@ export const ProfileDetailsFields = memo(function ProfileDetailsFields({
           code, so a typed value would simply be refused. */}
       <View style={{ gap: spacing.sm }}>
         <PlaceField
-          label={`${t("profileInfo.address")} · ${t("profileInfo.optional")}`}
+          label={t("profileInfo.address")}
           value={region ? label(region) : null}
           placeholder={t("profileInfo.addressPlaceholder")}
           onPress={() => setOpen("region")}
@@ -207,7 +213,7 @@ export const ProfileDetailsFields = memo(function ProfileDetailsFields({
 
       {onBio ? (
         <TextField
-          label={`${t("profileInfo.bio")} · ${t("profileInfo.optional")}`}
+          label={t("profileInfo.bio")}
           placeholder={t("profileInfo.bioPlaceholder")}
           value={bio ?? ""}
           onChangeText={onBio}
@@ -219,7 +225,7 @@ export const ProfileDetailsFields = memo(function ProfileDetailsFields({
 
       {onSocials ? (
         <Section
-          title={`${t("profileInfo.socials")} · ${t("profileInfo.optional")}`}
+          title={t("profileInfo.socials")}
         >
           <View style={{ gap: spacing.sm }}>
             <Text style={text.caption}>{t("profileInfo.socialsHint")}</Text>

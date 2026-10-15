@@ -9,7 +9,10 @@ import { radii, spacing } from "@/src/theme/tokens";
 import { useTheme } from "@/src/theme/useTheme";
 import { useT } from "@/src/i18n";
 import { queryClient } from "@/src/lib/query-client";
-import { listingApi } from "@/src/features/listings/api/listings.api";
+import {
+  listingApi,
+  type Listing,
+} from "@/src/features/listings/api/listings.api";
 import { formatThousands } from "@/src/features/wallet/components/VirtualCard";
 import { useWalletOverview } from "@/src/features/wallet/hooks/useWalletOverview";
 import { useTariffs } from "../hooks/useTariffs";
@@ -44,9 +47,15 @@ export const PromoteSheet = memo(function PromoteSheet({
 
   const promote = useMutation({
     mutationFn: (tariffId: string) => listingApi.promote(listingId, tariffId),
-    onSuccess: (listing) => {
-      // The badge is read off the listing, and the balance just moved.
-      queryClient.setQueryData(["listings", "detail", listingId], listing);
+    onSuccess: (result) => {
+      // MERGED, not replaced: the response is {id, promotedUntil} alone, and
+      // writing it over the cached listing would leave the detail screen
+      // without `offers` to render.
+      queryClient.setQueryData<Listing>(
+        ["listings", "detail", listingId],
+        (prev) =>
+          prev ? { ...prev, promotedUntil: result.promotedUntil } : prev,
+      );
       void queryClient.invalidateQueries({ queryKey: ["listings"] });
       void queryClient.invalidateQueries({ queryKey: ["wallet"] });
       toast.successKey("tariffs.topBought");

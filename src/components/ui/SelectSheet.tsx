@@ -1,7 +1,7 @@
 // A Joymee-style bottom picker: a titled sheet of radio rows that closes on
 // pick. For the one-of-N filters that used to live in a chip row eating a
 // line of every screen.
-import { Modal, View, Text, Pressable } from "react-native";
+import { Modal, View, Text, Pressable, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { spacing, radii } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
@@ -54,6 +54,10 @@ export function SelectSheet<T extends string>({
         <View
           accessibilityViewIsModal
           style={{
+            // Capped, or a long list (16 districts in a region) grows past the
+            // top of the screen and takes the handle and title with it —
+            // leaving no way to scroll and no way to close.
+            maxHeight: "85%",
             backgroundColor: colors.surface,
             borderTopLeftRadius: radii.xxl,
             borderTopRightRadius: radii.xxl,
@@ -79,14 +83,23 @@ export function SelectSheet<T extends string>({
           >
             {title}
           </Text>
-          <OptionList
-            options={options}
-            value={value}
-            onChange={(next) => {
-              onSelect(next);
-              onClose();
-            }}
-          />
+          {/* The handle and title stay put; only the rows move. flexShrink
+              lets the list give up height to the cap above, which is what
+              makes it scroll instead of overflowing. */}
+          <ScrollView
+            style={{ flexShrink: 1 }}
+            contentContainerStyle={{ paddingBottom: spacing.sm }}
+            bounces={false}
+          >
+            <OptionList
+              options={options}
+              value={value}
+              onChange={(next) => {
+                onSelect(next);
+                onClose();
+              }}
+            />
+          </ScrollView>
         </View>
       </View>
     </Modal>

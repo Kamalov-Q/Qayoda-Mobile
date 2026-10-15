@@ -1,5 +1,5 @@
 // app/profile/edit.tsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Text,
   View,
@@ -12,7 +12,7 @@ import { Image } from "expo-image";
 import { pickFromLibrary } from "../../src/lib/image-picker";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { Ionicons } from "@expo/vector-icons";
-import { useForm, Controller, useWatch } from "react-hook-form";
+import { useForm, Controller, useController } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -28,13 +28,16 @@ import { useT } from "../../src/i18n";
 import { confirm } from "../../src/lib/alerts";
 import { errorMessage } from "../../src/lib/api-error";
 import { resolveMediaUrl } from "../../src/lib/media-url";
+import type {
+  Profile,
+  UpdateProfileInput,
+} from "../../src/features/profile/api/profile.api";
 import {
   useProfile,
   useUpdateProfile,
   useUploadAvatar,
   useRemoveAvatar,
 } from "../../src/features/profile/hooks/useProfile";
-import { useAuthStore } from "../../src/features/auth/store/auth.store";
 import { ProfileDetailsFields } from "../../src/features/profile/components/ProfileDetailsFields";
 import {
   MAX_AGE,
@@ -43,7 +46,11 @@ import {
   fromIsoDate,
   toIsoDate,
 } from "../../src/features/profile/lib/birth-date";
-import type { SocialLinks } from "../../src/features/users/lib/social";
+import {
+  SOCIAL_PLATFORMS,
+  normalizeSocial,
+  type SocialLinks,
+} from "../../src/features/users/lib/social";
 
 /** Long edge the avatar is downscaled to before upload — the server re-crops
  *  and thumbnails it anyway, so shipping a full camera frame is pure waste. */
@@ -80,18 +87,49 @@ const makeSchema = (t: ReturnType<typeof useT>) =>
         t("profileInfo.ageRange", { min: MIN_AGE, max: MAX_AGE }),
       )
       .optional(),
-    gender: z.enum(["MALE", "FEMALE", "OTHER"]).or(z.literal("")),
+    gender: z.enum(["MALE", "FEMALE"]).or(z.literal("")),
     address: z.string().trim().max(255).optional(),
     bio: z.string().trim().max(500).optional(),
   });
 
 type FormData = z.infer<ReturnType<typeof makeSchema>>;
 
+/**
+ * The screen waits; the form mounts already knowing the answers.
+ *
+ * This split is the fix for fields that would not seed. The form used to
+ * mount empty and lean on react-hook-form's `values` prop to pour the
+ * profile in once the query resolved — but `values` applies through
+ * `_reset`, which notifies the form-state stream and NOT the value stream
+ * that useWatch (and therefore Controller and useController, both built on
+ * it) listen to. The reset landed in the form's internals and no field ever
+ * heard about it, so the boxes stayed blank until a keystroke forced a
+ * re-render.
+ *
+ * Mounting after the data arrives makes the stored values the
+ * `defaultValues`, which fields read directly on registration. No reset, no
+ * notification, nothing to miss.
+ */
 export default function EditProfileScreen() {
-  const { data: profile, isError: loadFailed, error: loadError } = useProfile();
-  // The session user seeds the form while /profile is still in flight — the
-  // name and surname it holds are the same values, so nothing flashes empty.
-  const sessionUser = useAuthStore((s) => s.user);
+  const { data: profile, isError, error } = useProfile();
+  const { colors } = useTheme();
+
+  if (!profile) {
+    return (
+      <Screen edges={HEADER_EDGES}>
+        {isError ? (
+          <ErrorBanner message={errorMessage(error)} />
+        ) : (
+          <ActivityIndicator color={colors.primary} />
+        )}
+      </Screen>
+    );
+  }
+
+  return <EditProfileForm profile={profile} />;
+}
+
+function EditProfileForm({ profile }: { profile: Profile }) {
   const update = useUpdateProfile();
   const uploadAvatar = useUploadAvatar();
   const removeAvatar = useRemoveAvatar();
@@ -105,53 +143,34 @@ export default function EditProfileScreen() {
   const {
     control,
     handleSubmit,
-    setValue,
-    formState: { errors },
+    formState: { errors, dirtyFields },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
+    // Read once, at mount, from data that is already here.
     defaultValues: {
-      name: "",
-      surname: "",
-      birthDate: "",
-      gender: "",
-      address: "",
-      bio: "",
+      name: profile.name ?? "",
+      surname: profile.surname ?? "",
+      // Stored ISO, typed DD.MM.YYYY.
+      birthDate: fromIsoDate(profile.birthDate),
+      gender: profile.gender ?? "",
+      address: profile.address ?? "",
+      bio: profile.bio ?? "",
     },
-    // Re-syncs whenever the query resolves (or a mutation writes fresh data),
-    // so the form never shows stale values after a cold navigation here.
-    values: profile
-      ? {
-          name: profile.name ?? "",
-          surname: profile.surname ?? "",
-          // Stored ISO, typed DD.MM.YYYY.
-          birthDate: fromIsoDate(profile.birthDate),
-          gender: profile.gender ?? "",
-          address: profile.address ?? "",
-          bio: profile.bio ?? "",
-        }
-      : sessionUser
-        ? {
-            // The session copy carries only the name; the rest arrives with
-            // the profile a moment later and `values` re-syncs then.
-            name: sessionUser.name ?? "",
-            surname: sessionUser.surname ?? "",
-            birthDate: "",
-            gender: "" as const,
-            address: "",
-            bio: "",
-          }
-        : undefined,
   });
 
-  const [birthDate, gender, address, bio] = useWatch({
-    control,
-    name: ["birthDate", "gender", "address", "bio"],
-  }) as [
-    string | undefined,
-    FormData["gender"],
-    string | undefined,
-    string | undefined,
-  ];
+  /**
+   * Registered controllers, NOT useWatch.
+   *
+   * `values` resets the form once the profile query lands, and a useWatch
+   * subscription set up during that first render does not see it — the
+   * fields stayed empty until any keystroke forced a re-render, while
+   * name/surname (on Controller) were right immediately. useController is
+   * what Controller uses underneath, so these now behave like those two.
+   */
+  const birthDateField = useController({ control, name: "birthDate" }).field;
+  const genderField = useController({ control, name: "gender" }).field;
+  const addressField = useController({ control, name: "address" }).field;
+  const bioField = useController({ control, name: "bio" }).field;
 
   /**
    * Social handles live outside the form.
@@ -161,36 +180,67 @@ export default function EditProfileScreen() {
    * through the resolver would buy nothing and cost six more schema entries.
    * Seeded from the profile once it lands.
    */
-  const [socials, setSocials] = useState<SocialLinks>({});
-  const seeded = useRef(false);
-  useEffect(() => {
-    if (!profile || seeded.current) return;
-    seeded.current = true;
-    setSocials(profile.socialLinks ?? {});
-  }, [profile]);
-
-  const onSubmit = handleSubmit((d) =>
-    update.mutate(
-      {
-        name: d.name.trim(),
-        surname: d.surname.trim(),
-        // A birth date is never cleared — there is no "I was not born".
-        birthDate: d.birthDate
-          ? (toIsoDate(d.birthDate) ?? undefined)
-          : undefined,
-        // Explicit null, not undefined: this form holds the whole truth, so
-        // an empty field means the answer was taken back. Undefined would
-        // leave the old value in place and the clear would look broken.
-        gender: d.gender || null,
-        address: d.address || null,
-        bio: d.bio?.trim() || null,
-        // Always sent, because the server replaces the set whole — that is
-        // what makes clearing one possible.
-        socialLinks: socials,
-      },
-      { onSuccess: () => router.back() },
-    ),
+  // Seeded at mount for the same reason as the form above — the profile is
+  // already here, so there is nothing to wait for and no effect to write.
+  const [socials, setSocials] = useState<SocialLinks>(
+    () => profile.socialLinks ?? {},
   );
+
+  /**
+   * Only what was actually edited.
+   *
+   * This used to send every field on every save, turning an empty box into
+   * an explicit null. That made the form destructive: any save made before
+   * it had seeded itself from the profile DELETED the gender, address and
+   * bio that were already stored — and because a wiped profile then loads
+   * empty, the next save wiped it again. Social handles escaped only because
+   * they are seeded from their own effect.
+   *
+   * A PATCH already means "leave out what should not change", so a field the
+   * user never touched is simply omitted. Clearing still works: emptying a
+   * box makes it dirty, and a dirty empty box sends null.
+   */
+  const onSubmit = handleSubmit((d) => {
+    const payload: UpdateProfileInput = {};
+
+    if (dirtyFields.name) payload.name = d.name.trim();
+    if (dirtyFields.surname) payload.surname = d.surname.trim();
+    // A birth date is never cleared — there is no "I was not born".
+    if (dirtyFields.birthDate && d.birthDate) {
+      payload.birthDate = toIsoDate(d.birthDate) ?? undefined;
+    }
+    if (dirtyFields.gender) payload.gender = d.gender || null;
+    if (dirtyFields.address) payload.address = d.address || null;
+    if (dirtyFields.bio) payload.bio = d.bio?.trim() || null;
+
+    // Outside the form, so dirtiness is decided by comparing with what the
+    // profile holds. Sent whole or not at all — the server replaces the set,
+    // which is what makes removing one handle possible.
+    //
+    // Both sides are normalised first: stored as a bare handle, so "@me",
+    // "me" and "instagram.com/me" are one account rather than three, and
+    // re-saving a profile written before this does not look like an edit.
+    const saved = profile.socialLinks ?? {};
+    const cleaned: SocialLinks = {};
+    for (const platform of SOCIAL_PLATFORMS) {
+      const handle = normalizeSocial(platform, socials[platform] ?? "");
+      if (handle) cleaned[platform] = handle;
+    }
+    const socialsChanged = SOCIAL_PLATFORMS.some(
+      (platform) =>
+        normalizeSocial(platform, saved[platform] ?? "") !==
+        (cleaned[platform] ?? ""),
+    );
+    if (socialsChanged) payload.socialLinks = cleaned;
+
+    // Nothing to say: a save that changed nothing should not cost a request.
+    if (Object.keys(payload).length === 0) {
+      router.back();
+      return;
+    }
+
+    update.mutate(payload, { onSuccess: () => router.back() });
+  });
 
   const avatarBusy = uploadAvatar.isPending || removeAvatar.isPending;
 
@@ -229,11 +279,8 @@ export default function EditProfileScreen() {
       onConfirm: () => removeAvatar.mutate(),
     });
 
-  const avatarUri = resolveMediaUrl(profile?.avatarThumbUrl);
-  const initials = [
-    profile?.name ?? sessionUser?.name,
-    profile?.surname ?? sessionUser?.surname,
-  ]
+  const avatarUri = resolveMediaUrl(profile.avatarThumbUrl);
+  const initials = [profile.name, profile.surname]
     .filter(Boolean)
     .map((s) => s![0]?.toUpperCase())
     .join("");
@@ -305,7 +352,7 @@ export default function EditProfileScreen() {
             </View>
           </Pressable>
 
-          {profile?.avatarThumbUrl ? (
+          {profile.avatarThumbUrl ? (
             <Button
               title={t("profile.removePhoto")}
               variant="link"
@@ -324,6 +371,7 @@ export default function EditProfileScreen() {
             render={({ field: { value, onChange, onBlur } }) => (
               <TextField
                 label={t("auth.name")}
+                required
                 placeholder={t("auth.namePlaceholder")}
                 autoComplete="given-name"
                 returnKeyType="next"
@@ -342,6 +390,7 @@ export default function EditProfileScreen() {
               <TextField
                 ref={surnameRef}
                 label={t("auth.surname")}
+                required
                 placeholder={t("auth.surnamePlaceholder")}
                 autoComplete="family-name"
                 returnKeyType="done"
@@ -357,17 +406,15 @@ export default function EditProfileScreen() {
               things nobody should be asked for at sign-up: a bio and six
               social handles. */}
           <ProfileDetailsFields
-            birthDate={birthDate ?? ""}
-            onBirthDate={(v) =>
-              setValue("birthDate", v, { shouldValidate: !!errors.birthDate })
-            }
+            birthDate={birthDateField.value ?? ""}
+            onBirthDate={birthDateField.onChange}
             birthDateError={errors.birthDate?.message}
-            gender={gender}
-            onGender={(v) => setValue("gender", v)}
-            address={address ?? ""}
-            onAddress={(v) => setValue("address", v)}
-            bio={bio ?? ""}
-            onBio={(v) => setValue("bio", v)}
+            gender={genderField.value}
+            onGender={genderField.onChange}
+            address={addressField.value ?? ""}
+            onAddress={addressField.onChange}
+            bio={bioField.value ?? ""}
+            onBio={bioField.onChange}
             socials={socials}
             onSocials={setSocials}
           />
@@ -379,22 +426,15 @@ export default function EditProfileScreen() {
               {t("profile.phone")}
             </Text>
             <Text style={text.body}>
-              {profile?.phoneNumber ?? sessionUser?.phoneNumber ?? "—"}
+              {profile.phoneNumber ?? "—"}
             </Text>
             <Text style={text.caption}>{t("profile.contactHint")}</Text>
           </View>
 
-          {/* A failed load matters here too: the save button stays disabled
-              until the profile arrives, and a silent blank form reads as a
-              frozen app. */}
+          {/* Only the save error now — a failed LOAD is shown by the gate
+              above, which never lets this form mount without data. */}
           <ErrorBanner
-            message={
-              update.isError
-                ? errorMessage(update.error)
-                : loadFailed
-                  ? errorMessage(loadError)
-                  : null
-            }
+            message={update.isError ? errorMessage(update.error) : null}
           />
 
           <Button
@@ -402,7 +442,6 @@ export default function EditProfileScreen() {
             icon="checkmark-outline"
             onPress={onSubmit}
             loading={update.isPending}
-            disabled={!profile}
           />
         </View>
       </View>

@@ -5,7 +5,7 @@
 // stack to escape through, and no BackButton is offered.
 import { useMemo, useRef, useState } from "react";
 import { Text, TextInput, View, Pressable } from "react-native";
-import { useForm, Controller, useWatch } from "react-hook-form";
+import { useForm, Controller, useController } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { router, Redirect } from "expo-router";
@@ -69,7 +69,7 @@ const makeSchema = (t: ReturnType<typeof useT>) =>
         },
         t("profileInfo.ageRange", { min: MIN_AGE, max: MAX_AGE }),
       ),
-    gender: z.enum(["MALE", "FEMALE", "OTHER"]).or(z.literal("")),
+    gender: z.enum(["MALE", "FEMALE"]).or(z.literal("")),
     address: z.string().trim().max(255).optional(),
   });
 
@@ -88,7 +88,6 @@ export default function OnboardingScreen() {
   const {
     control,
     handleSubmit,
-    setValue,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -101,14 +100,13 @@ export default function OnboardingScreen() {
     },
   });
 
-  // Watched rather than wrapped in three nested Controllers: these go to one
-  // presentational component, so the form just needs their values and a way
-  // to write them back.
-  const details = useWatch({
-    control,
-    name: ["birthDate", "gender", "address"],
-  }) as [string, FormData["gender"], string | undefined];
-  const [birthDate, gender, address] = details;
+  // Registered controllers rather than useWatch: these feed one presentational
+  // component, and a useWatch subscription misses the reset that `values`
+  // fires, which left the same fields blank on the edit screen until a
+  // keystroke woke them up. useController is what Controller uses underneath.
+  const birthDateField = useController({ control, name: "birthDate" }).field;
+  const genderField = useController({ control, name: "gender" }).field;
+  const addressField = useController({ control, name: "address" }).field;
 
   // Deep link / reload safety net: this screen means nothing without a session.
   if (!user) return <Redirect href="/(tabs)/home" />;
@@ -218,6 +216,7 @@ export default function OnboardingScreen() {
             render={({ field: { value, onChange, onBlur } }) => (
               <TextField
                 label={t("auth.name")}
+                required
                 placeholder={t("auth.namePlaceholder")}
                 autoComplete="given-name"
                 autoFocus
@@ -237,6 +236,7 @@ export default function OnboardingScreen() {
               <TextField
                 ref={surnameRef}
                 label={t("auth.surname")}
+                required
                 placeholder={t("auth.surnamePlaceholder")}
                 autoComplete="family-name"
                 returnKeyType="done"
@@ -253,15 +253,14 @@ export default function OnboardingScreen() {
               here — the edit screen takes a patch, so it cannot demand a
               field that older accounts never supplied. */}
           <ProfileDetailsFields
-            birthDate={birthDate}
-            onBirthDate={(v) =>
-              setValue("birthDate", v, { shouldValidate: !!errors.birthDate })
-            }
+            birthDate={birthDateField.value}
+            birthDateRequired
+            onBirthDate={birthDateField.onChange}
             birthDateError={errors.birthDate?.message}
-            gender={gender}
-            onGender={(v) => setValue("gender", v)}
-            address={address ?? ""}
-            onAddress={(v) => setValue("address", v)}
+            gender={genderField.value}
+            onGender={genderField.onChange}
+            address={addressField.value ?? ""}
+            onAddress={addressField.onChange}
           />
 
           {/* The number that signed them in, shown for confidence, not edited. */}

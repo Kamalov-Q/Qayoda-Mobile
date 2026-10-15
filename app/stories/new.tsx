@@ -39,7 +39,7 @@ import {
   type StoryHours,
   type StoryType,
 } from "../../src/features/stories/api/stories.api";
-import { PriceBadge } from "../../src/features/tariffs/components/PriceBadge";
+import { PriceNotice } from "../../src/features/tariffs/components/PriceNotice";
 import { useTariffs } from "../../src/features/tariffs/hooks/useTariffs";
 import { useWalletOverview } from "../../src/features/wallet/hooks/useWalletOverview";
 
@@ -341,7 +341,7 @@ export default function NewStoryScreen() {
         />
 
         {/* The cost, next to the button that incurs it. */}
-        <PriceBadge
+        <PriceNotice
           price={priceOf("STORY_POST")}
           balance={wallet.data?.balance}
         />

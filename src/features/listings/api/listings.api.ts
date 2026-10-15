@@ -321,6 +321,16 @@ function appendCommonFilters(
   }
 }
 
+/**
+ * What POST /listings/:id/promote answers with: the new end date, and nothing
+ * else. NOT a Listing — writing this into the detail cache in place of one
+ * leaves the screen without `offers` and it crashes on the next render.
+ */
+export interface PromoteResult {
+  id: string;
+  promotedUntil: string;
+}
+
 export const listingApi = {
   /** Public: the app needs categories before sign-in (filters, post form). */
   categories: () => api<Category[]>("/categories", { auth: false }),
@@ -407,7 +417,7 @@ export const listingApi = {
 
   /** Buys TOP for one listing, charged from the wallet at the chosen tariff. */
   promote: (id: string, tariffId: string) =>
-    api<Listing>(`/listings/${id}/promote`, {
+    api<PromoteResult>(`/listings/${id}/promote`, {
       method: "POST",
       body: { tariffId },
     }),

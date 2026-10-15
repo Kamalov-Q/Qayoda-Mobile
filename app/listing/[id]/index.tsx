@@ -311,24 +311,27 @@ export default function ListingDetailScreen() {
               onPress={onShare}
             />
 
-            {/* Signed-in only: a guest has no saved set, so the heart would
-                have nothing to fill in. */}
-            {userId ? (
-              <PhotoAction
-                icon={isSaved ? "heart" : "heart-outline"}
-                tint={isSaved ? colors.danger : undefined}
-                label={t(isSaved ? "saved.unsave" : "saved.save")}
-                selected={isSaved}
-                disabled={toggleSave.isPending}
-                onPress={() =>
+            {/* Always drawn, signed in or not. A guest sees the same row of
+                actions as anyone else and finds out an account is needed by
+                tapping — hiding the heart instead just made the feature
+                invisible to the people who have not signed up yet. Same gate
+                as the cards use (ListingCardActions). */}
+            <PhotoAction
+              icon={isSaved ? "heart" : "heart-outline"}
+              tint={isSaved ? colors.danger : undefined}
+              label={t(isSaved ? "saved.unsave" : "saved.save")}
+              selected={isSaved}
+              disabled={toggleSave.isPending}
+              onPress={() =>
+                requireAuth(() =>
                   toggleSave.mutate({
                     listingId: listing.id,
                     listing,
                     next: !isSaved,
-                  })
-                }
-              />
-            ) : null}
+                  }),
+                )
+              }
+            />
 
             {isOwner ? (
               <PhotoAction

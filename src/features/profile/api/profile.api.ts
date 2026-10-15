@@ -9,7 +9,8 @@ import { API_URL } from "../../../lib/env";
 import { useAuthStore } from "../../auth/store/auth.store";
 import type { SocialLinks } from "../../users/lib/social";
 
-export const GENDERS = ["MALE", "FEMALE", "OTHER"] as const;
+/** Mirrors the server's GENDERS. Not saying is null, not a third option. */
+export const GENDERS = ["MALE", "FEMALE"] as const;
 export type Gender = (typeof GENDERS)[number];
 
 /** Mirror of the server's ProfileResponse. */

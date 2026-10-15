@@ -30,11 +30,19 @@ interface Props extends TextInputProps {
   prefix?: string;
   /** Muted line under the field when there is no error to show instead. */
   hint?: string;
+  /**
+   * Marks the label with a red asterisk.
+   *
+   * Only the required fields are marked — the optional ones say nothing,
+   * which is shorter to read than labelling every one of them "optional"
+   * and leaves the eye only the few things it must fill in.
+   */
+  required?: boolean;
 }
 
 export const TextField = forwardRef<TextInput, Props>(
   (
-    { label, error, icon, suffix, prefix, hint, secureTextEntry, onFocus, onBlur, ...inputProps },
+    { label, error, icon, suffix, prefix, hint, required, secureTextEntry, onFocus, onBlur, ...inputProps },
     ref,
   ) => {
     const { colors } = useTheme();
@@ -59,7 +67,12 @@ export const TextField = forwardRef<TextInput, Props>(
           // Sentence case, not the tracked-out uppercase this used to use:
           // Cyrillic has no small-caps tradition and uppercasing it reads as
           // shouting while costing legibility at 12pt.
-          <Text style={{ ...type.label, color: colors.textMuted }}>{label}</Text>
+          <Text style={{ ...type.label, color: colors.textMuted }}>
+            {label}
+            {required ? (
+              <Text style={{ color: colors.danger }}> *</Text>
+            ) : null}
+          </Text>
         )}
 
         <View

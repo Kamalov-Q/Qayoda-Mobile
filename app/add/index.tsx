@@ -54,7 +54,7 @@ import {
   OfferPurpose,
 } from "../../src/features/listings/api/listings.api";
 import { useAmenities } from "../../src/features/listings/hooks/useAmenities";
-import { PriceBadge } from "../../src/features/tariffs/components/PriceBadge";
+import { PriceNotice } from "../../src/features/tariffs/components/PriceNotice";
 import { useTariffs } from "../../src/features/tariffs/hooks/useTariffs";
 import { useWalletOverview } from "../../src/features/wallet/hooks/useWalletOverview";
 
@@ -1141,10 +1141,8 @@ export default function AddListingScreen() {
         />
 
         {/* What this will cost, before the button that costs it. Silent
-            when no tariff is set — an unpriced action is free, and a badge
-            reading "0 so'm" only invites the question of whether the price
-            failed to load. */}
-        <PriceBadge
+            when no tariff is set — an unpriced action is free. */}
+        <PriceNotice
           price={priceOf("LISTING_POST")}
           balance={wallet.data?.balance}
         />

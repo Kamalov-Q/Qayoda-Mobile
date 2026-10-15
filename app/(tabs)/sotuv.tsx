@@ -51,6 +51,7 @@ import {
 } from "../../src/features/listings/utils/format";
 import { ListingCardBase } from "../../src/features/listings/components/ListingCardBase";
 import { ListingGridCard } from "../../src/features/listings/components/ListingGridCard";
+import { TopBadge } from "../../src/features/tariffs/components/TopBadge";
 import {
   ListingsMap,
   type ListingsMapHandle,
@@ -103,6 +104,12 @@ interface FeedItem {
   commentCount: number;
   /** Distinct viewers — the eye on the card's action row. */
   viewCount: number;
+  /**
+   * Kept so the TOP mark survives the trip from Listing to this slim row.
+   * Dropping it here was why a promoted listing showed the badge on the home
+   * feed (which renders ListingCard) but not in this tab's list or grid.
+   */
+  promotedUntil: string | null;
 }
 
 function toFeedItem(l: Listing, purpose: OfferPurpose): FeedItem {
@@ -131,6 +138,7 @@ function toFeedItem(l: Listing, purpose: OfferPurpose): FeedItem {
       : [],
     commentCount: l.commentCount,
     viewCount: l.viewCount,
+    promotedUntil: l.promotedUntil,
   };
 }
 
@@ -1010,6 +1018,7 @@ const FeedRow = memo(function FeedRow({
         specs={specs || null}
         meta={meta}
         rating={{ average: item.ratingAvg, count: item.ratingCount }}
+        overlay={<TopBadge promotedUntil={item.promotedUntil} />}
         actions={{
           listingId: item.id,
           commentCount: item.commentCount,
@@ -1032,6 +1041,9 @@ const FeedRow = memo(function FeedRow({
       // built to look finished that way rather than half-loaded.
       specs={specs || null}
       rating={{ average: item.ratingAvg, count: item.ratingCount }}
+      // Only this tab shows live listings, so there is no status badge to
+      // compete for the slot the way there is on ListingCard.
+      overlay={<TopBadge promotedUntil={item.promotedUntil} />}
       actions={{
         listingId: item.id,
         commentCount: item.commentCount,
