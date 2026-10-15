@@ -11,27 +11,23 @@ import { useTheme } from "../../../theme/useTheme";
 import { useT } from "../../../i18n";
 import { confirm } from "../../../lib/alerts";
 import type { AuthProvider } from "../api/auth.api";
-import { isGoogleSignInAvailable } from "../google";
 import {
   linkTelegram,
   useIdentities,
-  useLinkGoogle,
   useUnlink,
 } from "../hooks/useIdentities";
 
 const ROWS: {
   provider: AuthProvider;
   icon: keyof typeof Ionicons.glyphMap;
-  labelKey: "auth.methodPhone" | "auth.methodGoogle" | "auth.methodTelegram";
+  labelKey: "auth.methodPhone" | "auth.methodTelegram";
 }[] = [
   { provider: "PHONE", icon: "call-outline", labelKey: "auth.methodPhone" },
-  { provider: "GOOGLE", icon: "logo-google", labelKey: "auth.methodGoogle" },
   { provider: "TELEGRAM", icon: "paper-plane-outline", labelKey: "auth.methodTelegram" },
 ];
 
 export function SignInMethods() {
   const { data, isLoading } = useIdentities();
-  const linkGoogle = useLinkGoogle();
   const unlink = useUnlink();
   const { colors, text } = useTheme();
   const t = useT();
@@ -52,12 +48,8 @@ export function SignInMethods() {
     <Card flush>
       {ROWS.map((row, index) => {
         const isLinked = linked.has(row.provider);
-        // Google needs the native module to be in this binary; the other two
-        // are always offerable.
-        const canLink =
-          row.provider === "GOOGLE" ? isGoogleSignInAvailable() : true;
+        const canLink = true;
         const busy =
-          (row.provider === "GOOGLE" && linkGoogle.isPending) ||
           (unlink.isPending && unlink.variables === row.provider);
 
         const action = isLinked
@@ -68,7 +60,6 @@ export function SignInMethods() {
             ? {
                 label: t("auth.link"),
                 onPress: () => {
-                  if (row.provider === "GOOGLE") return linkGoogle.mutate();
                   if (row.provider === "TELEGRAM") return linkTelegram();
                   return router.push("/link-phone");
                 },
@@ -101,9 +92,7 @@ export function SignInMethods() {
               <Text style={text.caption}>
                 {isLoading
                   ? "…"
-                  : !isLinked && !canLink
-                    ? t("auth.googleUnavailable")
-                    : t(isLinked ? "auth.linked" : "auth.notLinked")}
+                  : t(isLinked ? "auth.linked" : "auth.notLinked")}
               </Text>
             </View>
             {busy ? (

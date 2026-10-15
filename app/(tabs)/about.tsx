@@ -22,8 +22,8 @@ const CONTACTS = [
   {
     labelKey: "about.contactEmail" as TranslationKey,
     icon: "mail-outline",
-    value: "support@uynest.uz",
-    url: "mailto:support@uynest.uz",
+    value: "support@growencity.uz",
+    url: "mailto:support@growencity.uz",
   },
   {
     labelKey: "about.contactPhone" as TranslationKey,
@@ -34,8 +34,8 @@ const CONTACTS = [
   {
     labelKey: "about.contactWebsite" as TranslationKey,
     icon: "globe-outline",
-    value: "uynest.uz",
-    url: "https://uynest.uz",
+    value: "growencity.uz",
+    url: "https://growencity.uz",
   },
 ] as const;
 

@@ -115,7 +115,6 @@ export const ru: Dictionary = {
     phonePlaceholder: "90 123 45 67",
     sendCode: "Отправить код",
     orContinueWith: "или",
-    continueWithGoogle: "Войти через Google",
     continueWithTelegram: "Войти через Telegram",
     showPassword: "Показать пароль",
     hidePassword: "Скрыть пароль",
@@ -155,12 +154,9 @@ export const ru: Dictionary = {
     telegramWaiting: "Ждём подтверждения…",
     telegramExpired: "Ссылка устарела. Попробуйте снова.",
     telegramLinked: "Telegram привязан к аккаунту",
-    googleCancelled: "Вход через Google отменён",
-    googleUnavailable: "Вход через Google недоступен на этом устройстве",
 
     methods: "Способы входа",
     methodPhone: "Номер телефона",
-    methodGoogle: "Google",
     methodTelegram: "Telegram",
     linked: "Привязан",
     notLinked: "Не привязан",
@@ -170,7 +166,6 @@ export const ru: Dictionary = {
     unlinkConfirmMessage:
       "Вы больше не сможете войти этим способом. Продолжить?",
     unlinked: "Способ входа отвязан",
-    googleLinked: "Google привязан к аккаунту",
 
     welcomeNew: "Добро пожаловать!",
     completeTitle: "О вас",

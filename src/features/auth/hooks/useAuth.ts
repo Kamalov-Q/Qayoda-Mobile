@@ -6,7 +6,7 @@ import { Linking } from "react-native";
 import { authApi, SessionResponse, TelegramStart } from "../api/auth.api";
 import { useAuthStore } from "../store/auth.store";
 import { useAuthFlowStore } from "../store/auth-flow.store";
-import { getGoogleIdToken } from "../google";
+
 import { secureSession } from "../../../lib/secure-session";
 import { ApiError, refreshSession } from "../../../lib/api-client";
 import { queryClient } from "../../../lib/query-client";
@@ -132,21 +132,6 @@ export function useResetPassword() {
   });
 }
 
-// ---------------------------------------------------------------- google
-
-export function useGoogleSignIn() {
-  return useMutation({
-    mutationFn: async () => {
-      const g = await getGoogleIdToken();
-      if (g.type === "unavailable") throw new Error(t("auth.googleUnavailable"));
-      if (g.type === "cancelled") return null;
-      return authApi.googleSignIn(g.idToken, lang());
-    },
-    onSuccess: (session) => {
-      if (session) return establishSession(session);
-    },
-  });
-}
 
 // ---------------------------------------------------------------- telegram
 

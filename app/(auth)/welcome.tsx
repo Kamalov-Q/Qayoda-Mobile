@@ -27,9 +27,7 @@ import { authApi } from "../../src/features/auth/api/auth.api";
 import {
   useRequestOtp,
   usePhoneLogin,
-  useGoogleSignIn,
 } from "../../src/features/auth/hooks/useAuth";
-import { isGoogleSignInAvailable } from "../../src/features/auth/google";
 
 import {
   formatUzPhoneInput,
@@ -55,7 +53,6 @@ export default function WelcomeScreen() {
 
   const requestOtp = useRequestOtp();
   const phoneLogin = usePhoneLogin();
-  const google = useGoogleSignIn();
   const { text, colors } = useTheme();
   const t = useT();
 
@@ -87,10 +84,7 @@ export default function WelcomeScreen() {
   };
 
   const busy =
-    check.isPending ||
-    requestOtp.isPending ||
-    phoneLogin.isPending ||
-    google.isPending;
+    phoneLogin.isPending;
 
   const error = phoneLogin.isError
     ? errorMessage(phoneLogin.error)
@@ -98,9 +92,7 @@ export default function WelcomeScreen() {
       ? errorMessage(check.error)
       : requestOtp.isError
         ? errorMessage(requestOtp.error)
-        : google.isError
-          ? errorMessage(google.error)
-          : null;
+        : null;
 
   const passwordStep = passwordFor !== null;
 
@@ -231,16 +223,6 @@ export default function WelcomeScreen() {
         </View>
 
         <View style={{ gap: spacing.sm }}>
-          {isGoogleSignInAvailable() && (
-            <Button
-              title={t("auth.continueWithGoogle")}
-              variant="secondary"
-              icon="logo-google"
-              onPress={() => google.mutate()}
-              loading={google.isPending}
-              disabled={busy}
-            />
-          )}
           <Button
             title={t("auth.continueWithTelegram")}
             variant="secondary"

@@ -2,7 +2,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { authApi, AuthProvider } from "../api/auth.api";
-import { getGoogleIdToken } from "../google";
+
 import { queryClient } from "../../../lib/query-client";
 import { toast } from "../../../components/ui/Toast";
 import { errorMessage } from "../../../lib/api-error";
@@ -16,22 +16,6 @@ export function useIdentities() {
 
 const refresh = () => queryClient.invalidateQueries({ queryKey: IDENTITIES_KEY });
 
-export function useLinkGoogle() {
-  return useMutation({
-    mutationFn: async () => {
-      const g = await getGoogleIdToken();
-      if (g.type === "unavailable") throw new Error(t("auth.googleUnavailable"));
-      if (g.type === "cancelled") return null;
-      return authApi.linkGoogle(g.idToken);
-    },
-    onSuccess: (linked) => {
-      if (!linked) return;
-      refresh();
-      toast.successKey("auth.googleLinked");
-    },
-    onError: (e) => toast.error(errorMessage(e)),
-  });
-}
 
 /** The Telegram handshake needs its own screen; this just opens it in link mode. */
 export function linkTelegram() {

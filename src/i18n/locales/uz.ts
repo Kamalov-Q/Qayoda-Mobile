@@ -114,7 +114,6 @@ export const uz = {
     phonePlaceholder: "90 123 45 67",
     sendCode: "Kod yuborish",
     orContinueWith: "yoki",
-    continueWithGoogle: "Google orqali kirish",
     continueWithTelegram: "Telegram orqali kirish",
     showPassword: "Parolni ko'rsatish",
     hidePassword: "Parolni yashirish",
@@ -155,12 +154,9 @@ export const uz = {
     telegramWaiting: "Tasdiqlashni kutmoqdamiz…",
     telegramExpired: "Havola eskirdi. Qaytadan urinib ko'ring.",
     telegramLinked: "Telegram hisobga bog'landi",
-    googleCancelled: "Google orqali kirish bekor qilindi",
-    googleUnavailable: "Google orqali kirish bu qurilmada mavjud emas",
 
     methods: "Kirish usullari",
     methodPhone: "Telefon raqami",
-    methodGoogle: "Google",
     methodTelegram: "Telegram",
     linked: "Bog'langan",
     notLinked: "Bog'lanmagan",
@@ -169,7 +165,6 @@ export const uz = {
     unlinkConfirmTitle: "Kirish usulini uzish",
     unlinkConfirmMessage: "Bu usul orqali endi kira olmaysiz. Davom etasizmi?",
     unlinked: "Kirish usuli uzildi",
-    googleLinked: "Google hisobga bog'landi",
 
     welcomeNew: "Xush kelibsiz!",
     completeTitle: "O'zingiz haqingizda",

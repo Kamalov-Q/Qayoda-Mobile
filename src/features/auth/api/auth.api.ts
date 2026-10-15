@@ -3,7 +3,7 @@ import { api } from "../../../lib/api-client";
 import { SessionUser } from "../store/auth.store";
 
 export type Lang = "uz" | "ru";
-export type AuthProvider = "PHONE" | "GOOGLE" | "TELEGRAM";
+export type AuthProvider = "PHONE" | "TELEGRAM";
 
 /** Mirror of what `TokenService.issuePair` returns. */
 export interface SessionResponse {
@@ -85,15 +85,6 @@ export const authApi = {
       auth: false,
     }),
 
-  // ---- google ------------------------------------------------------------
-  /** The ID token from the native Google SDK — never an access token. */
-  googleSignIn: (idToken: string, lang: Lang) =>
-    api<SessionResponse>("/auth/google", {
-      method: "POST",
-      body: { idToken, lang },
-      auth: false,
-    }),
-
   // ---- telegram ----------------------------------------------------------
   telegramStart: () =>
     api<TelegramStart>("/auth/telegram/start", {
@@ -136,8 +127,6 @@ export const authApi = {
       body: { phone, code },
     }),
 
-  linkGoogle: (idToken: string) =>
-    api<Identity>("/auth/link/google", { method: "POST", body: { idToken } }),
 
   /** Same shape as telegramStart; poll resolves to LINKED instead of a session. */
   linkTelegram: () =>
