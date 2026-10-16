@@ -25,6 +25,7 @@ import { useTheme } from "../../src/theme/useTheme";
 import { useT } from "../../src/i18n";
 import { toast } from "../../src/components/ui/Toast";
 import { errorMessage } from "../../src/lib/api-error";
+import { confirm } from "../../src/lib/alerts";
 import { useMyListings } from "../../src/features/listings/hooks/useMyListings";
 import { usePostStory } from "../../src/features/stories/hooks/useStories";
 import {
@@ -319,20 +320,41 @@ export default function NewStoryScreen() {
           </View>
         )}
 
-        {/* Where it sends people, and how long it lives. */}
-        <Row
-          icon="link-outline"
-          label={t("stories.linkListing")}
-          value={
-            listingId
-              ? (linkable.find((l) => l.id === listingId)?.title ??
-                t("listings.untitled"))
-              : t("stories.noLink")
-          }
-          hint={t("stories.linkListingHint")}
-          disabled={!linkable.length}
-          onPress={() => setListingOpen(true)}
-        />
+        {/* Where it sends people, and how long it lives.
+            With nothing to link, there is no control here at all — a greyed
+            row that still reads "Havolasiz" is a riddle: it looks like a
+            setting you are not allowed to change, with no clue that the
+            reason is an empty listings list. It is replaced by a notice that
+            says so and offers the one thing that fixes it. */}
+        {linkable.length ? (
+          <Row
+            icon="link-outline"
+            label={t("stories.linkListing")}
+            value={
+              listingId
+                ? (linkable.find((l) => l.id === listingId)?.title ??
+                  t("listings.untitled"))
+                : t("stories.noLink")
+            }
+            hint={t("stories.linkListingHint")}
+            onPress={() => setListingOpen(true)}
+          />
+        ) : (
+          <NoListingsNotice
+            // Leaving loses whatever is in the composer, so it is only worth
+            // asking about when there is something to lose.
+            onPost={() =>
+              canPost
+                ? confirm({
+                    titleKey: "stories.noListingsTitle",
+                    messageKey: "stories.leaveDraft",
+                    confirmKey: "stories.postListing",
+                    onConfirm: () => router.push("/add"),
+                  })
+                : router.push("/add")
+            }
+          />
+        )}
         <Row
           icon="time-outline"
           label={t("stories.duration")}
@@ -447,6 +469,64 @@ function SourceButton({
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+/**
+ * Said plainly: there is nothing to link to yet, and here is how to change
+ * that. Warning-toned rather than red — a profile with no listings is a
+ * starting point, not a fault.
+ *
+ * It also states that a story can be posted without a link, so nobody reads
+ * this as a requirement blocking the Joylash button below it.
+ */
+function NoListingsNotice({ onPost }: { onPost: () => void }) {
+  const { colors, text } = useTheme();
+  const t = useT();
+
+  return (
+    <View
+      style={{
+        gap: spacing.sm,
+        padding: spacing.md,
+        borderRadius: radii.lg,
+        borderWidth: 1,
+        borderColor: colors.primaryBorder,
+        backgroundColor: colors.primarySoft,
+      }}
+    >
+      <View
+        style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}
+      >
+        <Ionicons name="information-circle" size={19} color={colors.primary} />
+        <Text style={{ ...text.bodyStrong, flex: 1 }}>
+          {t("stories.noListingsTitle")}
+        </Text>
+      </View>
+
+      <Text style={text.caption}>{t("stories.noListingsBody")}</Text>
+
+      <Pressable
+        onPress={onPost}
+        accessibilityRole="button"
+        accessibilityLabel={t("stories.postListing")}
+        hitSlop={6}
+        style={({ pressed }) => ({
+          flexDirection: "row",
+          alignItems: "center",
+          alignSelf: "flex-start",
+          gap: 4,
+          opacity: pressed ? 0.6 : 1,
+        })}
+      >
+        <Text
+          style={{ ...text.caption, fontWeight: "700", color: colors.primary }}
+        >
+          {t("stories.postListing")}
+        </Text>
+        <Ionicons name="arrow-forward" size={13} color={colors.primary} />
+      </Pressable>
+    </View>
   );
 }
 

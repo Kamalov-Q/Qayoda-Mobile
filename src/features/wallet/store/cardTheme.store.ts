@@ -108,7 +108,10 @@ export const useCardThemeStore = create<CardThemeState>()(
       },
     }),
     {
-      name: "qayoda_virtual_card_theme",
+      // Renamed with the rest of the branding. Nothing is published yet, so
+      // the only cost is that a test device forgets its chosen card colour
+      // once and picks the default again.
+      name: "growencity_virtual_card_theme",
       storage: createJSONStorage(() => AsyncStorage),
     },
   ),

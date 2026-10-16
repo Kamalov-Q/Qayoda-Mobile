@@ -8,6 +8,7 @@ import {
 import { errorMessage } from "@/src/lib/api-error";
 import { toast } from "@/src/components/ui/Toast";
 import { handleChargeError } from "@/src/features/tariffs/lib/charge-errors";
+import { walletApi } from "@/src/features/wallet/api/wallet.api";
 
 const TRAY_KEY = ["stories", "tray"] as const;
 const storyKey = (id: string) => ["stories", "detail", id] as const;
@@ -66,7 +67,31 @@ export function usePostStory() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: CreateStoryInput) => storiesApi.create(input),
+    // TEMPORARY TRACE — remove once paid story posting is confirmed.
+    // Reads the balance either side of the call, so the charge can be seen
+    // from the client without waiting on the server log.
+    mutationFn: async (input: CreateStoryInput) => {
+      const before = await walletApi.overview().catch(() => null);
+      console.log("[story] balance before:", before?.balance ?? "(unknown)");
+      try {
+        const story = await storiesApi.create(input);
+        const after = await walletApi.overview().catch(() => null);
+        console.log(
+          "[story] posted:",
+          story.id,
+          "| balance after:",
+          after?.balance ?? "(unknown)",
+          "| charged:",
+          before && after
+            ? (Number(before.balance) - Number(after.balance)).toFixed(2)
+            : "(unknown)",
+        );
+        return story;
+      } catch (e) {
+        console.log("[story] FAILED:", JSON.stringify(e));
+        throw e;
+      }
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: TRAY_KEY });
       // Posting a story is charged, so the balance just moved.

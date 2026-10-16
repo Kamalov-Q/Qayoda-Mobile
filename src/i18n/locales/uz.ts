@@ -670,6 +670,11 @@ export const uz = {
     linkListing: "E'longa havola",
     linkListingHint: "Ko'rganlar to'g'ridan-to'g'ri e'longa o'tadi",
     noLink: "Havolasiz",
+    noListingsTitle: "Faol e'loningiz yo'q",
+    noListingsBody:
+      "Hikoyani e'longa bog'lash uchun avval e'lon bering. Hikoyani shundoq ham joylashingiz mumkin.",
+    postListing: "E'lon berish",
+    leaveDraft: "Hikoya qoralamasi saqlanmaydi. Davom etilsinmi?",
     duration: "Qancha turadi",
     hours: "{{count}} soat",
     post: "Joylash",

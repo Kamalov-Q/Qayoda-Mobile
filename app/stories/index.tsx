@@ -69,6 +69,20 @@ interface Page {
   isMine: boolean;
 }
 
+/**
+ * Legible on anything.
+ *
+ * Every label over a story is white, which disappears outright on a light
+ * one — a TEXT story on a white or pale background, or a photo of a sky.
+ * A shadow costs nothing, needs no layout change and no gradient library,
+ * and works whatever is behind it.
+ */
+const OVER_STORY = {
+  textShadowColor: "rgba(0,0,0,0.85)",
+  textShadowOffset: { width: 0, height: 1 },
+  textShadowRadius: 4,
+} as const;
+
 export default function StoriesScreen() {
   const { group, user, story } = useLocalSearchParams<{
     group?: string;
@@ -369,7 +383,7 @@ export default function StoriesScreen() {
       >
         <Stack.Screen options={{ headerShown: false }} />
         <Ionicons name="time-outline" size={32} color="rgba(255,255,255,0.6)" />
-        <Text style={{ ...type.body, color: "#FFFFFF" }}>
+        <Text style={{ ...type.body, color: "#FFFFFF", ...OVER_STORY }}>
           {t("stories.emptyTitle")}
         </Text>
         <Pressable onPress={close} hitSlop={12}>
@@ -477,6 +491,20 @@ export default function StoriesScreen() {
         }}
       />
 
+      {/* A scrim under the top chrome. The progress bars are hairline white
+          rules, which a text shadow cannot help — they need something behind
+          them. Three stacked bands fade out instead of ending on a hard
+          edge, since there is no gradient library in the project.
+          Non-interactive, so the tap areas underneath still work. */}
+      <View
+        pointerEvents="none"
+        style={{ position: "absolute", left: 0, right: 0, top: 0 }}
+      >
+        <View style={{ height: insets.top + 56, backgroundColor: "rgba(0,0,0,0.38)" }} />
+        <View style={{ height: 22, backgroundColor: "rgba(0,0,0,0.22)" }} />
+        <View style={{ height: 22, backgroundColor: "rgba(0,0,0,0.10)" }} />
+      </View>
+
       {/* Chrome. Everything below sits above the tap areas, so a button is a
           button rather than a way to skip a story by accident. */}
       <View
@@ -525,7 +553,7 @@ export default function StoriesScreen() {
             />
             <View style={{ flex: 1, gap: 2 }}>
               <Text
-                style={{ ...type.bodyStrong, fontSize: 14, color: "#FFFFFF" }}
+                style={{ ...type.bodyStrong, fontSize: 14, color: "#FFFFFF", ...OVER_STORY }}
                 numberOfLines={1}
               >
                 {current.isMine ? t("stories.mine") : authorName}
@@ -541,7 +569,8 @@ export default function StoriesScreen() {
                   style={{
                     ...type.caption,
                     fontSize: 11,
-                    color: "rgba(255,255,255,0.75)",
+                    color: "rgba(255,255,255,0.9)",
+                    ...OVER_STORY,
                   }}
                 >
                   {relativeDate(current.story.createdAt)}
@@ -586,6 +615,23 @@ export default function StoriesScreen() {
           ) : null}
           <ChromeButton icon="close" onPress={close} />
         </View>
+      </View>
+
+      {/* The same scrim at the foot. The owner's bar is small white text and
+          hairline icons over whatever the story happens to be — a shadow
+          alone leaves it readable but faint on a pale one. */}
+      <View
+        pointerEvents="none"
+        style={{ position: "absolute", left: 0, right: 0, bottom: 0 }}
+      >
+        <View style={{ height: 24, backgroundColor: "rgba(0,0,0,0.10)" }} />
+        <View style={{ height: 24, backgroundColor: "rgba(0,0,0,0.22)" }} />
+        <View
+          style={{
+            height: insets.bottom + 120,
+            backgroundColor: "rgba(0,0,0,0.38)",
+          }}
+        />
       </View>
 
       {/* The foot: where a story sends you, how it is doing, and how to
@@ -643,9 +689,14 @@ export default function StoriesScreen() {
             {/* Named, not just numbered: a bare "3" beside an eye does not
                 look like something to press, and this is the only way to the
                 list of who watched. */}
-            <Ionicons name="eye-outline" size={17} color="#FFFFFF" />
+            <Ionicons
+              name="eye-outline"
+              size={17}
+              color="#FFFFFF"
+              style={OVER_STORY}
+            />
             <Text
-              style={{ ...type.bodyStrong, fontSize: 14, color: "#FFFFFF" }}
+              style={{ ...type.bodyStrong, fontSize: 14, color: "#FFFFFF", ...OVER_STORY }}
             >
               {current.story.viewCount}
             </Text>
@@ -654,11 +705,11 @@ export default function StoriesScreen() {
                 <Ionicons
                   name="heart"
                   size={15}
-                  color="rgba(255,255,255,0.9)"
-                  style={{ marginLeft: spacing.sm }}
+                  color="#FFFFFF"
+                  style={{ marginLeft: spacing.sm, ...OVER_STORY }}
                 />
                 <Text
-                  style={{ ...type.bodyStrong, fontSize: 14, color: "#FFFFFF" }}
+                  style={{ ...type.bodyStrong, fontSize: 14, color: "#FFFFFF", ...OVER_STORY }}
                 >
                   {current.story.reactionCount}
                 </Text>
@@ -667,8 +718,9 @@ export default function StoriesScreen() {
             <Text
               style={{
                 ...type.caption,
-                color: "rgba(255,255,255,0.85)",
+                color: "#FFFFFF",
                 marginLeft: spacing.xs,
+                ...OVER_STORY,
               }}
             >
               {t("stories.seeViewers")}
@@ -676,7 +728,8 @@ export default function StoriesScreen() {
             <Ionicons
               name="chevron-forward"
               size={14}
-              color="rgba(255,255,255,0.85)"
+              color="#FFFFFF"
+              style={OVER_STORY}
             />
           </Pressable>
         ) : (
@@ -692,18 +745,40 @@ export default function StoriesScreen() {
                 <Pressable
                   key={emoji}
                   onPress={() =>
-                    requireAuth(() =>
+                    requireAuth(() => {
+                      const storyId = current.story.id;
+                      const previous = myReactions[storyId];
+                      // Lit before the request, not after it.
+                      //
+                      // This used to wait for the round trip, so a tap did
+                      // nothing visible for as long as the network took —
+                      // and because tapping the SAME emoji again removes it,
+                      // the second "it didn't work" tap undid the first. The
+                      // emoji appeared to need two or three presses when in
+                      // fact every press was registering.
+                      setMyReactions((m) => ({
+                        ...m,
+                        [storyId]: previous === emoji ? null : emoji,
+                      }));
+
                       react.mutate(
-                        { id: current.story.id, emoji },
+                        { id: storyId, emoji },
                         {
+                          // The server decides; this only corrects a guess
+                          // that turned out wrong.
                           onSuccess: (result) =>
                             setMyReactions((m) => ({
                               ...m,
-                              [current.story.id]: result.myReaction,
+                              [storyId]: result.myReaction,
+                            })),
+                          onError: () =>
+                            setMyReactions((m) => ({
+                              ...m,
+                              [storyId]: previous ?? null,
                             })),
                         },
-                      ),
-                    )
+                      );
+                    })
                   }
                   accessibilityRole="button"
                   accessibilityLabel={t("stories.reactions")}

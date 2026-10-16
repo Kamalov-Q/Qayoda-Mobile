@@ -1,16 +1,16 @@
 {
   "expo": {
     "name": "Growen City",
-    "slug": "uyNest",
+    "slug": "growencity",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "uynest",
+    "scheme": "growencity",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "uz.uynest.app",
+      "bundleIdentifier": "uz.growencity.app",
       "infoPlist": {
         "LSApplicationQueriesSchemes": [
           "yandexnavi",
@@ -21,7 +21,7 @@
       }
     },
     "android": {
-      "package": "uz.uynest.app",
+      "package": "uz.growencity.app",
       "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#ECFDF5",
