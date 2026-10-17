@@ -22,7 +22,7 @@
     },
     "android": {
       "package": "uz.growencity.app",
-      "versionCode": 1,
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#ECFDF5",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

@@ -51,7 +51,9 @@ export default function ResetPasswordScreen() {
   const [cooldown, setCooldown] = useState(RESEND_COOLDOWN);
   const phone = useAuthFlowStore((s) => s.phone);
   const reset = useResetPassword();
-  const resendOtp = useResendOtp();
+  // "reset", so a resent code arrives worded as a password reset like the
+  // first one did.
+  const resendOtp = useResendOtp("reset");
   const repeatRef = useRef<TextInput>(null);
   const { colors, text } = useTheme();
   const t = useT();

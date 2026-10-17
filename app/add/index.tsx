@@ -1,5 +1,5 @@
 // app/add/index.tsx
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Text,
@@ -9,7 +9,12 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeIn } from "react-native-reanimated";
-import { useForm, useWatch, Controller } from "react-hook-form";
+import {
+  useForm,
+  useWatch,
+  Controller,
+  type FieldErrors,
+} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -34,6 +39,7 @@ import { useT, type TranslationKey } from "../../src/i18n";
 import { useIsAuthed } from "../../src/features/auth/guest";
 import { GuestPrompt } from "../../src/features/auth/components/GuestPrompt";
 import { notify } from "../../src/lib/alerts";
+import { toast } from "../../src/components/ui/Toast";
 import { errorMessage } from "../../src/lib/api-error";
 import { useCreateListing } from "../../src/features/listings/hooks/useCreateListing";
 import { useImageUpload } from "../../src/features/listings/hooks/useImageUpload";
@@ -171,6 +177,21 @@ const PRICE_PLACEHOLDERS: Record<OfferPurpose, Record<Currency, string>> = {
   RENT_MONTHLY: { USD: "500", UZS: "6000000" },
   RENT_DAILY: { USD: "40", UZS: "500000" },
 };
+
+/**
+ * What a number-pad field keeps of what was typed or pasted. Several Android
+ * keyboards still offer space, comma, dot and minus on "number-pad", and a
+ * pasted "50 000" used to fail as "enter a price" with the number plainly
+ * there — so separators are dropped as they arrive instead.
+ */
+const onlyDigits = (v: string) => v.replace(/\D/g, "");
+
+/**
+ * Same for the area, which may carry a fraction. Uzbek and Russian keyboards
+ * put a comma on "decimal-pad", and "120,5" failed as "numbers only"; it is
+ * read as the decimal point it is meant to be.
+ */
+const decimalInput = (v: string) => v.replace(/,/g, ".").replace(/[^\d.]/g, "");
 
 /** 1250000 → "1 250 000", for the bounds quoted in error messages. */
 const groupDigits = (n: number) =>
@@ -524,11 +545,22 @@ export default function AddListingScreen() {
     // in the payload and be refused by the server.
     if (!canHaveBuildingType(next)) setValue("buildingType", "");
     if (!canHaveRepairType(next)) setValue("repairType", "");
-
-    if (canHaveFloors(next) === showFloors) return;
-    setValue("hasFloors", canHaveFloors(next) ? "yes" : "no");
-    resetFloorFields();
   };
+
+  // The floor answer follows whatever category is in effect — including the
+  // one the form falls back to before anything is tapped. Doing this only in
+  // changeCategory left `hasFloors` at its "yes" default when the server's
+  // first category has no floors (HOUSE on production): the floor fields were
+  // hidden, yet the schema still demanded a floor, so submit failed on a
+  // field nobody could see and the button appeared to do nothing.
+  useEffect(() => {
+    const answer = showFloors ? "yes" : "no";
+    if (getValues("hasFloors") === answer) return;
+    setValue("hasFloors", answer);
+    setValue("floor", "");
+    setValue("totalFloors", "");
+    clearErrors(["floor", "totalFloors"]);
+  }, [showFloors, getValues, setValue, clearErrors]);
 
   const hasBoundary = polygon.length >= MIN_POLYGON_POINTS;
   const hasLocation = locMode === "POLYGON" ? hasBoundary : pin !== null;
@@ -666,8 +698,12 @@ export default function AddListingScreen() {
       // the column null, rather than storing a guess.
       sellerType: d.sellerType || undefined,
       // Only where a building exists — the same rule the section is shown by.
-      buildingType: d.buildingType || undefined,
-      repairType: d.repairType || undefined,
+      // Gated on what is asked at send time, not on what was ever picked:
+      // the category in effect can change underneath the form (an admin
+      // hides the picked one and it falls back), and the server refuses an
+      // answer to a question the category does not ask.
+      buildingType: (showBuildingType && d.buildingType) || undefined,
+      repairType: (showRepairType && d.repairType) || undefined,
       // Both stay off the payload unless the category can carry them AND the
       // owner said it does — the server rejects a floor on anything else.
       floor: sendFloors && d.floor ? Number(d.floor) : undefined,
@@ -689,6 +725,14 @@ export default function AddListingScreen() {
       ],
       images: toPayload(),
     });
+  };
+
+  // The inline messages sit under fields that may be scrolled far out of
+  // view (or hidden), and a submit that only paints them reads as a dead
+  // button — so say what stopped it where it cannot be missed.
+  const onInvalid = (errs: FieldErrors<FormData>) => {
+    const first = Object.values(errs).find((e) => e?.message);
+    toast.error(String(first?.message ?? t("validation.required")));
   };
 
   if (!authed) {
@@ -887,7 +931,7 @@ export default function AddListingScreen() {
                 pricePeriod
               }
               value={value}
-              onChangeText={onChange}
+              onChangeText={(v) => onChange(onlyDigits(v))}
               onBlur={onBlur}
               error={errors.price?.message}
             />
@@ -902,7 +946,7 @@ export default function AddListingScreen() {
               placeholder={t("add.roomsPlaceholder")}
               keyboardType="number-pad"
               value={value}
-              onChangeText={onChange}
+              onChangeText={(v) => onChange(onlyDigits(v))}
               onBlur={onBlur}
               error={errors.rooms?.message}
             />
@@ -923,7 +967,7 @@ export default function AddListingScreen() {
               suffix="m²"
               keyboardType="decimal-pad"
               value={value}
-              onChangeText={onChange}
+              onChangeText={(v) => onChange(decimalInput(v))}
               onBlur={onBlur}
               error={errors.areaM2?.message}
               hint={
@@ -979,7 +1023,7 @@ export default function AddListingScreen() {
                           placeholder={t("add.floorPlaceholder")}
                           keyboardType="number-pad"
                           value={value}
-                          onChangeText={onChange}
+                          onChangeText={(v) => onChange(onlyDigits(v))}
                           onBlur={onBlur}
                           error={errors.floor?.message}
                         />
@@ -996,7 +1040,7 @@ export default function AddListingScreen() {
                           placeholder={t("add.totalFloorsPlaceholder")}
                           keyboardType="number-pad"
                           value={value}
-                          onChangeText={onChange}
+                          onChangeText={(v) => onChange(onlyDigits(v))}
                           onBlur={onBlur}
                           error={errors.totalFloors?.message}
                         />
@@ -1153,7 +1197,7 @@ export default function AddListingScreen() {
 
         <Button
           title={isUploading ? t("images.uploading") : t("add.submit")}
-          onPress={handleSubmit(onSubmit)}
+          onPress={handleSubmit(onSubmit, onInvalid)}
           loading={create.isPending}
           disabled={isUploading}
         />

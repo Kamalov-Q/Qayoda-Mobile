@@ -28,6 +28,7 @@ import {
   useRequestOtp,
   usePhoneLogin,
 } from "../../src/features/auth/hooks/useAuth";
+import { useAuthFlowStore } from "../../src/features/auth/store/auth-flow.store";
 
 import {
   formatUzPhoneInput,
@@ -53,14 +54,21 @@ export default function WelcomeScreen() {
 
   const requestOtp = useRequestOtp();
   const phoneLogin = usePhoneLogin();
+  const rememberPhone = useAuthFlowStore((s) => s.setPhone);
   const { text, colors } = useTheme();
   const t = useT();
 
   const check = useMutation({
     mutationFn: (phone: string) => authApi.checkPhone(phone),
     onSuccess: ({ usePassword }, phone) => {
-      if (usePassword) setPasswordFor(phone);
-      else requestOtp.mutate(phone); // new number or OTP-only → straight to SMS
+      if (usePassword) {
+        setPasswordFor(phone);
+        // Forgot-password is one tap away from here and asks for the number
+        // again — hand it the one already typed so it arrives prefilled.
+        rememberPhone(phone);
+      } else {
+        requestOtp.mutate(phone); // new number or OTP-only → straight to SMS
+      }
     },
   });
 

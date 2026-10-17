@@ -3,7 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { Linking } from "react-native";
-import { authApi, SessionResponse, TelegramStart } from "../api/auth.api";
+import {
+  authApi,
+  OtpPurpose,
+  SessionResponse,
+  TelegramStart,
+} from "../api/auth.api";
 import { useAuthStore } from "../store/auth.store";
 import { useAuthFlowStore } from "../store/auth-flow.store";
 
@@ -70,10 +75,15 @@ export function useRequestOtp() {
   });
 }
 
-export function useResendOtp() {
+/**
+ * The "send it again" button. `purpose` must match the screen it sits on:
+ * resending from the reset screen with the login wording would tell the user
+ * someone is signing in to their account.
+ */
+export function useResendOtp(purpose: OtpPurpose = "login") {
   const phone = useAuthFlowStore((s) => s.phone);
   return useMutation({
-    mutationFn: () => authApi.requestOtp(phone, lang()),
+    mutationFn: () => authApi.requestOtp(phone, lang(), purpose),
   });
 }
 
@@ -110,11 +120,14 @@ export function useSetPassword() {
   });
 }
 
-/** Same request as login OTPs — the reset screen just points elsewhere. */
+/**
+ * Same endpoint and same code as a login OTP, but the recovery wording — and
+ * it lands on the reset screen rather than the verify one.
+ */
 export function useRequestReset() {
   const setPhone = useAuthFlowStore((s) => s.setPhone);
   return useMutation({
-    mutationFn: (phone: string) => authApi.requestOtp(phone, lang()),
+    mutationFn: (phone: string) => authApi.requestOtp(phone, lang(), "reset"),
     onSuccess: (_data, phone) => {
       setPhone(phone);
       router.push("/(auth)/reset-password");

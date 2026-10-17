@@ -5,6 +5,15 @@ import { SessionUser } from "../store/auth.store";
 export type Lang = "uz" | "ru";
 export type AuthProvider = "PHONE" | "TELEGRAM";
 
+/**
+ * Which SMS wording the server sends. The code is the same either way — this
+ * only decides whether the text reads "sign in" or "reset your password",
+ * which is the one clue the reader has that the SMS is the one they asked
+ * for. Resends must repeat the purpose, or the second SMS contradicts the
+ * first.
+ */
+export type OtpPurpose = "login" | "reset";
+
 /** Mirror of what `TokenService.issuePair` returns. */
 export interface SessionResponse {
   accessToken: string;
@@ -39,10 +48,10 @@ export interface Identity {
 
 export const authApi = {
   // ---- phone -------------------------------------------------------------
-  requestOtp: (phone: string, lang: Lang) =>
+  requestOtp: (phone: string, lang: Lang, purpose: OtpPurpose = "login") =>
     api<{ sent: true; expiresIn: number }>("/auth/phone/request", {
       method: "POST",
-      body: { phone, lang },
+      body: { phone, lang, purpose },
       auth: false,
     }),
 

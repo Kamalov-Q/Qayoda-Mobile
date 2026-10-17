@@ -77,6 +77,17 @@ interface Page {
  * A shadow costs nothing, needs no layout change and no gradient library,
  * and works whatever is behind it.
  */
+/**
+ * How far the foot of the story sits above the bottom edge.
+ *
+ * `insets.bottom` alone is not enough: a phone with hardware buttons reports
+ * zero, which left the controls flush against the edge of the glass, right
+ * where the system's own back gesture starts. The floor keeps a thumb's worth
+ * of space there whatever the device claims.
+ */
+const FOOT_CLEARANCE = (bottomInset: number) =>
+  Math.max(bottomInset, spacing.sm) + spacing.md;
+
 const OVER_STORY = {
   textShadowColor: "rgba(0,0,0,0.85)",
   textShadowOffset: { width: 0, height: 1 },
@@ -628,7 +639,7 @@ export default function StoriesScreen() {
         <View style={{ height: 24, backgroundColor: "rgba(0,0,0,0.22)" }} />
         <View
           style={{
-            height: insets.bottom + 120,
+            height: FOOT_CLEARANCE(insets.bottom) + 132,
             backgroundColor: "rgba(0,0,0,0.38)",
           }}
         />
@@ -641,7 +652,7 @@ export default function StoriesScreen() {
           position: "absolute",
           left: 0,
           right: 0,
-          bottom: insets.bottom + spacing.md,
+          bottom: FOOT_CLEARANCE(insets.bottom),
           paddingHorizontal: spacing.md,
           gap: spacing.sm,
         }}
@@ -675,29 +686,39 @@ export default function StoriesScreen() {
         ) : null}
 
         {current.isMine ? (
+          /* A pill, not bare text.
+             This used to be white text with a shadow laid straight over the
+             story, sharing the bottom strip with the home indicator — on a
+             pale photo it read as a watermark, and the one way to the list of
+             who watched looked like a caption nobody was meant to press. The
+             filled shape gives it a contrast floor no story can undercut and
+             an edge that says it is a button. Dark, where the listing pill
+             above is white, so the two do not compete to be the main action. */
           <Pressable
             onPress={() => setViewersFor(current.story.id)}
             accessibilityRole="button"
+            accessibilityLabel={`${t("stories.seeViewers")}: ${current.story.viewCount}`}
+            hitSlop={8}
             style={({ pressed }) => ({
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "center",
               gap: spacing.xs,
-              opacity: pressed ? 0.6 : 1,
+              alignSelf: "center",
+              maxWidth: "100%",
+              minHeight: 44,
+              paddingHorizontal: spacing.lg,
+              paddingVertical: 10,
+              borderRadius: radii.pill,
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.28)",
+              backgroundColor: pressed
+                ? "rgba(0,0,0,0.72)"
+                : "rgba(0,0,0,0.55)",
             })}
           >
-            {/* Named, not just numbered: a bare "3" beside an eye does not
-                look like something to press, and this is the only way to the
-                list of who watched. */}
-            <Ionicons
-              name="eye-outline"
-              size={17}
-              color="#FFFFFF"
-              style={OVER_STORY}
-            />
-            <Text
-              style={{ ...type.bodyStrong, fontSize: 14, color: "#FFFFFF", ...OVER_STORY }}
-            >
+            <Ionicons name="eye-outline" size={17} color="#FFFFFF" />
+            <Text style={{ ...type.bodyStrong, fontSize: 14, color: "#FFFFFF" }}>
               {current.story.viewCount}
             </Text>
             {current.story.reactionCount > 0 ? (
@@ -706,31 +727,30 @@ export default function StoriesScreen() {
                   name="heart"
                   size={15}
                   color="#FFFFFF"
-                  style={{ marginLeft: spacing.sm, ...OVER_STORY }}
+                  style={{ marginLeft: spacing.sm }}
                 />
                 <Text
-                  style={{ ...type.bodyStrong, fontSize: 14, color: "#FFFFFF", ...OVER_STORY }}
+                  style={{ ...type.bodyStrong, fontSize: 14, color: "#FFFFFF" }}
                 >
                   {current.story.reactionCount}
                 </Text>
               </>
             ) : null}
+            {/* Shrinks and ellipsises rather than pushing the chevron off the
+                pill: "Kim ko'rgan" is longer in some languages than others. */}
             <Text
+              numberOfLines={1}
               style={{
-                ...type.caption,
+                ...type.bodyStrong,
+                fontSize: 14,
                 color: "#FFFFFF",
                 marginLeft: spacing.xs,
-                ...OVER_STORY,
+                flexShrink: 1,
               }}
             >
               {t("stories.seeViewers")}
             </Text>
-            <Ionicons
-              name="chevron-forward"
-              size={14}
-              color="#FFFFFF"
-              style={OVER_STORY}
-            />
+            <Ionicons name="chevron-forward" size={14} color="#FFFFFF" />
           </Pressable>
         ) : (
           <View style={{ gap: spacing.sm }}>

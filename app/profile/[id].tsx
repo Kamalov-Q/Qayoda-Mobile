@@ -641,7 +641,10 @@ const StatsRow = memo(function StatsRow({ stats }: { stats: OwnerStats }) {
             borderLeftColor: colors.border,
           }}
         >
-          <Text style={{ ...type.heading, fontSize: 19 }}>{cell.value}</Text>
+          {/* text.heading, not type.heading: the bare token carries no colour,
+              so the number fell back to React Native's default black and
+              disappeared into the card on the dark theme. */}
+          <Text style={{ ...text.heading, fontSize: 19 }}>{cell.value}</Text>
           <Text style={text.caption} numberOfLines={1}>
             {cell.label}
           </Text>

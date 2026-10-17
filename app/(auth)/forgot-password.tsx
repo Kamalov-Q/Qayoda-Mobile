@@ -1,4 +1,4 @@
-// app/(auth)/forgot-password.tsx — asks for the phone, sends the same login
+// app/(auth)/forgot-password.tsx — asks for the phone, sends a reset-worded
 // OTP, and hands over to the reset screen where code + new password land.
 import { useMemo } from "react";
 import { Text, View } from "react-native";
