@@ -5,7 +5,7 @@ import { useState } from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { spacing, radii } from "@/src/theme/tokens";
+import { spacing, radii, weight } from "@/src/theme/tokens";
 import { useTheme } from "@/src/theme/useTheme";
 import { useT } from "@/src/i18n";
 import { Button } from "@/src/components/ui";
@@ -74,7 +74,7 @@ export function ReviewsSection({ listingId, isOwner }: Props) {
             })}
           >
             <Text
-              style={{ ...text.caption, color: colors.primary, fontWeight: "600" }}
+              style={{ ...text.caption, color: colors.primary, ...weight("600") }}
             >
               {t("reviews.seeAll", { count })}
             </Text>

@@ -2,7 +2,7 @@ import { memo } from "react";
 import { View, Text } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
-import { radii } from "../../theme/tokens";
+import { radii, weight } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 import { resolveMediaUrl } from "../../lib/media-url";
 import { PulseHalo } from "./PulseHalo";
@@ -78,7 +78,7 @@ export const Avatar = memo(function Avatar({
         <Text
           style={{
             color: colors.onPrimary,
-            fontWeight: "700",
+            ...weight("700"),
             fontSize: Math.round(size * 0.38),
           }}
         >

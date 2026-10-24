@@ -11,7 +11,7 @@ import {
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useIsFocused } from "expo-router";
-import { spacing, radii } from "../../../theme/tokens";
+import { spacing, radii, weight } from "../../../theme/tokens";
 import { useTheme } from "../../../theme/useTheme";
 import { resolveMediaUrl } from "../../../lib/media-url";
 
@@ -39,6 +39,20 @@ interface Props {
    */
   swipeable?: boolean;
 }
+
+/**
+ * How many photos either side of the visible one actually get an <Image>.
+ *
+ * This is a paging ScrollView, and a ScrollView mounts EVERY child the
+ * moment it renders — there is no windowing. Unwindowed, a feed of 20 cards
+ * carrying up to six photos each fired forty-odd image requests to show
+ * four, and kept every one of them decoded in memory. `priority="low"` only
+ * reordered that queue; it never stopped the fetch.
+ *
+ * One neighbour, not two: the next photo is the only one a swipe can reach
+ * before onMomentumScrollEnd fires and widens the window again.
+ */
+const PRELOAD_RADIUS = 1;
 
 const BASE_INTERVAL = 4200;
 /** More than this and the dots stop being countable; show a counter instead. */
@@ -134,19 +148,34 @@ export const ListingPhotoSlider = memo(function ListingPhotoSlider({
       >
         {(count ? photos : [{}]).map((photo, i) => {
           const uri = resolveMediaUrl(photo.thumbUrl ?? photo.url);
+          // The slot always exists — paging depends on every photo having a
+          // full-width box — but only the ones near the viewport get an
+          // <Image> to fetch and decode into. The rest are a plain View in
+          // the placeholder colour, which is what an unloaded photo looks
+          // like anyway.
+          const near = Math.abs(i - index) <= PRELOAD_RADIUS;
           return (
             <Pressable key={i} onPress={onPress} style={{ width, height }}>
-              {uri ? (
+              {uri && near ? (
                 <Image
                   source={{ uri }}
                   style={{ width: "100%", height: "100%" }}
                   contentFit="cover"
                   transition={150}
-                  cachePolicy="memory-disk"
-                  // Only the visible photo and its neighbour are worth
-                  // decoding eagerly on a feed of a hundred cards.
-                  priority={i === 0 ? "normal" : "low"}
+                  // "disk", not "memory-disk": a feed scrolls past hundreds
+                  // of these, and pinning every decoded one in RAM is what
+                  // the viewport query's gcTime comment is already fighting.
+                  // Disk keeps the re-fetch off the network without holding
+                  // the bitmap.
+                  cachePolicy="disk"
+                  priority={i === index ? "normal" : "low"}
+                  recyclingKey={uri}
                 />
+              ) : uri ? (
+                // A photo that exists but is out of range: the placeholder
+                // tint, so paging past it does not flash the empty-state
+                // glyph as though the listing had no picture there.
+                <View style={{ flex: 1 }} />
               ) : (
                 <View
                   style={{
@@ -206,7 +235,7 @@ export const ListingPhotoSlider = memo(function ListingPhotoSlider({
             ))
           ) : (
             // Twelve dots is a smear; a counter is the honest version.
-            <Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "600" }}>
+            <Text style={{ color: "#FFFFFF", fontSize: 11, ...weight("600") }}>
               {index + 1}/{count}
             </Text>
           )}

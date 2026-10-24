@@ -1,15 +1,33 @@
-// app/(auth)/welcome.tsx — progressive sign-in. Step 1 asks only for the
-// phone; POST /auth/phone/check then decides step 2: a password field when the
-// account has one, or an SMS code otherwise. First-time users therefore never
-// see a password prompt (or an "invalid credentials" error) — they typed a
-// number, they get a code, the account creates itself.
-import { useMemo, useState } from "react";
+// app/(auth)/welcome.tsx — sign-in in two screens, and only two.
+//
+// This one takes a number; the next takes the six digits from the SMS. That
+// is the whole of it, for a new account and a returning one alike: no
+// password to invent, no password to remember, no surname, no avatar.
+// Everything else about a person is optional and lives on the profile
+// screen, to be filled in by someone who has already seen what the app is
+// for.
+//
+// There is deliberately no password branch any more. This screen used to ask
+// POST /auth/phone/check whether the number belonged to an account that had
+// set one, and show a password box if so — which meant the people who had
+// been here longest got the slower, more forgettable door, and a "forgot
+// password" flow existed to rescue them from it. A number that can receive
+// an SMS is the whole credential; the accounts that still carry a password
+// hash on the server sign in by code like everybody else.
+//
+// No name box either. It used to sit above the number, asked of everyone —
+// but a returning user, which is almost everyone who ever sees this screen,
+// has a name already and was being made to scroll past a field that would
+// be thrown away. Only a BRAND NEW account owes us one, and only that
+// account is asked: establishSession routes it to /onboarding when the
+// verify call comes back isNew with no name. The question is now asked of
+// exactly the people it applies to, after they are already signed in.
+import { useMemo } from "react";
 import { Text, View } from "react-native";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { router } from "expo-router";
-import { useMutation } from "@tanstack/react-query";
 import {
   Screen,
   Button,
@@ -23,18 +41,12 @@ import { spacing } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT } from "../../src/i18n";
 import { errorMessage } from "../../src/lib/api-error";
-import { authApi } from "../../src/features/auth/api/auth.api";
-import {
-  useRequestOtp,
-  usePhoneLogin,
-} from "../../src/features/auth/hooks/useAuth";
-import { useAuthFlowStore } from "../../src/features/auth/store/auth-flow.store";
+import { useRequestOtp } from "../../src/features/auth/hooks/useAuth";
 
 import {
   formatUzPhoneInput,
   isUzMobile,
   normalizePhone,
-  prettyPhone,
 } from "../../src/lib/phone";
 
 // Validation messages are user-facing, so the schema is rebuilt whenever the
@@ -47,30 +59,9 @@ const makeSchema = (t: ReturnType<typeof useT>) =>
 type FormData = z.infer<ReturnType<typeof makeSchema>>;
 
 export default function WelcomeScreen() {
-  // "phone" until the number is checked; then either the password step or a
-  // hand-off to the OTP screen (which navigates away, so no third step here).
-  const [passwordFor, setPasswordFor] = useState<string | null>(null);
-  const [password, setPassword] = useState("");
-
   const requestOtp = useRequestOtp();
-  const phoneLogin = usePhoneLogin();
-  const rememberPhone = useAuthFlowStore((s) => s.setPhone);
   const { text, colors } = useTheme();
   const t = useT();
-
-  const check = useMutation({
-    mutationFn: (phone: string) => authApi.checkPhone(phone),
-    onSuccess: ({ usePassword }, phone) => {
-      if (usePassword) {
-        setPasswordFor(phone);
-        // Forgot-password is one tap away from here and asks for the number
-        // again — hand it the one already typed so it arrives prefilled.
-        rememberPhone(phone);
-      } else {
-        requestOtp.mutate(phone); // new number or OTP-only → straight to SMS
-      }
-    },
-  });
 
   const schema = useMemo(() => makeSchema(t), [t]);
   const {
@@ -79,30 +70,17 @@ export default function WelcomeScreen() {
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { phone: "" }, // prevents "uncontrolled to controlled" warning
+    // prevents "uncontrolled to controlled" warning
+    defaultValues: { phone: "" },
   });
 
+  // One call, one outcome: the code is on its way and the next screen takes
+  // it. Whether the number already has an account is the server's business
+  // and nothing this screen has to branch on.
   const onContinue = ({ phone }: FormData) =>
-    check.mutate(normalizePhone(phone));
+    requestOtp.mutate({ phone: normalizePhone(phone) });
 
-  const onLogin = () => {
-    if (passwordFor && password) {
-      phoneLogin.mutate({ phone: passwordFor, password });
-    }
-  };
-
-  const busy =
-    phoneLogin.isPending;
-
-  const error = phoneLogin.isError
-    ? errorMessage(phoneLogin.error)
-    : check.isError
-      ? errorMessage(check.error)
-      : requestOtp.isError
-        ? errorMessage(requestOtp.error)
-        : null;
-
-  const passwordStep = passwordFor !== null;
+  const error = requestOtp.isError ? errorMessage(requestOtp.error) : null;
 
   return (
     <Screen centered>
@@ -119,7 +97,11 @@ export default function WelcomeScreen() {
                 account, so it needs its own way back — a guest who taps the
                 heart by accident must not be trapped on a login screen. */}
             <View
-              style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing.md,
+              }}
             >
               <BackButton />
               <BrandMark />
@@ -128,106 +110,57 @@ export default function WelcomeScreen() {
           </View>
           <View style={{ gap: spacing.xs }}>
             <Text style={text.display}>{t("auth.welcomeTitle")}</Text>
-            <Text style={text.caption}>
-              {passwordStep ? t("auth.loginWithPasswordSubtitle") : t("auth.welcomeSubtitle")}
-            </Text>
+            <Text style={text.caption}>{t("auth.welcomeSubtitle")}</Text>
           </View>
         </View>
 
-        {passwordStep ? (
-          <View style={{ gap: spacing.md }}>
-            {/* The checked number, with the way to change it right next to
-                it — retyping should not mean hunting for a back button. */}
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <Text style={text.heading}>{prettyPhone(passwordFor)}</Text>
-              <Button
-                title={t("auth.changeNumber")}
-                variant="link"
-                size="sm"
-                onPress={() => {
-                  setPasswordFor(null);
-                  setPassword("");
-                  phoneLogin.reset();
-                }}
+        <View style={{ gap: spacing.md }}>
+          <Controller
+            control={control}
+            name="phone"
+            render={({ field: { value, onChange, onBlur } }) => (
+              <TextField
+                label={t("auth.phone")}
+                placeholder={t("auth.phonePlaceholder")}
+                icon="call-outline"
+                prefix="+998"
+                keyboardType="phone-pad"
+                autoComplete="tel"
+                textContentType="telephoneNumber"
+                returnKeyType="go"
+                maxLength={12} // "90 123 45 67"
+                onSubmitEditing={handleSubmit(onContinue)}
+                value={value}
+                onChangeText={(v) => onChange(formatUzPhoneInput(v))}
+                onBlur={onBlur}
+                error={errors.phone?.message}
               />
-            </View>
+            )}
+          />
 
-            <TextField
-              label={t("auth.password")}
-              placeholder={t("auth.passwordPlaceholder")}
-              secureTextEntry
-              autoComplete="current-password"
-              autoFocus
-              returnKeyType="go"
-              onSubmitEditing={onLogin}
-              value={password}
-              onChangeText={setPassword}
-            />
+          <ErrorBanner message={error} />
 
-            <ErrorBanner message={error} />
-
-            <Button
-              title={t("auth.login")}
-              onPress={onLogin}
-              loading={phoneLogin.isPending}
-              disabled={busy || !password}
-            />
-
-            <Button
-              title={t("auth.forgotPassword")}
-              variant="link"
-              onPress={() => router.push("/(auth)/forgot-password")}
-              disabled={busy}
-            />
-          </View>
-        ) : (
-          <View style={{ gap: spacing.md }}>
-            <Controller
-              control={control}
-              name="phone"
-              render={({ field: { value, onChange, onBlur } }) => (
-                <TextField
-                  label={t("auth.phone")}
-                  placeholder={t("auth.phonePlaceholder")}
-                  icon="call-outline"
-                  prefix="+998"
-                  keyboardType="phone-pad"
-                  autoComplete="tel"
-                  textContentType="telephoneNumber"
-                  returnKeyType="go"
-                  maxLength={12} // "90 123 45 67"
-                  onSubmitEditing={handleSubmit(onContinue)}
-                  value={value}
-                  onChangeText={(v) => onChange(formatUzPhoneInput(v))}
-                  onBlur={onBlur}
-                  error={errors.phone?.message}
-                />
-              )}
-            />
-
-            <ErrorBanner message={error} />
-
-            <Button
-              title={t("common.continue")}
-              onPress={handleSubmit(onContinue)}
-              loading={check.isPending || requestOtp.isPending}
-              disabled={busy}
-            />
-          </View>
-        )}
+          <Button
+            title={t("common.continue")}
+            onPress={handleSubmit(onContinue)}
+            loading={requestOtp.isPending}
+          />
+        </View>
 
         <View
-          style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: spacing.md,
+          }}
         >
-          <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+          <View
+            style={{ flex: 1, height: 1, backgroundColor: colors.border }}
+          />
           <Text style={text.caption}>{t("auth.orContinueWith")}</Text>
-          <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+          <View
+            style={{ flex: 1, height: 1, backgroundColor: colors.border }}
+          />
         </View>
 
         <View style={{ gap: spacing.sm }}>
@@ -236,7 +169,7 @@ export default function WelcomeScreen() {
             variant="secondary"
             icon="paper-plane-outline"
             onPress={() => router.push("/telegram")}
-            disabled={busy}
+            disabled={requestOtp.isPending}
           />
         </View>
       </View>

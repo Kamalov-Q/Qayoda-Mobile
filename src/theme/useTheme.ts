@@ -20,6 +20,7 @@ function buildText(c: Palette) {
     bodyStrong: { ...type.bodyStrong, color: c.text },
     caption: { ...type.caption, color: c.textMuted },
     label: { ...type.label, color: c.textMuted },
+    price: { ...type.price, color: c.text },
   } as const;
 }
 

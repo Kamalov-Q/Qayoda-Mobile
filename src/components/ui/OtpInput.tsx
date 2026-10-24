@@ -1,6 +1,6 @@
 import { memo, useRef, useState } from "react";
 import { View, Text, TextInput, Pressable } from "react-native";
-import { radii, spacing } from "../../theme/tokens";
+import { radii, spacing, weight } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 
 // One hidden input drives N display boxes — no focus juggling between 6 inputs,
@@ -73,7 +73,7 @@ export const OtpInput = memo(function OtpInput({
               <Text
                 style={{
                   fontSize: 26,
-                  fontWeight: "700",
+                  ...weight("700"),
                   color: colors.text,
                 }}
               >

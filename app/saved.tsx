@@ -8,7 +8,12 @@ import {
   RefreshControl,
 } from "react-native";
 import { router } from "expo-router";
-import { Screen, EmptyState, HEADER_EDGES } from "../src/components/ui";
+import {
+  Screen,
+  EmptyState,
+  HEADER_EDGES,
+  LoadingView,
+} from "../src/components/ui";
 import { spacing } from "../src/theme/tokens";
 import { useTheme } from "../src/theme/useTheme";
 import { useT } from "../src/i18n";
@@ -51,10 +56,7 @@ export default function SavedScreen() {
       </View>
 
       {isLoading ? (
-        <ActivityIndicator
-          style={{ marginTop: spacing.xxl }}
-          color={colors.primary}
-        />
+        <LoadingView />
       ) : isError ? (
         <EmptyState
           icon="cloud-offline-outline"
@@ -97,7 +99,7 @@ export default function SavedScreen() {
               title={t("saved.empty")}
               description={t("saved.emptyHint")}
               actionLabel={t("saved.browse")}
-              onAction={() => router.push("/(tabs)/sotuv")}
+              onAction={() => router.push("/(tabs)/home")}
             />
           }
           renderItem={({ item }) => (

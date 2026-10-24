@@ -7,7 +7,7 @@ import { useRouter } from "expo-router";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "@/src/components/ui";
-import { spacing, radii } from "@/src/theme/tokens";
+import { spacing, radii, weight } from "@/src/theme/tokens";
 import { useTheme } from "@/src/theme/useTheme";
 import { useT } from "@/src/i18n";
 import { resolveMediaUrl } from "@/src/lib/media-url";
@@ -25,6 +25,8 @@ interface Props {
   onReply?: (comment: Comment) => void;
   onEdit?: (comment: Comment) => void;
   onDelete?: (comment: Comment) => void;
+  /** Offered on comments that are not yours, beside nothing else. */
+  onReport?: (comment: Comment) => void;
   onToggleLike?: (comment: Comment) => void;
   onPressImage?: (url: string) => void;
 }
@@ -40,6 +42,7 @@ export const CommentRow = memo(function CommentRow({
   onReply,
   onEdit,
   onDelete,
+  onReport,
   onToggleLike,
   onPressImage,
 }: Props) {
@@ -122,10 +125,7 @@ export const CommentRow = memo(function CommentRow({
               opacity: pressed ? 0.75 : 1,
             })}
           >
-            <Text
-              style={{ ...text.bodyStrong }}
-              numberOfLines={1}
-            >
+            <Text style={{ ...text.bodyStrong }} numberOfLines={1}>
               {name}
             </Text>
           </Pressable>
@@ -160,7 +160,12 @@ export const CommentRow = memo(function CommentRow({
               }}
               contentFit="cover"
               transition={150}
-              cachePolicy="memory-disk"
+              // "disk", not "memory-disk": expo-image's memory cache is
+              // global and survives unmount, so a long thread scrolled
+              // through once leaves every photo it passed decoded in RAM.
+              // Disk keeps the re-read off the network without holding the
+              // bitmap — see ListingPhotoSlider for the same trade.
+              cachePolicy="disk"
             />
           </Pressable>
         ) : null}
@@ -189,7 +194,7 @@ export const CommentRow = memo(function CommentRow({
             />
           ) : null}
 
-          {canManage && (onEdit || onDelete) ? (
+          {(canManage && (onEdit || onDelete)) || (!mine && onReport) ? (
             <Pressable
               onPress={() => setMenuOpen((open) => !open)}
               hitSlop={10}
@@ -207,7 +212,7 @@ export const CommentRow = memo(function CommentRow({
           ) : null}
         </View>
 
-        {menuOpen && canManage ? (
+        {menuOpen ? (
           <View
             style={{
               flexDirection: "row",
@@ -215,7 +220,7 @@ export const CommentRow = memo(function CommentRow({
               paddingVertical: spacing.xs,
             }}
           >
-            {mine && onEdit ? (
+            {mine && canManage && onEdit ? (
               <TextAction
                 label={t("common.edit")}
                 tone={colors.primary}
@@ -225,13 +230,26 @@ export const CommentRow = memo(function CommentRow({
                 }}
               />
             ) : null}
-            {onDelete ? (
+            {canManage && onDelete ? (
               <TextAction
                 label={t("common.delete")}
                 tone={colors.danger}
                 onPress={() => {
                   setMenuOpen(false);
                   onDelete(comment);
+                }}
+              />
+            ) : null}
+            {/* Flagging is the one action here that is about somebody
+                else's comment, so it is the one offered when none of the
+                others are. */}
+            {!mine && onReport ? (
+              <TextAction
+                label={t("report.action")}
+                tone={colors.danger}
+                onPress={() => {
+                  setMenuOpen(false);
+                  onReport(comment);
                 }}
               />
             ) : null}
@@ -290,7 +308,7 @@ function TextAction({
       <Text
         style={{
           ...text.caption,
-          fontWeight: "600",
+          ...weight("600"),
           color: tone ?? colors.textMuted,
         }}
       >

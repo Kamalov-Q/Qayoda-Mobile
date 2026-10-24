@@ -3,12 +3,19 @@ import { api } from "@/src/lib/api-client";
 /**
  * The actions the server charges for by itself. An admin may invent other
  * codes in the dashboard; those are listed but nothing charges them until
- * a feature sells them, so the app only ever looks up these three.
+ * a feature sells them, so the app only ever looks up these two.
+ *
+ * STORY_POST was one of these until stories were removed from the product
+ * altogether — the module, the tables and the tariff row all went with it,
+ * so there is nothing left to look up under that code. VIDEO_POST replaced
+ * it: posting a reel is charged when Bunny confirms the encoded file, so the
+ * price shown on the upload screen is a promise about a charge that has not
+ * happened yet.
  */
 export const BUILT_IN_ACTIONS = [
   "LISTING_POST",
-  "STORY_POST",
   "LISTING_PROMOTE",
+  "VIDEO_POST",
 ] as const;
 
 export type TariffAction = (typeof BUILT_IN_ACTIONS)[number];

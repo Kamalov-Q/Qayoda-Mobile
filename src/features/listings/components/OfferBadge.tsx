@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { Text, View } from "react-native";
-import { radii, spacing } from "../../../theme/tokens";
+import { radii, spacing, type } from "../../../theme/tokens";
 import { useTheme } from "../../../theme/useTheme";
 import { usePriceFormatter } from "../utils/format";
 
@@ -28,7 +28,7 @@ export const OfferBadge = memo(function OfferBadge({
         alignSelf: "flex-start",
       }}
     >
-      <Text style={{ color: colors.onPrimary, fontWeight: "700", fontSize: 14 }}>
+      <Text style={{ ...type.price, fontSize: 14, color: colors.onPrimary }}>
         {formatPrice(price, currency, purpose)}
       </Text>
     </View>

@@ -4,7 +4,7 @@
 // expensive way to render nothing.
 import { useState } from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
-import { spacing } from "@/src/theme/tokens";
+import { spacing, weight } from "@/src/theme/tokens";
 import { useTheme } from "@/src/theme/useTheme";
 import { useT } from "@/src/i18n";
 import { CommentRow } from "./CommentRow";
@@ -73,7 +73,7 @@ export function CommentThreadItem({
             opacity: pressed ? 0.6 : 1,
           })}
         >
-          <Text style={{ ...text.caption, fontWeight: "600" }}>
+          <Text style={{ ...text.caption, ...weight("600") }}>
             {t("comments.showReplies", { count: hidden })}
           </Text>
         </Pressable>

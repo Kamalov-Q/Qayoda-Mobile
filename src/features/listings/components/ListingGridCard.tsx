@@ -65,7 +65,14 @@ export const ListingGridCard = memo(function ListingGridCard({
   return (
     <Pressable
       onPress={onPress}
-      accessibilityRole="button"
+      // "link", not "button": the card navigates to a listing, which is what
+      // a link is, and it is also the only role that lets the action icons
+      // inside it stay real buttons. On web react-native-web renders this
+      // role as <a> and accessibilityRole="button" as <button> — a button
+      // inside a button is invalid HTML and React refuses to hydrate it
+      // ("<button> cannot contain a nested <button>"), which is exactly what
+      // the like / comment / share row in ListingCardActions is.
+      accessibilityRole="link"
       style={({ pressed }) => ({
         flex: 1,
         backgroundColor: colors.surface,
@@ -124,7 +131,7 @@ export const ListingGridCard = memo(function ListingGridCard({
             }}
           >
             <Text
-              style={{ ...type.bodyStrong, fontSize: 14, color: "#FFFFFF" }}
+              style={{ ...type.price, fontSize: 14, color: "#FFFFFF" }}
               numberOfLines={1}
             >
               {price}

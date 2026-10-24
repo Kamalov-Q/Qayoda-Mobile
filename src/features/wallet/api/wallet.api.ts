@@ -33,14 +33,20 @@ export interface WalletOverview {
   balance: string;
   balanceTiyin: number;
   providers: TopupProvider[];
+  /**
+   * The public account number ("Hisob raqami") — what the user types into
+   * Paynet to pay into this wallet. Short and never reused, unlike the
+   * account's uuid.
+   */
+  accountNo: number;
 }
 
 export type TxKind =
   | "TOPUP"
   | "TOPUP_BONUS"
   | "LISTING_POST"
-  | "STORY_POST"
   | "LISTING_PROMOTE"
+  | "VIDEO_POST"
   | "REFUND"
   | "ADMIN_ADJUST";
 
@@ -86,8 +92,24 @@ export interface WalletTransactionDetail extends WalletTransactionItem {
   payment: TransactionPayment | null;
 }
 
+/** The Paynet checkout link, built server-side. */
+export interface PaynetLinkResponse {
+  /** The number the payer types into Paynet ("Hisob raqami"). */
+  accountNo: number;
+  payUrl: string;
+}
+
 export const walletApi = {
   overview: (): Promise<WalletOverview> => api("/wallet"),
+
+  /**
+   * Paynet is push-model: there is no order to create, only a link to open.
+   * The server builds it from PAYNET_MERCHANT_ID and the user's account
+   * number — which is why it is asked for rather than assembled here. The
+   * app used to hardcode the merchant id, so changing it meant a release.
+   */
+  paynetLink: (amount?: number): Promise<PaynetLinkResponse> =>
+    api(`/wallet/paynet-link${amount ? `?amount=${amount}` : ""}`),
 
   createTopup: (body: CreateTopupRequest): Promise<CreateTopupResponse> =>
     api("/wallet/topup", { method: "POST", body }),

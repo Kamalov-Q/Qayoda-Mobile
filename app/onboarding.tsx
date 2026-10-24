@@ -1,14 +1,21 @@
-// app/onboarding.tsx — the one unskippable screen: a brand-new account that
-// arrived without a full name (every phone sign-up; Telegram/Google when the
-// provider carried none) fills in who they are before entering the app.
+// app/onboarding.tsx — the safety net, not the usual path.
+//
+// A phone sign-up gives its name on the welcome screen and never sees this
+// screen at all. It is here for the two accounts that arrive without one: a
+// welcome screen whose optional name box was left blank, and a Telegram
+// account whose provider carried no first name.
+//
+// Asks for a NAME and nothing else. The surname is optional and the avatar
+// can be skipped — both belong to the profile screen, filled in later by
+// someone who has already seen what the app is for.
 // Reached only via router.replace from establishSession, so there is no back
 // stack to escape through, and no BackButton is offered.
 import { useMemo, useRef, useState } from "react";
 import { Text, TextInput, View, Pressable } from "react-native";
-import { useForm, Controller, useController } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { router, Redirect } from "expo-router";
+import { Redirect } from "expo-router";
 import { pickFromLibrary } from "../src/lib/image-picker";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { Image } from "expo-image";
@@ -31,13 +38,6 @@ import {
   useUploadAvatar,
 } from "../src/features/profile/hooks/useProfile";
 import { resolveMediaUrl } from "../src/lib/media-url";
-import { ProfileDetailsFields } from "../src/features/profile/components/ProfileDetailsFields";
-import {
-  MAX_AGE,
-  MIN_AGE,
-  ageFrom,
-  toIsoDate,
-} from "../src/features/profile/lib/birth-date";
 
 /** Same downscale as the profile screen — the server re-crops anyway. */
 const AVATAR_EDGE = 1024;
@@ -47,30 +47,20 @@ const makeSchema = (t: ReturnType<typeof useT>) =>
     name: z
       .string()
       .trim()
-      .min(2, t("validation.minChars", { count: 2 })),
+      .min(2, t("validation.minChars", { count: 2 }))
+      // The server's own bound (UpdateProfileDto: 2–64).
+      .max(64, t("validation.maxChars", { count: 64 })),
+    // Optional: a person with one name is a person, and the profile screen
+    // takes a surname later for anyone who wants one on their listings.
     surname: z
       .string()
       .trim()
-      .min(2, t("validation.minChars", { count: 2 })),
-    /**
-     * The one new field that is REQUIRED. Validated in two steps so the
-     * message says which thing is wrong: a date that is not a date, versus a
-     * date that would make somebody 4 or 140.
-     */
-    birthDate: z
-      .string()
-      .trim()
-      .min(1, t("profileInfo.birthDateRequired"))
-      .refine((v) => toIsoDate(v) !== null, t("profileInfo.birthDateInvalid"))
+      // The server's own bound (UpdateProfileDto: 2–64).
+      .max(64, t("validation.maxChars", { count: 64 }))
       .refine(
-        (v) => {
-          const age = ageFrom(toIsoDate(v));
-          return age !== null && age >= MIN_AGE && age <= MAX_AGE;
-        },
-        t("profileInfo.ageRange", { min: MIN_AGE, max: MAX_AGE }),
+        (v) => !v || v.length >= 2,
+        t("validation.minChars", { count: 2 }),
       ),
-    gender: z.enum(["MALE", "FEMALE"]).or(z.literal("")),
-    address: z.string().trim().max(255).optional(),
   });
 
 type FormData = z.infer<ReturnType<typeof makeSchema>>;
@@ -94,19 +84,8 @@ export default function OnboardingScreen() {
     defaultValues: {
       name: user?.name ?? "",
       surname: user?.surname ?? "",
-      birthDate: "",
-      gender: "",
-      address: "",
     },
   });
-
-  // Registered controllers rather than useWatch: these feed one presentational
-  // component, and a useWatch subscription misses the reset that `values`
-  // fires, which left the same fields blank on the edit screen until a
-  // keystroke woke them up. useController is what Controller uses underneath.
-  const birthDateField = useController({ control, name: "birthDate" }).field;
-  const genderField = useController({ control, name: "gender" }).field;
-  const addressField = useController({ control, name: "address" }).field;
 
   // Deep link / reload safety net: this screen means nothing without a session.
   if (!user) return <Redirect href="/(tabs)/home" />;
@@ -138,25 +117,15 @@ export default function OnboardingScreen() {
     update.mutate(
       {
         name: d.name.trim(),
-        surname: d.surname.trim(),
-        // Validated above, so the conversion cannot fail here.
-        birthDate: toIsoDate(d.birthDate)!,
-        // Blank means "not saying" — sent as undefined rather than an empty
-        // string, which the server would store as a value.
-        gender: d.gender || undefined,
-        address: d.address?.trim() || undefined,
+        // Undefined, not "", so a blank box leaves the column null rather
+        // than writing an empty string the profile screen has to undo.
+        surname: d.surname.trim() || undefined,
       },
       {
-        onSuccess: () => {
-          // Phone accounts pick their password next; provider-only accounts
-          // have no phone to log into, so they are done — via the intro if
-          // this is their first login.
-          if (user?.phoneNumber && !user.hasPassword) {
-            router.replace("/set-password");
-          } else {
-            goHomeAfterAuth();
-          }
-        },
+        // Straight in. The password step that used to follow is gone: the
+        // session is a sliding 30 days, and a password is something to add
+        // from Settings if you want one, not a toll on the way in.
+        onSuccess: () => goHomeAfterAuth(),
       },
     ),
   );
@@ -236,8 +205,8 @@ export default function OnboardingScreen() {
               <TextField
                 ref={surnameRef}
                 label={t("auth.surname")}
-                required
                 placeholder={t("auth.surnamePlaceholder")}
+                hint={t("auth.surnameOptional")}
                 autoComplete="family-name"
                 returnKeyType="done"
                 onSubmitEditing={onSubmit}
@@ -249,20 +218,11 @@ export default function OnboardingScreen() {
             )}
           />
 
-          {/* Who they are, beyond a name. Age is required here and only
-              here — the edit screen takes a patch, so it cannot demand a
-              field that older accounts never supplied. */}
-          <ProfileDetailsFields
-            birthDate={birthDateField.value}
-            birthDateRequired
-            onBirthDate={birthDateField.onChange}
-            birthDateError={errors.birthDate?.message}
-            gender={genderField.value}
-            onGender={genderField.onChange}
-            address={addressField.value ?? ""}
-            onAddress={addressField.onChange}
-          />
-
+          {/* Only the name is required. The surname, the avatar, the birth
+              date, the gender and the address are all optional and live on
+              the profile edit screen — asking for them before someone has
+              even seen the app was a wall at the door, and the server never
+              required any of them. */}
           {/* The number that signed them in, shown for confidence, not edited. */}
           {user.phoneNumber ? (
             <Text style={text.caption}>

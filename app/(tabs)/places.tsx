@@ -18,6 +18,7 @@ import {
   PriceRangeFilter,
   TextField,
   TAB_EDGES,
+  LoadingView,
 } from "../../src/components/ui";
 import { spacing } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
@@ -182,6 +183,8 @@ export default function PlacesScreen() {
         visible={filtersOpen}
         onClose={() => setFiltersOpen(false)}
         onReset={activeCount ? resetFilters : undefined}
+        activeCount={activeCount}
+        resultCount={listings.length}
       >
         <Section title={t("filters.status")}>
           <ChipGroup
@@ -218,10 +221,7 @@ export default function PlacesScreen() {
       </FilterSheet>
 
       {isLoading ? (
-        <ActivityIndicator
-          style={{ marginTop: spacing.xxl }}
-          color={colors.primary}
-        />
+        <LoadingView />
       ) : isError ? (
         <EmptyState
           icon="cloud-offline-outline"

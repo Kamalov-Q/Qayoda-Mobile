@@ -3,6 +3,8 @@ import { Linking, Platform } from "react-native";
 import * as Location from "expo-location";
 import { confirm, notify } from "../../../lib/alerts";
 import { toast } from "../../../components/ui/Toast";
+import { useLanguage } from "../../../i18n";
+import { geocodeAddress } from "../../map/geocoder";
 
 export interface Coords {
   latitude: number;
@@ -103,57 +105,46 @@ export function useMyLocation() {
   return { locate, loading };
 }
 
-/** Never throws: a geocoder that is unreachable, rate-limited or simply
- *  unsure is the same "no result" to the caller. */
-async function geocodeQuietly(query: string) {
-  try {
-    return await Location.geocodeAsync(query);
-  } catch {
-    return [];
-  }
-}
-
 /**
  * Address → coordinates, for moving a map camera somewhere by name.
  *
- * Native only (`geocodeAsync` has no web implementation), which is fine: the
- * only screen using it is the polygon editor, and that is already a "open the
- * app on your phone" stub in the browser.
+ * Yandex's Geocoder HTTP API rather than the device's own geocoder, which is
+ * what this used before. Three things came with the swap: the same answers on
+ * both platforms (Android's Geocoder is a vendor service and simply absent on
+ * some builds), no location permission in the path at all — Android gated its
+ * geocoder behind one and returned an empty list rather than an error when it
+ * was not held, which cost a permission prompt in the middle of typing a
+ * street name — and addresses in the language the app is set to rather than
+ * the one the OS is set to.
+ *
+ * Still native-and-web alike, unlike the old one: it is an HTTPS call, so the
+ * polygon editor's stub on web is now a choice rather than a limitation.
  */
 export function useGeocode() {
   const [loading, setLoading] = useState(false);
+  const language = useLanguage();
 
-  const search = useCallback(async (query: string): Promise<Coords | null> => {
-    const q = query.trim();
-    if (!q) return null;
+  const search = useCallback(
+    async (query: string): Promise<Coords | null> => {
+      const q = query.trim();
+      if (!q) return null;
 
-    setLoading(true);
-    try {
-      let results = await geocodeQuietly(q);
-
-      // Android's Geocoder is permission-gated and answers with an empty list
-      // rather than an error when it is not held. Asked for only once a search
-      // has actually come back empty — prompting for the user's location the
-      // moment they type a street name is a bad trade for a lookup that
-      // usually works without it.
-      if (!results.length && Platform.OS === "android") {
-        const held = await Location.getForegroundPermissionsAsync();
-        if (!held.granted && (await ensureForegroundPermission())) {
-          results = await geocodeQuietly(q);
+      setLoading(true);
+      try {
+        // Never throws — see geocoder.ts. An unreachable, rate-limited or
+        // unconfigured geocoder is the same "not found" to the reader.
+        const found = await geocodeAddress(q, language);
+        if (!found) {
+          toast.errorKey("map.searchNotFound");
+          return null;
         }
+        return found;
+      } finally {
+        setLoading(false);
       }
-
-      const first = results[0];
-      if (!first) {
-        toast.errorKey("map.searchNotFound");
-        return null;
-      }
-
-      return { latitude: first.latitude, longitude: first.longitude };
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [language],
+  );
 
   return { search, loading };
 }

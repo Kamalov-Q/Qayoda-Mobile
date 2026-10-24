@@ -1,16 +1,22 @@
 import { memo, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import { spacing } from "@/src/theme/tokens";
+import { radii, spacing } from "@/src/theme/tokens";
 import { useTheme } from "@/src/theme/useTheme";
+import { Avatar } from "@/src/components/ui";
 import { useT } from "@/src/i18n";
-import { StoryAvatar } from "@/src/features/stories/components/StoryAvatar";
 import { ActionIcons, type ActionIcon } from "./ActionIcons";
 import { VerifiedBadge } from "./VerifiedBadge";
 
+/**
+ * The ring around the photo.
+ *
+ * Drawn whether or not the photo opens: it used to appear only for someone
+ * with a story up, which made the avatar five points bigger and framed on
+ * one profile and bare on the next.
+ */
+const RING = 2.5;
+
 interface Props {
-  /** Drives the story ring, and where tapping the photo leads when they
-   *  have one up. Null for an account that no longer exists. */
-  userId: string | null | undefined;
   avatarUri: string | null | undefined;
   name: string;
   verified?: boolean;
@@ -46,7 +52,6 @@ interface Props {
  * says. All of it comes in as props.
  */
 export const ProfileHeader = memo(function ProfileHeader({
-  userId,
   avatarUri,
   name,
   verified,
@@ -59,7 +64,7 @@ export const ProfileHeader = memo(function ProfileHeader({
   photoBadge,
   avatarSize = 104,
 }: Props) {
-  const { text } = useTheme();
+  const { colors, text } = useTheme();
   const t = useT();
 
   const heading = (
@@ -96,18 +101,28 @@ export const ProfileHeader = memo(function ProfileHeader({
   return (
     <View style={{ alignItems: "center", gap: spacing.sm }}>
       <View>
-        {/* Rings when they have a story up and opens it on tap; otherwise
-            the photo, full-size, when there is a bigger version to show. An
-            initials circle has none, and a press effect that leads nowhere
-            is worse than none. */}
-        <StoryAvatar
-          userId={userId}
-          uri={avatarUri}
-          name={name}
-          size={avatarSize}
-          online={online}
+        {/* Opens the photo full-size when there is a bigger version to
+            show. An initials circle has none, and a press effect that leads
+            nowhere is worse than none. */}
+        <Pressable
           onPress={onPressPhoto}
-        />
+          disabled={!onPressPhoto}
+          accessibilityRole={onPressPhoto ? "button" : undefined}
+          style={({ pressed }) => ({
+            padding: RING,
+            borderRadius: radii.pill,
+            borderWidth: RING,
+            borderColor: colors.border,
+            opacity: pressed ? 0.75 : 1,
+          })}
+        >
+          <Avatar
+            uri={avatarUri ?? null}
+            name={name}
+            size={avatarSize}
+            online={online}
+          />
+        </Pressable>
         {photoBadge}
       </View>
 

@@ -13,6 +13,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
+import { weight } from "@/src/theme/tokens";
 import { useTheme } from "@/src/theme/useTheme";
 import { useT } from "@/src/i18n";
 import { useAuthStore } from "@/src/features/auth/store/auth.store";
@@ -72,7 +73,7 @@ export default function WalletHistoryScreen() {
 
   const renderItem = ({ item }: { item: WalletTransactionItem }) => {
     const num = Number(item.amount);
-    const config = getTxConfig(item.kind, num, t);
+    const config = getTxConfig(item.kind, num, t, scheme);
     const isPositive = num > 0;
     const formattedAmount = `${isPositive ? "+" : ""}${formatThousands(num)} UZS`;
 
@@ -130,7 +131,7 @@ export default function WalletHistoryScreen() {
             <Text
               style={[
                 styles.txAmount,
-                { color: isPositive ? "#10B981" : colors.text },
+                { color: isPositive ? colors.success : colors.text },
               ]}
             >
               {formattedAmount}
@@ -231,6 +232,7 @@ export default function WalletHistoryScreen() {
                 balance={overview?.balance ?? 0}
                 phone={user?.phoneNumber}
                 userId={user?.id}
+                accountNo={overview?.accountNo}
                 name={userName}
                 interactive={true}
                 onPressTopup={() => router.back()}
@@ -311,8 +313,8 @@ export default function WalletHistoryScreen() {
                   },
                 ]}
               >
-                <Ionicons name="add" size={18} color="#FFFFFF" />
-                <Text style={styles.emptyTopupBtnText}>
+                <Ionicons name="add" size={18} color={colors.onPrimary} />
+                <Text style={[styles.emptyTopupBtnText, { color: colors.onPrimary }]}>
                   {t("wallet.topupBalanceBtn")}
                 </Text>
               </Pressable>
@@ -353,7 +355,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 17,
-    fontWeight: "700",
+    ...weight("700"),
     textAlign: "center",
   },
   listContent: {
@@ -375,7 +377,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: "700",
+    ...weight("700"),
   },
   countBadge: {
     paddingHorizontal: 9,
@@ -384,7 +386,7 @@ const styles = StyleSheet.create({
   },
   countBadgeText: {
     fontSize: 12,
-    fontWeight: "700",
+    ...weight("700"),
   },
   txCard: {
     borderRadius: 16,
@@ -415,7 +417,7 @@ const styles = StyleSheet.create({
   },
   txTitle: {
     fontSize: 14.5,
-    fontWeight: "700",
+    ...weight("700"),
     marginBottom: 2,
   },
   txMetaRow: {
@@ -425,7 +427,7 @@ const styles = StyleSheet.create({
   },
   txDate: {
     fontSize: 12,
-    fontWeight: "500",
+    ...weight("500"),
   },
   txNote: {
     fontSize: 11.5,
@@ -436,7 +438,7 @@ const styles = StyleSheet.create({
   },
   txAmount: {
     fontSize: 14.5,
-    fontWeight: "800",
+    ...weight("800"),
     marginBottom: 2,
   },
   txChevron: {
@@ -444,7 +446,7 @@ const styles = StyleSheet.create({
   },
   txBalanceAfter: {
     fontSize: 11,
-    fontWeight: "500",
+    ...weight("500"),
   },
   loadingContainer: {
     paddingVertical: 40,
@@ -467,13 +469,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 16,
-    fontWeight: "700",
+    ...weight("700"),
     marginBottom: 6,
     textAlign: "center",
   },
   emptyHint: {
     fontSize: 13,
-    fontWeight: "400",
+    ...weight("400"),
     textAlign: "center",
     lineHeight: 18,
     marginBottom: 18,
@@ -488,8 +490,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   emptyTopupBtnText: {
-    color: "#FFFFFF",
+    // colour comes from the theme at the call site (colors.onPrimary)
     fontSize: 13.5,
-    fontWeight: "700",
+    ...weight("700"),
   },
 });

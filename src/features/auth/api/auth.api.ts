@@ -63,36 +63,11 @@ export const authApi = {
       auth: false,
     }),
 
-  /** `usePassword: false` covers both "no account" and "no password" — both continue by SMS. */
-  checkPhone: (phone: string) =>
-    api<{ usePassword: boolean }>("/auth/phone/check", {
-      method: "POST",
-      body: { phone },
-      auth: false,
-    }),
-
-  /** Returning-user path — no SMS spent. 401 PASSWORD_NOT_SET → use the OTP flow. */
-  phoneLogin: (phone: string, password: string) =>
-    api<SessionResponse>("/auth/phone/login", {
-      method: "POST",
-      body: { phone, password },
-      auth: false,
-    }),
-
-  /** First-time set after onboarding, or a change (current password proven). */
-  setPassword: (password: string, currentPassword?: string) =>
-    api<{ set: true }>("/auth/password", {
-      method: "POST",
-      body: { password, ...(currentPassword ? { currentPassword } : {}) },
-    }),
-
-  /** SMS code proves the phone; replaces the password and returns a session. */
-  resetPassword: (phone: string, code: string, password: string) =>
-    api<SessionResponse>("/auth/password/reset", {
-      method: "POST",
-      body: { phone, code, password },
-      auth: false,
-    }),
+  // No password calls. /auth/phone/check, /auth/phone/login, /auth/password
+  // and /auth/password/reset all still answer on the server so that older
+  // builds keep working, but nothing in this app asks a person for a
+  // password any more: a number that can receive an SMS is the credential,
+  // and an account that still carries a hash signs in by code like the rest.
 
   // ---- telegram ----------------------------------------------------------
   telegramStart: () =>
@@ -135,7 +110,6 @@ export const authApi = {
       method: "POST",
       body: { phone, code },
     }),
-
 
   /** Same shape as telegramStart; poll resolves to LINKED instead of a session. */
   linkTelegram: () =>

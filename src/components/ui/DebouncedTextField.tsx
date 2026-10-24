@@ -7,6 +7,8 @@ interface Props extends Omit<TextInputProps, "value" | "onChangeText"> {
   label?: string;
   icon?: keyof typeof Ionicons.glyphMap;
   hint?: string;
+  /** Passed through to TextField — pill corners, for a field over content. */
+  round?: boolean;
   /**
    * The text the field opens with. Changing it later does NOT move what the
    * reader is typing — to clear the field from outside, remount it with a

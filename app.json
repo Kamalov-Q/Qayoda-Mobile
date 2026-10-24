@@ -2,7 +2,7 @@
   "expo": {
     "name": "Growen City",
     "slug": "growencity",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "growencity",
@@ -22,10 +22,11 @@
     },
     "android": {
       "package": "uz.growencity.app",
-      "versionCode": 2,
+      "versionCode": 5,
       "adaptiveIcon": {
-        "backgroundColor": "#ECFDF5",
+        "backgroundColor": "#0A2024",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png",
         "backgroundImage": "./assets/images/android-icon-background.png"
       },
       "predictiveBackGestureEnabled": false
@@ -36,16 +37,15 @@
     },
     "plugins": [
       "expo-router",
-      "@maplibre/maplibre-react-native",
       [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-emblem.png",
-          "imageWidth": 200,
+          "imageWidth": 260,
           "resizeMode": "contain",
-          "backgroundColor": "#F8FAFC",
+          "backgroundColor": "#0A2024",
           "dark": {
-            "backgroundColor": "#0F172A"
+            "backgroundColor": "#07191D"
           }
         }
       ],
@@ -60,22 +60,33 @@
       [
         "expo-media-library",
         {
-          "savePhotosPermission": "Suhbat va hikoyalardagi rasm va videolarni galereyangizga saqlash uchun ruxsat kerak.",
+          "savePhotosPermission": "Suhbat va videolardagi rasm va videolarni galereyangizga saqlash uchun ruxsat kerak.",
           "photosPermission": "E'lon va suhbat uchun rasm tanlashda galereyangizdan foydalanamiz."
         }
       ],
+      "react-native-compressor",
       [
         "expo-image-picker",
         {
-          "photosPermission": "E'lon va suhbat uchun rasm tanlashda galereyangizdan foydalanamiz.",
-          "cameraPermission": "Rasmga olish uchun kameradan foydalanamiz."
+          "photosPermission": "E'lon va suhbat uchun rasm va video tanlashda galereyangizdan foydalanamiz.",
+          "cameraPermission": "Rasm va video olish uchun kameradan foydalanamiz.",
+          "microphonePermission": "Video yozishda ovoz yozib olish uchun mikrofondan foydalanamiz."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/android-icon-monochrome.png",
+          "color": "#0A2024",
+          "defaultChannel": "default"
         }
       ],
       "expo-font",
       "expo-image",
       "expo-video",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      "./plugins/with-nav-app-queries"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -169,7 +169,12 @@ export const MessageBubble = memo(function MessageBubble({
                 borderRadius: radii.md,
               }}
               contentFit="cover"
-              cachePolicy="memory-disk"
+              // "disk", not "memory-disk": expo-image's memory cache is
+              // global and survives unmount, so a long thread scrolled
+              // through once leaves every photo it passed decoded in RAM.
+              // Disk keeps the re-read off the network without holding the
+              // bitmap — see ListingPhotoSlider for the same trade.
+              cachePolicy="disk"
             />
           </Pressable>
           {m.type !== "IMAGE" && (

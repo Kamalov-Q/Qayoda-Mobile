@@ -2,7 +2,7 @@
 // brackets. Sized to ride a photo scrim next to the price.
 import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { spacing, radii, type } from "@/src/theme/tokens";
+import { spacing, radii, type, weight } from "@/src/theme/tokens";
 import { useTheme } from "@/src/theme/useTheme";
 
 interface Props {
@@ -42,7 +42,7 @@ export function RatingPill({ average, count, onPhoto }: Props) {
       accessibilityLabel={`${average.toFixed(1)} / 5, ${count}`}
     >
       <Ionicons name="star" size={12} color={colors.vip} />
-      <Text style={{ ...type.caption, fontWeight: "600", color: fg }}>
+      <Text style={{ ...type.caption, ...weight("600"), color: fg }}>
         {average.toFixed(1)}
       </Text>
       {count > 0 ? (

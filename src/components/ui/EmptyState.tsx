@@ -13,6 +13,13 @@ interface Props {
   onAction?: () => void;
   /** Tints the icon medallion red — used for load failures. */
   tone?: "neutral" | "danger";
+  /**
+   * How the action reads. Secondary by default: on most empty screens the
+   * button is a way out of a dead end, not the thing the screen is for. The
+   * exception is a screen whose whole purpose is the action behind it — an
+   * empty video feed is an invitation to post one.
+   */
+  actionVariant?: "primary" | "secondary";
 }
 
 /** Replaces the bare centred caption the lists used to show. An empty list and
@@ -24,6 +31,7 @@ export const EmptyState = memo(function EmptyState({
   actionLabel,
   onAction,
   tone = "neutral",
+  actionVariant = "secondary",
 }: Props) {
   const { colors, text } = useTheme();
   const accent = tone === "danger" ? colors.danger : colors.primary;
@@ -63,7 +71,7 @@ export const EmptyState = memo(function EmptyState({
       {actionLabel && onAction ? (
         <Button
           title={actionLabel}
-          variant="secondary"
+          variant={actionVariant}
           onPress={onAction}
           style={{ minWidth: 180 }}
         />

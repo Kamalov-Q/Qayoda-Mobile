@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { radii, spacing, type } from "../../theme/tokens";
+import { radii, spacing, type, weight } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 
 interface Props {
@@ -87,7 +87,7 @@ export const FilterPill = memo(function FilterPill({
             style={{
               ...type.caption,
               fontSize: 11,
-              fontWeight: "700",
+              ...weight("700"),
               color: active ? colors.onPrimary : colors.textMuted,
             }}
           >

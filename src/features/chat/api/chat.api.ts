@@ -115,6 +115,21 @@ export const chatApi = {
       },
     ),
 
+  /**
+   * Write to a PERSON rather than about an advert — the sellers directory,
+   * where a profile with no live listing has nothing to open a thread on.
+   * Idempotent per pair: if either side has written before, the server
+   * returns that same thread.
+   */
+  startDirectConversation: (userId: string, message: SendMessageInput) =>
+    api<{ conversation: Conversation; message: ChatMessage }>(
+      `/chat/conversations/direct`,
+      {
+        method: "POST",
+        body: { userId, message },
+      },
+    ),
+
   listMessages: (conversationId: string, before?: string, limit = 30) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (before) params.set("before", before);

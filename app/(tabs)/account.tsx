@@ -18,9 +18,8 @@ import { confirm } from "../../src/lib/alerts";
 import { useAuthStore } from "../../src/features/auth/store/auth.store";
 import { useLogout } from "../../src/features/auth/hooks/useAuth";
 import { useIsAuthed } from "../../src/features/auth/guest";
-import { GuestPrompt } from "../../src/features/auth/components/GuestPrompt";
+import { RedirectToSignIn } from "../../src/features/auth/components/RedirectToSignIn";
 import { useProfile } from "../../src/features/profile/hooks/useProfile";
-import { ProfileStories } from "../../src/features/stories/components/ProfileStories";
 import { resolveMediaUrl } from "../../src/lib/media-url";
 import { useListingCounts } from "../../src/features/listings/hooks/useMyListings";
 import { ProfileHeader } from "../../src/features/users/components/ProfileHeader";
@@ -116,7 +115,7 @@ export default function AccountScreen() {
               <Ionicons name="settings-outline" size={24} color={colors.text} />
             </Pressable>
           </View>
-          <GuestPrompt />
+          <RedirectToSignIn />
         </View>
       </Screen>
     );
@@ -159,7 +158,6 @@ export default function AccountScreen() {
             /profile/[id] cannot drift apart again. No actions: there is
             nothing to do about yourself that belongs beside your own name. */}
         <ProfileHeader
-          userId={user?.id}
           avatarUri={avatarUri ?? null}
           name={[user?.name, user?.surname].filter(Boolean).join(" ")}
           // The live profile first: the session copy was minted at sign-in
@@ -212,7 +210,7 @@ export default function AccountScreen() {
                   : colors.primary,
               })}
             >
-              <Ionicons name="pencil" size={15} color="#FFFFFF" />
+              <Ionicons name="pencil" size={15} color={colors.onPrimary} />
             </Pressable>
           }
         />
@@ -226,12 +224,6 @@ export default function AccountScreen() {
         ) : null}
 
         <SocialRow links={profile?.socialLinks} />
-
-        {/* Your own stories, including the ones that have run out — the
-            same strip your public profile shows, because this tab is the
-            other place you look at yourself. Renders nothing when you have
-            never posted one. */}
-        {user?.id ? <ProfileStories userId={user.id} isMe /> : null}
 
         {/* The numbers, in the panel the public profile uses — but these
             are yours, so each column is a way in rather than a fact. */}
@@ -266,12 +258,40 @@ export default function AccountScreen() {
         <VirtualCard
           phone={user?.phoneNumber}
           userId={user?.id}
+          accountNo={wallet?.accountNo}
           name={[user?.name, user?.surname].filter(Boolean).join(" ")}
           balance={wallet?.balance ?? 0}
           variant="compact"
           onPressTopup={() => router.push("/wallet" as any)}
           topupLabel={t("wallet.topupButton")}
         />
+
+        {/* Right under the card whose balance it explains. It used to be
+            reachable only through the top-up screen, so checking a past
+            payment meant pretending to start a new one. */}
+        <Pressable
+          onPress={() => router.push("/wallet/history" as Href)}
+          accessibilityRole="button"
+          accessibilityLabel={t("wallet.historyTitle")}
+          style={({ pressed }) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            gap: spacing.md,
+            marginTop: -spacing.sm,
+            paddingVertical: spacing.sm + 2,
+            paddingHorizontal: spacing.md,
+            borderRadius: radii.lg,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: pressed ? colors.surfaceRaised : colors.surface,
+          })}
+        >
+          <Ionicons name="receipt-outline" size={20} color={colors.primary} />
+          <Text style={{ ...text.bodyStrong, flex: 1 }}>
+            {t("wallet.historyTitle")}
+          </Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
+        </Pressable>
 
         <Section title={t("profile.links")}>
           <Card flush>

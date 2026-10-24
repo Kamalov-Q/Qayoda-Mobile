@@ -18,8 +18,9 @@ import {
   ImageViewer,
   SelectSheet,
   HEADER_EDGES,
+  LoadingView,
 } from "../../src/components/ui";
-import { spacing, radii, type } from "../../src/theme/tokens";
+import { spacing, radii, type, weight } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT, useLanguage } from "../../src/i18n";
 import { errorMessage } from "../../src/lib/api-error";
@@ -40,6 +41,9 @@ import {
   PURPOSE_ICONS,
 } from "../../src/features/listings/utils/icons";
 import { ListingCard } from "../../src/features/listings/components/ListingCard";
+import { AuthorVideosGrid } from "../../src/features/videos/components/AuthorVideosGrid";
+import { FollowButton } from "../../src/features/follows/components/FollowButton";
+import { FollowCounts } from "../../src/features/follows/components/FollowCounts";
 import type {
   Listing,
   OfferPurpose,
@@ -52,7 +56,6 @@ import { useToggleBlock } from "../../src/features/blocks/hooks/useBlocks";
 import { confirm } from "../../src/lib/alerts";
 import { useAuthStore } from "../../src/features/auth/store/auth.store";
 import { PresenceStatus } from "../../src/features/chat/components/PresenceStatus";
-import { ProfileStories } from "../../src/features/stories/components/ProfileStories";
 import { SocialRow } from "../../src/features/users/components/SocialRow";
 
 /** The order the purpose sheet lists them in — the same order the rest of the
@@ -270,7 +273,6 @@ export default function UserProfileScreen() {
           person, and scrolling past their whole inventory to find the one
           that ends the conversation was a strange way to arrange them. */}
       <ProfileHeader
-        userId={id}
         // avatarUrl first, thumb as the fallback — the thumb is what the
         // chat list already had, so a profile opened from there paints
         // instantly from cache while the full-size version loads.
@@ -328,14 +330,26 @@ export default function UserProfileScreen() {
         </Text>
       ) : null}
 
-      {/* What they have up right now, above the numbers: a story is the
-          most perishable thing on this screen. Your own profile also shows
-          the ones that have run out. */}
-      {id ? <ProfileStories userId={id} isMe={isSelf} /> : null}
+      {/* Follow, and the two numbers it moves.
+          Above the stats row rather than inside it: those three are things
+          the platform counted about their adverts, these two are about the
+          person — and this is the one button on the screen that changes what
+          the viewer's own Videos tab will show them. */}
+      {data && !blocked ? (
+        <View style={{ gap: spacing.md, alignItems: "center" }}>
+          <FollowCounts userId={id!} />
+          {!isSelf ? <FollowButton userId={id!} /> : null}
+        </View>
+      ) : null}
 
       {/* What this seller is worth knowing by, in their own numbers. Only
           things actually counted: no "0 sales" column that can never move. */}
       {data ? <StatsRow stats={stats} /> : null}
+
+      {/* Their reels, above the listings: a video is a face and a voice, and
+          it is what tells a buyer whether this is a person or a feed of
+          adverts. Renders nothing when they have posted none. */}
+      {id ? <AuthorVideosGrid userId={id} /> : null}
 
       {/* Their listings, and the three ways to cut them down. The sheets are
           built from the seller's own inventory: a purpose or a category they
@@ -363,7 +377,7 @@ export default function UserProfileScreen() {
                 <Text
                   style={{
                     ...type.caption,
-                    fontWeight: "600",
+                    ...weight("600"),
                     color: colors.primary,
                   }}
                 >
@@ -453,10 +467,7 @@ export default function UserProfileScreen() {
     return (
       <Screen edges={HEADER_EDGES} scroll={false}>
         <Stack.Screen options={{ title: t("userProfile.title") }} />
-        <ActivityIndicator
-          style={{ marginTop: spacing.xxl }}
-          color={colors.primary}
-        />
+        <LoadingView />
       </Screen>
     );
   }

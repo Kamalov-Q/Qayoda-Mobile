@@ -38,11 +38,19 @@ interface Props extends TextInputProps {
    * and leaves the eye only the few things it must fill in.
    */
   required?: boolean;
+  /**
+   * Full-pill corners instead of the usual soft rectangle.
+   *
+   * For a field that floats over content rather than sitting in a form — the
+   * search box on the map, where a rectangle reads as a panel edge and a
+   * pill reads as something laid on top.
+   */
+  round?: boolean;
 }
 
 export const TextField = forwardRef<TextInput, Props>(
   (
-    { label, error, icon, suffix, prefix, hint, required, secureTextEntry, onFocus, onBlur, ...inputProps },
+    { label, error, icon, suffix, prefix, hint, required, round, secureTextEntry, onFocus, onBlur, ...inputProps },
     ref,
   ) => {
     const { colors } = useTheme();
@@ -82,7 +90,7 @@ export const TextField = forwardRef<TextInput, Props>(
             gap: spacing.sm,
             height: isMultiline ? undefined : sizing.control,
             minHeight: isMultiline ? MULTILINE_HEIGHT : undefined,
-            borderRadius: radii.md,
+            borderRadius: round ? radii.pill : radii.md,
             borderWidth: 1,
             borderColor,
             backgroundColor: focused ? colors.surface : colors.surfaceRaised,

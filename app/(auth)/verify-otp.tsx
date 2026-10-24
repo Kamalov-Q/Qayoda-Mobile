@@ -9,7 +9,7 @@ import {
   LanguageSwitcher,
   toast,
 } from "../../src/components/ui";
-import { spacing } from "../../src/theme/tokens";
+import { spacing, weight } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT } from "../../src/i18n";
 import { errorMessage } from "../../src/lib/api-error";
@@ -96,7 +96,7 @@ export default function VerifyOtpScreen() {
             <Text style={text.display}>{t("auth.otpTitle")}</Text>
             <Text style={text.caption}>
               {before}
-              <Text style={{ color: colors.text, fontWeight: "600" }}>
+              <Text style={{ color: colors.text, ...weight("600") }}>
                 {prettyPhone(phone)}
               </Text>
               {after}

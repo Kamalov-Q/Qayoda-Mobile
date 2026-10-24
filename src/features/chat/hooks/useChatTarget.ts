@@ -30,8 +30,13 @@ export function useChatTarget(userId: string | undefined) {
     if (existing) return { kind: "existing" as const, id: existing.id };
 
     const listing = profile?.listings?.[0];
-    return listing ? { kind: "new" as const, listingId: listing.id } : null;
-  }, [userId, viewerId, conversations, profile?.listings]);
+    if (listing) return { kind: "new" as const, listingId: listing.id };
+
+    // No advert to enquire about — write to the PERSON. This used to return
+    // null, which took the Message button off the profile entirely and made
+    // a seller with nothing currently listed look uncontactable.
+    return profile ? { kind: "direct" as const, userId } : null;
+  }, [userId, viewerId, conversations, profile]);
 
   /** Opens the thread. Gated on a phone, like every other way of writing. */
   const openChat = () => {
@@ -42,10 +47,15 @@ export function useChatTarget(userId: string | undefined) {
           // boilerplate, which is right when you arrive from an advert and
           // wrong when you arrive from a person.
           router.push({ pathname: "/chat/[id]", params: { id: target.id } })
-        : router.push({
-            pathname: "/chat/[id]",
-            params: { id: "new", listingId: target.listingId },
-          }),
+        : target.kind === "new"
+          ? router.push({
+              pathname: "/chat/[id]",
+              params: { id: "new", listingId: target.listingId },
+            })
+          : router.push({
+              pathname: "/chat/[id]",
+              params: { id: "new", peerId: target.userId },
+            }),
     );
   };
 

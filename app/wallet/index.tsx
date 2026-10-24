@@ -3,6 +3,7 @@ import { useState } from "react";
 import {
   View,
   Text,
+  TextInput,
   Pressable,
   ScrollView,
   KeyboardAvoidingView,
@@ -11,12 +12,12 @@ import {
   Linking,
 } from "react-native";
 import { router } from "expo-router";
-import { useQueryClient } from "@tanstack/react-query";
 import * as WebBrowser from "expo-web-browser";
 import * as ExpoLinking from "expo-linking";
 import * as Crypto from "expo-crypto";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { weight } from "@/src/theme/tokens";
 import { useTheme } from "@/src/theme/useTheme";
 import { useT } from "@/src/i18n";
 import { useAuthStore } from "@/src/features/auth/store/auth.store";
@@ -32,9 +33,25 @@ import {
 } from "@/src/features/wallet/components/VirtualCard";
 import { CardThemeSelector } from "@/src/features/wallet/components/CardThemeSelector";
 import { walletApi } from "@/src/features/wallet/api/wallet.api";
+import { usePendingTopupStore } from "@/src/features/wallet/store/pendingTopup.store";
+import { requirePhone } from "@/src/features/auth/guest";
+import { ApiError } from "@/src/lib/api-client";
 import { useWalletOverview } from "@/src/features/wallet/hooks/useWalletOverview";
 
 const QUICK_AMOUNTS = [1_000, 50_000, 100_000, 200_000, 500_000];
+
+/**
+ * What the server will take in one go.
+ *
+ * The presets are the common amounts, not the only ones: anything in this
+ * range can be typed instead. Both bounds are enforced here as well as on
+ * the server, so a wrong amount is a disabled button rather than a rejected
+ * payment the user has already left the app for.
+ */
+const MIN_TOPUP = 1_000;
+const MAX_TOPUP = 10_000_000;
+/** 10 000 000 is eight digits; one more lets it be typed and then corrected. */
+const MAX_DIGITS = 9;
 
 type PaymentMethod = "CLICK" | "PAYME" | "PAYNET";
 
@@ -43,17 +60,39 @@ export default function WalletTopupScreen() {
   const { colors, scheme } = useTheme();
   const t = useT();
   const user = useAuthStore((s) => s.user);
-  const queryClient = useQueryClient();
 
   const { data: overview } = useWalletOverview();
+  const setPendingTopup = usePendingTopupStore((s) => s.setPending);
 
-  // Price cannot be manually edited; driven directly by quick amount selections
-  const [selectedAmount, setSelectedAmount] = useState<number>(1_000);
+  /**
+   * The amount, as the digits the field holds.
+   *
+   * Text rather than a number because an empty field is a state someone is
+   * in the middle of typing through, and `0` cannot say that. The presets
+   * write to the same place, so a tapped amount is as editable afterwards
+   * as a typed one.
+   */
+  const [amountText, setAmountText] = useState(String(QUICK_AMOUNTS[0]));
+  const selectedAmount = Number(amountText) || 0;
+  const amountValid =
+    selectedAmount >= MIN_TOPUP && selectedAmount <= MAX_TOPUP;
+  // An empty field is on the way somewhere, not a mistake: it disables the
+  // button like any other unpayable amount, but it is not painted red.
+  const amountInvalid = amountText.length > 0 && !amountValid;
+
+  const onChangeAmount = (next: string) => {
+    // The field shows "1 000 000", so the separators it is formatted with
+    // have to come back out before this is a number again. Leading zeros go
+    // too — "0500 000" is not an amount anyone meant to type.
+    const digits = next.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+    if (digits.length > MAX_DIGITS) return;
+    setAmountText(digits);
+  };
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>("PAYNET");
 
   const userName = user ? [user.name, user.surname].filter(Boolean).join(" ") : null;
 
-  const paymentMethods: {
+  const allMethods: {
     id: PaymentMethod;
     renderLogo: () => React.ReactNode;
     subtitle: string;
@@ -87,11 +126,40 @@ export default function WalletTopupScreen() {
       },
     ];
 
+  /**
+   * Which of them the server will actually accept.
+   *
+   * `GET /wallet` reports the providers it has credentials for — Click and
+   * Payme are dropped when their keys are unset, Paynet when its service id
+   * is. Offering one the server has disabled ends in a PROVIDER_UNAVAILABLE
+   * toast after the user has already chosen an amount, and turning a provider
+   * off would otherwise need an app release. Until the overview arrives the
+   * full list is shown rather than an empty one: a brief extra option is a
+   * smaller wrong than a screen with nothing to tap.
+   */
+  const enabled = overview?.providers;
+  const paymentMethods = enabled
+    ? allMethods.filter((m) => enabled.includes(m.id))
+    : allMethods;
+
+  // The selection follows the list rather than a useEffect writing state back:
+  // if the server does not offer what is selected (or what this screen starts
+  // on), the first available method is what the buttons below act on.
+  const activeMethod =
+    paymentMethods.some((m) => m.id === selectedMethod)
+      ? selectedMethod
+      : (paymentMethods[0]?.id ?? selectedMethod);
+
   const [loadingTopup, setLoadingTopup] = useState(false);
 
   const handleTopup = async () => {
-    if (selectedAmount < 1_000) {
-      toast.info(t("validation.range", { min: "1 000", max: "10 000 000" }));
+    if (!amountValid) {
+      toast.info(
+        t("validation.range", {
+          min: formatThousands(MIN_TOPUP),
+          max: formatThousands(MAX_TOPUP),
+        }),
+      );
       return;
     }
 
@@ -101,76 +169,83 @@ export default function WalletTopupScreen() {
     }
 
     // ── PAYNET ────────────────────────────────────────────────────────────
-    if (selectedMethod === "PAYNET") {
-      const merchantId = "52589";
-      const paynetUrl = `https://app.paynet.uz/?m=${merchantId}&c=${encodeURIComponent(user.id)}&a=${selectedAmount}`;
+    // Push-model: nothing to create, just a link to open. The server builds
+    // it — the merchant id lives in its env, and the account reference is the
+    // user's SHORT account number. This screen used to assemble the URL
+    // itself from a hardcoded merchant id and the user's uuid, which meant a
+    // wrong merchant id could only be fixed by shipping a new build.
+    if (activeMethod === "PAYNET") {
+      setLoadingTopup(true);
       try {
-        const canOpen = await Linking.canOpenURL(paynetUrl);
+        const { payUrl } = await walletApi.paynetLink(selectedAmount);
+        const canOpen = await Linking.canOpenURL(payUrl);
         if (canOpen) {
-          await Linking.openURL(paynetUrl);
+          await Linking.openURL(payUrl);
         } else {
-          await WebBrowser.openBrowserAsync(paynetUrl);
+          await WebBrowser.openBrowserAsync(payUrl);
         }
-      } catch {
-        await WebBrowser.openBrowserAsync(paynetUrl);
+      } catch (err) {
+        toast.error(
+          err instanceof Error && err.message
+            ? err.message
+            : t("wallet.paymentCancelled"),
+        );
+      } finally {
+        setLoadingTopup(false);
       }
       return;
     }
 
-    // ── PAYME ──────────────────────────────────────────────────────────────
-    if (selectedMethod === "PAYME") {
-      toast.info(t("wallet.paymeSubtitle"));
-      return;
-    }
+    // ── CLICK and PAYME (both via the backend) ─────────────────────────────
+    // One branch, because the two are the same flow: the server creates the
+    // order and returns a checkout URL, the user pays outside the app, and
+    // the provider's webhook — not the return link — is what credits the
+    // wallet. Only the provider name differs. Paynet is above on its own
+    // because it is push-model: there is no order to create.
+    if (activeMethod === "CLICK" || activeMethod === "PAYME") {
+      // The server refuses an order without a verified phone
+      // (PHONE_REQUIRED). Asking first turns that into the add-a-number flow
+      // instead of a raw error toast.
+      if (!user.phoneNumber) {
+        requirePhone();
+        return;
+      }
 
-    // ── CLICK (via backend) ────────────────────────────────────────────────
-    if (selectedMethod === "CLICK") {
       setLoadingTopup(true);
       // Expo Go uses exp://... scheme, production uses growencity://...
       const returnUrl = ExpoLinking.createURL("/wallet/result");
       try {
         const order = await walletApi.createTopup({
           amount: selectedAmount,
-          provider: "CLICK",
+          provider: activeMethod,
           clientId: Crypto.randomUUID(),
         });
 
-        // 2. Open Click's checkout page in the in-app browser
-        const result = await WebBrowser.openAuthSessionAsync(
-          order.payUrl,
-          returnUrl
-        );
+        // Remembered before leaving the app: when Click or Payme finishes in
+        // its own app it opens growencity://wallet/result, which carries no id.
+        setPendingTopup({ paymentId: order.paymentId, amount: selectedAmount });
 
-        // 3. Poll status until paid or cancelled (max 30s)
-        if (result.type === "success" || result.type === "dismiss") {
-          let attempts = 0;
-          const poll = setInterval(async () => {
-            attempts++;
-            try {
-              const status = await walletApi.getTopupStatus(order.paymentId);
-              if (status.status === "PAID") {
-                clearInterval(poll);
-                queryClient.invalidateQueries({ queryKey: ["wallet"] });
-                toast.success(
-                  t("wallet.paidSuccess", {
-                    amount: formatThousands(selectedAmount),
-                  })
-                );
-              } else if (status.status === "CANCELLED") {
-                clearInterval(poll);
-                toast.error(t("wallet.paymentCancelled"));
-              } else if (attempts >= 15) {
-                // ~30s timeout
-                clearInterval(poll);
-                toast.info(t("wallet.paymentPending"));
-              }
-            } catch {
-              clearInterval(poll);
-            }
-          }, 2000);
+        await WebBrowser.openAuthSessionAsync(order.payUrl, returnUrl);
+
+        // However the browser closed — paid, cancelled or just dismissed —
+        // the result screen asks the server and reports. navigate, not push:
+        // if Click's return link already opened it, this updates that one
+        // instead of stacking a second copy.
+        router.navigate({
+          pathname: "/wallet/result",
+          params: { paymentId: order.paymentId },
+        });
+      } catch (err) {
+        if (err instanceof ApiError && err.code === "PHONE_REQUIRED") {
+          // The session's phone was stale; the server has the final say.
+          requirePhone();
+        } else {
+          toast.error(
+            err instanceof Error && err.message
+              ? err.message
+              : t("wallet.paymentCancelled"),
+          );
         }
-      } catch (err: any) {
-        toast.error(err?.message || t("wallet.paymentCancelled"));
       } finally {
         setLoadingTopup(false);
       }
@@ -237,11 +312,15 @@ export default function WalletTopupScreen() {
             { paddingBottom: insets.bottom + 90 },
           ]}
           showsVerticalScrollIndicator={false}
+          // Or the first tap on a preset only dismisses the keyboard.
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
           {/* Distinctive Growen City Virtual Card */}
           <VirtualCard
             phone={user?.phoneNumber}
             userId={user?.id}
+            accountNo={overview?.accountNo}
             name={userName}
             balance={overview?.balance ?? 0}
             variant="full"
@@ -250,35 +329,85 @@ export default function WalletTopupScreen() {
           {/* Interactive Card Theme Selector */}
           <CardThemeSelector />
 
-          {/* Read-only / Non-editable Selected Price Display */}
+          {/* Type an amount, or take one of the presets under it — the
+              presets write into this same field, so either way what is
+              being paid is one editable number. It used to be a read-only
+              display with a padlock-shaped badge beside it, which left
+              anyone wanting 75 000 with no way to ask for it. */}
           <View
             style={[
               styles.amountDisplayContainer,
               {
-                backgroundColor: scheme === "dark" ? colors.surfaceRaised : "#F3F4F6",
-                borderColor: colors.border,
+                backgroundColor: colors.surfaceRaised,
+                borderColor: amountInvalid ? colors.danger : colors.border,
               },
             ]}
           >
-            <View style={styles.amountDisplayLeft}>
+            <View style={[styles.amountDisplayLeft, { flex: 1 }]}>
               <Text style={[styles.amountLabel, { color: colors.textFaint }]}>
                 {t("wallet.enterAmount")}
               </Text>
-              <Text style={[styles.amountValue, { color: colors.text }]}>
-                {formatThousands(selectedAmount)} UZS
-              </Text>
+              <TextInput
+                value={amountText ? formatThousands(amountText) : ""}
+                onChangeText={onChangeAmount}
+                keyboardType="number-pad"
+                inputMode="numeric"
+                returnKeyType="done"
+                placeholder="0"
+                placeholderTextColor={colors.textFaint}
+                selectionColor={colors.primary}
+                accessibilityLabel={t("wallet.enterAmount")}
+                // padding: 0 — Android gives a TextInput its own padding,
+                // which pushes the number off the baseline the label sets.
+                style={[
+                  styles.amountValue,
+                  { color: colors.text, padding: 0 },
+                ]}
+              />
             </View>
-            <View
-              style={[
-                styles.lockBadge,
-                {
-                  backgroundColor: scheme === "dark" ? colors.surface : "#E5E7EB",
-                },
-              ]}
-            >
-              <Ionicons name="pricetag-outline" size={16} color={colors.primary} />
-            </View>
+
+            <Text style={[styles.amountCurrency, { color: colors.textMuted }]}>
+              UZS
+            </Text>
+
+            {/* Clears in one tap rather than nine backspaces over a number
+                that is mostly zeros. */}
+            {amountText ? (
+              <Pressable
+                onPress={() => setAmountText("")}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={t("common.clear")}
+                style={({ pressed }) => [
+                  styles.clearBadge,
+                  {
+                    backgroundColor: colors.surface,
+                    opacity: pressed ? 0.7 : 1,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="close"
+                  size={16}
+                  color={colors.textMuted}
+                />
+              </Pressable>
+            ) : null}
           </View>
+
+          {/* The bounds, said once and in place, rather than as a toast
+              after the button has been pressed. */}
+          <Text
+            style={[
+              styles.amountHint,
+              { color: amountInvalid ? colors.danger : colors.textFaint },
+            ]}
+          >
+            {t("validation.range", {
+              min: formatThousands(MIN_TOPUP),
+              max: formatThousands(MAX_TOPUP),
+            })}
+          </Text>
 
           {/* Quick Amount Chips */}
           <View style={styles.quickChipsRow}>
@@ -287,18 +416,16 @@ export default function WalletTopupScreen() {
               return (
                 <Pressable
                   key={amt}
-                  onPress={() => setSelectedAmount(amt)}
+                  onPress={() => setAmountText(String(amt))}
                   accessibilityRole="button"
                   style={({ pressed }) => [
                     styles.quickChip,
                     {
                       backgroundColor: active
-                        ? colors.text
-                        : scheme === "dark"
-                          ? colors.surfaceRaised
-                          : "#F3F4F6",
-                      borderWidth: active ? 1 : 0,
-                      borderColor: colors.text,
+                        ? colors.primary
+                        : colors.surfaceRaised,
+                      borderWidth: 1,
+                      borderColor: active ? colors.primary : colors.border,
                       opacity: pressed ? 0.75 : 1,
                     },
                   ]}
@@ -306,7 +433,7 @@ export default function WalletTopupScreen() {
                   <Text
                     style={[
                       styles.quickChipText,
-                      { color: active ? colors.bg : colors.text },
+                      { color: active ? colors.onPrimary : colors.text },
                     ]}
                   >
                     {formatThousands(amt)}
@@ -324,7 +451,7 @@ export default function WalletTopupScreen() {
           {/* Modern Curated Payment Method Cards */}
           <View style={styles.methodsList}>
             {paymentMethods.map((method) => {
-              const selected = selectedMethod === method.id;
+              const selected = activeMethod === method.id;
               return (
                 <Pressable
                   key={method.id}
@@ -333,16 +460,13 @@ export default function WalletTopupScreen() {
                   style={({ pressed }) => [
                     styles.methodCard,
                     {
+                      // Tokens, not a per-scheme literal: this card used to
+                      // name slate and emerald by hand, which is how it kept
+                      // the old palette after the brand moved to teal.
                       backgroundColor: selected
-                        ? scheme === "dark"
-                          ? "#1E293B"
-                          : "#F8FAFC"
+                        ? colors.primarySoft
                         : colors.surface,
-                      borderColor: selected
-                        ? scheme === "dark"
-                          ? "#10B981"
-                          : "#18181B"
-                        : colors.border,
+                      borderColor: selected ? colors.primary : colors.border,
                       borderWidth: selected ? 2 : 1,
                       opacity: pressed ? 0.8 : 1,
                     },
@@ -375,20 +499,16 @@ export default function WalletTopupScreen() {
                           styles.radioCircle,
                           {
                             borderColor: selected
-                              ? scheme === "dark"
-                                ? "#10B981"
-                                : "#18181B"
+                              ? colors.primary
                               : colors.borderStrong,
                             backgroundColor: selected
-                              ? scheme === "dark"
-                                ? "#10B981"
-                                : "#18181B"
+                              ? colors.primary
                               : "transparent",
                           },
                         ]}
                       >
                         {selected && (
-                          <Ionicons name="checkmark" size={13} color="#FFFFFF" />
+                          <Ionicons name="checkmark" size={13} color={colors.onPrimary} />
                         )}
                       </View>
                     </View>
@@ -417,13 +537,15 @@ export default function WalletTopupScreen() {
         >
           <Pressable
             onPress={handleTopup}
-            disabled={loadingTopup}
+            disabled={loadingTopup || !amountValid}
             accessibilityRole="button"
+            accessibilityState={{ disabled: loadingTopup || !amountValid }}
             style={({ pressed }) => [
               styles.topupButton,
               {
                 backgroundColor: colors.text,
-                opacity: loadingTopup ? 0.65 : pressed ? 0.85 : 1,
+                opacity:
+                  loadingTopup || !amountValid ? 0.5 : pressed ? 0.85 : 1,
               },
             ]}
           >
@@ -434,8 +556,10 @@ export default function WalletTopupScreen() {
               ]}
             >
               {loadingTopup
-                ? "Tekshirilmoqda..."
-                : `${t("wallet.topupButton")} (${formatThousands(selectedAmount)} UZS)`}
+                ? t("common.loading")
+                : amountValid
+                  ? `${t("wallet.topupButton")} (${formatThousands(selectedAmount)} UZS)`
+                  : t("wallet.topupButton")}
             </Text>
           </Pressable>
         </View>
@@ -472,7 +596,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: "700",
+    ...weight("700"),
     flexShrink: 1,
     maxWidth: 180,
   },
@@ -489,7 +613,7 @@ const styles = StyleSheet.create({
   },
   historyText: {
     fontSize: 12.5,
-    fontWeight: "600",
+    ...weight("600"),
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -510,15 +634,27 @@ const styles = StyleSheet.create({
   },
   amountLabel: {
     fontSize: 11,
-    fontWeight: "600",
+    ...weight("600"),
     textTransform: "uppercase",
     letterSpacing: 0.3,
   },
   amountValue: {
     fontSize: 18,
-    fontWeight: "800",
+    ...weight("800"),
   },
-  lockBadge: {
+  amountCurrency: {
+    fontSize: 15,
+    ...weight("700"),
+    marginRight: 10,
+  },
+  amountHint: {
+    fontSize: 12,
+    ...weight("500"),
+    marginTop: -6,
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  clearBadge: {
     width: 32,
     height: 32,
     borderRadius: 16,
@@ -539,11 +675,11 @@ const styles = StyleSheet.create({
   },
   quickChipText: {
     fontSize: 13,
-    fontWeight: "700",
+    ...weight("700"),
   },
   sectionTitle: {
     fontSize: 15,
-    fontWeight: "600",
+    ...weight("600"),
     marginBottom: 12,
   },
   methodsList: {
@@ -576,7 +712,7 @@ const styles = StyleSheet.create({
   },
   methodBadgeText: {
     fontSize: 11,
-    fontWeight: "700",
+    ...weight("700"),
   },
   radioCircle: {
     width: 22,
@@ -588,7 +724,7 @@ const styles = StyleSheet.create({
   },
   methodSubtitle: {
     fontSize: 12.5,
-    fontWeight: "500",
+    ...weight("500"),
     marginLeft: 2,
   },
   bottomBar: {
@@ -607,6 +743,6 @@ const styles = StyleSheet.create({
   },
   topupButtonText: {
     fontSize: 16,
-    fontWeight: "700",
+    ...weight("700"),
   },
 });

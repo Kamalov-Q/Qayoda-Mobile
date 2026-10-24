@@ -18,7 +18,6 @@ import { queryClient } from "../../../lib/query-client";
 import { disconnectChatSocket } from "../../../lib/chat-socket";
 import { usePreferences } from "../../../lib/preferences";
 import { toast } from "../../../components/ui/Toast";
-import { t } from "../../../i18n";
 
 /** The device language rides along on every sign-in so a new account and its SMS match the UI. */
 const lang = () => usePreferences.getState().language;
@@ -41,22 +40,23 @@ async function establishSession(session: SessionResponse) {
   useAuthStore.getState().setSession(session.accessToken, session.user);
   useAuthFlowStore.getState().reset();
 
-  // A new account that arrived without a full name (phone sign-ups always,
-  // Telegram/Google when the provider had none) must finish onboarding
-  // before anything else — otherwise every listing and chat would show an
-  // anonymous owner. replace(), not push(): there is nothing to go back to.
-  if (session.isNew && (!session.user.name || !session.user.surname)) {
+  // A new account still owes us a name — otherwise every listing and chat
+  // would show an anonymous owner. Only a NAME: the surname, the avatar and
+  // everything else moved to the profile screen, where they can be filled in
+  // by someone who has already seen what the app is for.
+  //
+  // This is now the ONLY place a phone sign-up is asked its name — the
+  // welcome screen no longer has a name box, so every new account arrives
+  // here. A Telegram account whose provider carried no first name lands here
+  // too; one that carried a name skips straight home.
+  if (session.isNew && !session.user.name) {
     router.replace("/onboarding");
     toast.successKey("auth.welcomeNew");
     return;
   }
-  // A phone account without a password sets one now — that password is the
-  // next sign-in. (Telegram/Google-only accounts have no phone to log into.)
-  if (session.user.phoneNumber && !session.user.hasPassword) {
-    router.replace("/set-password");
-    toast.successKey("auth.loggedIn");
-    return;
-  }
+  // No password step. Signing up ends at the code: the session is a sliding
+  // 30 days, so the next launch needs nothing at all, and a password can be
+  // added later from Settings by whoever actually wants one.
   goHomeAfterAuth();
   toast.successKey("auth.loggedIn");
 }
@@ -66,9 +66,10 @@ async function establishSession(session: SessionResponse) {
 export function useRequestOtp() {
   const setPhone = useAuthFlowStore((s) => s.setPhone);
   return useMutation({
-    mutationFn: (phone: string) => authApi.requestOtp(phone, lang()),
-    onSuccess: (_data, phone) => {
-      setPhone(phone);
+    mutationFn: (args: { phone: string }) =>
+      authApi.requestOtp(args.phone, lang()),
+    onSuccess: (_data, args) => {
+      setPhone(args.phone);
       router.push("/(auth)/verify-otp");
       toast.successKey("auth.otpSent");
     },
@@ -90,61 +91,16 @@ export function useResendOtp(purpose: OtpPurpose = "login") {
 export function useVerifyOtp() {
   const phone = useAuthFlowStore((s) => s.phone);
   return useMutation({
+    // No name: the account is created nameless and /onboarding asks for one
+    // straight after, so there is nothing to carry from the welcome screen.
     mutationFn: (args: { code: string }) =>
       authApi.verifyOtp(phone, args.code, lang()),
     onSuccess: establishSession,
   });
 }
 
-export function usePhoneLogin() {
-  return useMutation({
-    mutationFn: (args: { phone: string; password: string }) =>
-      authApi.phoneLogin(args.phone, args.password),
-    onSuccess: establishSession,
-  });
-}
-
-export function useSetPassword() {
-  return useMutation({
-    mutationFn: (password: string) => authApi.setPassword(password),
-    onSuccess: () => {
-      // The session user drives the "must set a password" routing — flip the
-      // flag or the next establishSession would bounce back here.
-      const { accessToken, user, setSession } = useAuthStore.getState();
-      if (accessToken && user) {
-        setSession(accessToken, { ...user, hasPassword: true });
-      }
-      toast.successKey("auth.passwordSet");
-      goHomeAfterAuth();
-    },
-  });
-}
-
-/**
- * Same endpoint and same code as a login OTP, but the recovery wording — and
- * it lands on the reset screen rather than the verify one.
- */
-export function useRequestReset() {
-  const setPhone = useAuthFlowStore((s) => s.setPhone);
-  return useMutation({
-    mutationFn: (phone: string) => authApi.requestOtp(phone, lang(), "reset"),
-    onSuccess: (_data, phone) => {
-      setPhone(phone);
-      router.push("/(auth)/reset-password");
-      toast.successKey("auth.otpSent");
-    },
-  });
-}
-
-export function useResetPassword() {
-  const phone = useAuthFlowStore((s) => s.phone);
-  return useMutation({
-    mutationFn: (args: { code: string; password: string }) =>
-      authApi.resetPassword(phone, args.code, args.password),
-    onSuccess: establishSession,
-  });
-}
-
+// No password hooks. Signing in is one road — a number, a code — and there
+// is nothing to set, change, forget or reset at the end of it.
 
 // ---------------------------------------------------------------- telegram
 

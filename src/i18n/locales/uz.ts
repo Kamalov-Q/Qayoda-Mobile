@@ -13,6 +13,7 @@ export const uz = {
     done: "Tayyor",
     close: "Yopish",
     more: "Yana",
+    skip: "O'tkazib yuborish",
     clear: "Tozalash",
     loading: "Yuklanmoqda...",
     error: "Xatolik",
@@ -23,8 +24,8 @@ export const uz = {
   },
 
   tabs: {
+    videos: "Videolar",
     home: "Asosiy",
-    sale: "Sotuv",
     myListings: "E'lonlarim",
     saved: "Saqlangan",
     add: "Qo'shish",
@@ -48,34 +49,6 @@ export const uz = {
       "Vositachisiz yozing: chat ilovaning ichida, telefon raqami esa har bir e'londa.",
     next: "Keyingisi",
     start: "Boshlash",
-  },
-
-  home: {
-    greeting: "Assalomu alaykum!",
-    greetingName: "Assalomu alaykum, {{name}}!",
-    tagline: "Ko'chmas mulk — xaritada, chegaralari bilan",
-    heroTitle: "O'z joyingizni xaritadan toping",
-    heroSubtitle:
-      "Har bir e'lon xaritada o'z chegarasi bilan turadi — qayerda ekanini taxmin qilish shart emas.",
-    heroCta: "E'lonlarni ko'rish",
-    latestTitle: "Yangi e'lonlar",
-    seeAll: "Hammasini ko'rish",
-    quickTitle: "Tezkor amallar",
-    actionBrowse: "Sotuvdagi e'lonlar",
-    actionAdd: "E'lon joylash",
-    actionSaved: "Saqlanganlar",
-    adsTitle: "Aksiyalar",
-    // Dummy promos — swap for real campaigns when they exist.
-    ad1Title: "Birinchi e'lon — bepul",
-    ad1Text: "Ro'yxatdan o'tgan har bir foydalanuvchi e'lonini bepul joylaydi.",
-    ad2Title: "Xaritada aniq chegara",
-    ad2Text: "Yer va hovlilarni chegarasi bilan ko'ring — adashish yo'q.",
-    ad3Title: "Tez aloqa",
-    ad3Text: "Egasining raqami har bir e'londa — vositachisiz gaplashing.",
-    howTitle: "Qanday ishlaydi?",
-    step1: "Xaritadan qiziqtirgan hududni oching",
-    step2: "E'lonni tanlab, rasm va narxini ko'ring",
-    step3: "Egasi bilan to'g'ridan-to'g'ri bog'laning",
   },
 
   saved: {
@@ -144,8 +117,13 @@ export const uz = {
     otpSent: "Kod SMS orqali yuborildi",
     name: "Ism",
     namePlaceholder: "Ismingiz",
+    // Optional on the welcome screen: only used when the code creates the
+    // account, so a returning user can leave it alone.
+    nameHint: "Yangi hisob uchun — keyin o'zgartirsa bo'ladi",
+    useCodeInstead: "SMS kod bilan kirish",
     surname: "Familiya",
     surnamePlaceholder: "Familiyangiz",
+    surnameOptional: "Ixtiyoriy — keyin qo'shsa bo'ladi",
 
     telegramTitle: "Telegramda tasdiqlang",
     telegramSubtitle:
@@ -209,18 +187,6 @@ export const uz = {
       "Shikoyat yuborilsa, moderatorlar shu suhbat yozishmalarini ko'rishi mumkin.",
   },
 
-  storyReport: {
-    title: "Hikoya haqida shikoyat",
-    subtitle: "Nima uchun bu hikoya haqida xabar bermoqchisiz?",
-    SPAM: "Spam yoki reklama",
-    SCAM: "Firibgarlik",
-    INAPPROPRIATE: "Nomaqbul kontent",
-    HARASSMENT: "Haqorat yoki tahdid",
-    COPYRIGHT: "Mualliflik huquqi buzilgan",
-    OTHER: "Boshqa sabab",
-    already: "Siz bu hikoya haqida allaqachon xabar bergansiz",
-  },
-
   report: {
     action: "Shikoyat qilish",
     title: "Shikoyat qilish",
@@ -231,11 +197,19 @@ export const uz = {
     WRONG_PRICE: "Narx noto'g'ri",
     DUPLICATE: "Takroriy e'lon",
     INAPPROPRIATE: "Nomaqbul kontent",
+    // Video-only. Neither has a listing equivalent: nobody advertises a flat
+    // as spam, and nobody puts somebody else's music on a photograph.
+    SPAM: "Spam yoki reklama",
+    COPYRIGHT: "Musiqa yoki video o'zganing",
     OTHER: "Boshqa sabab",
     otherPlaceholder: "Sababni yozing…",
     submit: "Yuborish",
     sent: "Shikoyat yuborildi. Rahmat!",
     already: "Siz bu e'lon haqida allaqachon xabar bergansiz",
+    videoSubtitle: "Bu video haqida nima uchun xabar bermoqchisiz?",
+    commentSubtitle: "Bu izoh haqida nima uchun xabar bermoqchisiz?",
+    alreadyComment: "Siz bu izoh haqida allaqachon xabar bergansiz",
+    alreadyVideo: "Siz bu video haqida allaqachon xabar bergansiz",
   },
 
   reviews: {
@@ -373,6 +347,8 @@ export const uz = {
     emptyHint: "Kimnidir bloklasangiz, u shu yerda ko'rinadi.",
     youBlocked: "Siz bu foydalanuvchini bloklagansiz",
     unavailable: "Bu suhbat mavjud emas",
+    // Marks a blocked person in people-search results.
+    badge: "Siz bloklagansiz",
   },
 
   validation: {
@@ -394,10 +370,175 @@ export const uz = {
     decimalPlaces: "Ko'pi bilan 2 ta kasr raqam",
   },
 
+  notifications: {
+    title: "Bildirishnomalar",
+    empty: "Hozircha bildirishnoma yo'q",
+    emptyHint: "Videolaringizga yoqtirish va izohlar shu yerda ko'rinadi.",
+    // One line per kind. The actor's name is prefixed by the row itself, so
+    // these read as the predicate: "Bek  sizning videongizni yoqtirdi".
+    videoReady: "Videongiz joylashtirildi",
+    videoFailed: "Video joylashtirilmadi",
+    videoAwaitingPayment: "Video to'lov kutmoqda",
+    videoLike: "videongizni yoqtirdi",
+    videoComment: "videongizga izoh qoldirdi",
+    commentReply: "izohingizga javob berdi",
+    newFollower: "sizga obuna bo'ldi",
+    // --- the inbox beyond video ------------------------------------------
+    followedUserPosted: "yangi video joyladi",
+    listingComment: "e'loningizga izoh qoldirdi",
+    listingCommentReply: "izohingizga javob berdi",
+    listingReview: "e'loningizni baholadi",
+    chatMessage: "sizga xabar yubordi",
+    topupSucceeded: "Hisobingiz to'ldirildi",
+    topupFailed: "To'lov amalga oshmadi",
+    tariffPaid: "Tarif uchun to'lov qabul qilindi",
+    tariffExpiring: "Tarifingiz tugayapti",
+  },
+
+  // Global search: one entry, three kinds of answer. See the segmented
+  // control on the home header.
+  search: {
+    scopeListings: "E'lonlar",
+    scopeVideos: "Videolar",
+    scopePeople: "Odamlar",
+    peoplePlaceholder: "Ism bo'yicha qidirish",
+    videosPlaceholder: "Video tavsifi bo'yicha qidirish",
+    // Shown before the query is long enough to ask about, so it says what to
+    // do rather than "nothing found" — which would be a lie.
+    typeToSearch: "Qidirish uchun kamida {{count}} harf kiriting",
+    noPeople: "Bunday odam topilmadi",
+    noVideos: "Bunday video topilmadi",
+    listingCount: "{{count}} e'lon",
+  },
+
+  users: {
+    title: "Sotuvchilar",
+    searchPlaceholder: "Sotuvchi qidirish",
+    directoryEmpty: "Hali sotuvchilar yo'q",
+  },
+
+  follows: {
+    follow: "Obuna bo'lish",
+    following: "Obuna bo'lingan",
+    followers: "Obunachilar",
+    followingTitle: "Obunalar",
+    followsYou: "Sizga obuna",
+    followerCount: "{{count}} obunachi",
+    noFollowers: "Hali obunachilar yo'q",
+    noFollowing: "Hali hech kimga obuna bo'lmagan",
+    // The Videos tab's two feeds.
+    scopeForYou: "Siz uchun",
+    scopeFollowing: "Obunalar",
+    feedEmpty: "Siz obuna bo'lganlar hali video joylamagan",
+    feedEmptyHint:
+      "Yoqqan sotuvchilarga obuna bo'ling — videolari shu yerda chiqadi.",
+    searchPlaceholder: "Obunachilar orasidan qidirish",
+    noMatches: "Mos keladigan odam yo'q",
+  },
+
+  /**
+   * The walkthrough film on an advert — a different thing from a reel, and
+   * worded so nobody confuses them. "Video tur" here; "Video" in the tab.
+   */
+  listingVideo: {
+    title: "Video tur",
+    hint: "Xonadonni video orqali ko'rsating — u galereyada birinchi bo'lib turadi. 3 daqiqagacha.",
+    tag: "Video tur",
+    add: "Video qo'shish",
+    replace: "Almashtirish",
+    play: "Videoni ijro etish",
+    pause: "Videoni to'xtatish",
+    ready: "Video tayyor",
+    compressing: "Siqilmoqda...",
+    preparing: "Tayyorlanmoqda...",
+    uploading: "Yuklanmoqda...",
+    processing: "Qayta ishlanmoqda",
+    processingHint:
+      "Bir daqiqacha vaqt oladi. Tayyor bo'lgach, e'londa ko'rinadi.",
+    tryAgain: "Boshqa video tanlash",
+    failed: "Video yuklanmadi",
+    failedTooLong: "Video 3 daqiqadan uzun",
+    failedEncoding: "Videoni qayta ishlashda xatolik",
+    failedAbandoned: "Yuklash tugallanmadi",
+    tooLongPick: "Video 3 daqiqadan oshmasligi kerak",
+    removeTitle: "Video o'chirilsinmi?",
+    removeMessage:
+      "Video tur e'londan butunlay o'chiriladi. E'lonning o'zi qoladi.",
+  },
+
+  videos: {
+    title: "Videolar",
+    empty: "Hozircha video yo'q",
+    emptyHint: "Birinchi videoni siz joylashtiring.",
+    sound: "Ovoz",
+    play: "Davom ettirish",
+    pause: "To'xtatish",
+    like: "Yoqdi",
+    comment: "Izohlar",
+    share: "Ulashish",
+    openListing: "Uyni ko'rish",
+    // The author's own shelf and the states a video passes through.
+    mine: "Mening videolarim",
+    mineEmpty: "Siz hali video joylashtirmagansiz",
+    processing: "Tayyorlanmoqda…",
+    processingHint: "Video tayyor bo'lgach, Videolar bo'limida paydo bo'ladi.",
+    awaitingPayment: "To'lov kutilmoqda",
+    awaitingPaymentHint:
+      'Video tayyor. Balansni to\'ldirib, "Joylashtirish" tugmasini bosing — 48 soat saqlanadi.',
+    publish: "Joylashtirish",
+    published: "Video joylashtirildi",
+    failed: "Joylashtirilmadi",
+    failedTooLong: "Video 1 daqiqadan uzun",
+    failedEncoding: "Videoni tayyorlashda xatolik",
+    failedAbandoned: "Yuklash tugallanmadi",
+    expired: "Muddati tugadi",
+    removed: "O'chirilgan",
+    // Posting.
+    add: "Video joylash",
+    pick: "Galereyadan tanlash",
+    // Short forms for the chips on the preview frame, where the icon already
+    // says what kind of thing it is.
+    gallery: "Galereya",
+    camera: "Kamera",
+    record: "Kamerada olish",
+    replace: "Boshqa video",
+    maxDuration: "Maksimal 1 daqiqa",
+    tooLong: "Video 1 daqiqadan uzun bo'lmasligi kerak",
+    caption: "Izoh",
+    captionPlaceholder: "Nima haqida? Masalan: Chilonzorda 3 xonali kvartira",
+    linkListing: "E'longa bog'lash",
+    linkListingHint:
+      "Bog'langan video Videolar bo'limida \"Uyni ko'rish\" tugmasi bilan chiqadi.",
+    linkListingNone: "Bog'lanmagan",
+    noListings: "Sizda faol e'lon yo'q",
+    compressing: "Siqilmoqda… {{percent}}%",
+    uploading: "Yuklanmoqda… {{percent}}%",
+    uploadingHint: "Ilovani yopmang. Aloqa uzilsa, yuklash davom etadi.",
+    uploadDone: "Video yuklandi — tayyorlanmoqda",
+    uploadFailed: "Yuklab bo'lmadi",
+    cancelUpload: "Yuklashni bekor qilish",
+    dailyLimit: "Kuniga {{count}} ta video joylashtirish mumkin",
+    pickFirst: "Avval video tanlang",
+    permission: "Kameraga ruxsat berilmadi",
+    // Removal.
+    delete: "Videoni o'chirish",
+    deleteTitle: "Video o'chirilsinmi?",
+    deleteMessage:
+      "Video Videolar bo'limidan olib tashlanadi. Pul qaytarilmaydi.",
+    deleted: "Video o'chirildi",
+    edit: "Tahrirlash",
+    editTitle: "Videoni tahrirlash",
+    saved: "Saqlandi",
+    stats: "{{views}} ko'rish · {{likes}} yoqtirish · {{comments}} izoh",
+    // The counters under a reel.
+    viewCount: "{{count}} ko'rish",
+    muted: "Ovozsiz",
+    unavailable: "Video mavjud emas",
+    listingVideo: "Video",
+  },
   listings: {
     posted: "E'lon berilgan",
     edited: "Tahrirlangan",
-    saleTitle: "Sotuv",
     seller: "Sotuvchi",
     myListingsTitle: "Mening e'lonlarim",
     newListing: "E'lon", // sits next to a "+" icon, so no plus in the string
@@ -407,7 +548,19 @@ export const uz = {
     daysAgo: "{{count}} kun oldin",
     monthsAgo: "{{count}} oy oldin",
     searchPlaceholder: "Qidirish — nom yoki manzil",
+    // The pinned bar's search icon — the placeholder is a sentence, which
+    // is the wrong thing for a screen reader to read out as a button.
+    searchButton: "Qidirish",
     foundShort: "Topildi: {{count}}",
+    // The home screen's own chrome: the map is a mode you switch into, and
+    // the promoted strip above the feed.
+    // The card at the top of the feed that opens the map.
+    mapCardTitle: "Xaritada ko'rish",
+    mapCardHint: "E'lonlar xaritada",
+    mapButton: "Xaritada",
+    listButton: "Ro'yxat",
+    vipTitle: "VIP e'lonlar",
+    sortLabel: "Saralash",
     propertiesTitle: "Xususiyatlar",
     som: "so'm",
     similarTitle: "O'xshash e'lonlar",
@@ -460,7 +613,23 @@ export const uz = {
     RENT_DAILY: "Kunlik ijara",
   },
 
+  // The same three, cut to fit the feed's segmented control — a third of a
+  // phone's width each, where "Oylik ijara" truncates.
+  purposesShort: {
+    SALE: "Sotuv",
+    RENT_MONTHLY: "Oylik",
+    RENT_DAILY: "Kunlik",
+  },
+
   add: {
+    // The post form is a five-step wizard; these name the steps and count them.
+    step1Title: "Nima sotiladi",
+    step2Title: "Mulk haqida",
+    step3Title: "Narx va maydon",
+    step4Title: "Joylashuv va aloqa",
+    step5Title: "Suratlar va qulayliklar",
+    stepCounter: "{{current}}/{{total}}-qadam",
+    stepFixErrors: "Bu qadamda to'ldirilmagan joylar bor.",
     title: "Yangi e'lon",
     // Short on purpose: three of these share one segmented track.
     tabs: {
@@ -484,6 +653,7 @@ export const uz = {
     purpose: "Maqsad",
     listingTitle: "Sarlavha",
     listingTitlePlaceholder: "Chilonzorda 3 xonali kvartira",
+    listingTitleHint: "Nima, nechta xona va qaysi hudud — shu uchtasi yetadi.",
     price: "Narx",
     pricePlaceholder: "50000",
     repairTitle: "Ta'mirlash",
@@ -533,6 +703,7 @@ export const uz = {
     addressPlaceholder: "Toshkent, Chilonzor tumani, 12-mavze",
     phone: "Aloqa telefoni",
     phonePlaceholder: "+998 90 123 45 67",
+    phoneHint: "Xaridorlar shu raqamga qo'ng'iroq qiladi.",
     description: "Tavsif",
     descriptionPlaceholder:
       "Ta'mir, qo'shnilar, infratuzilma haqida qisqacha yozing",
@@ -545,6 +716,13 @@ export const uz = {
     noBoundary: "Chegara chizilmagan",
     drawOnMap: "Xaritada chizish",
     boundarySummary: "{{count}} nuqta · {{area}}",
+    // Group headings for the long stretches of the form that had none: the
+    // fields between "repair" and "amenities" used to run as one flat column.
+    sectionBasics: "Asosiy ma'lumot",
+    sectionContact: "Manzil va aloqa",
+    // Short enough for a two-up segmented track in every language.
+    locationModePolygon: "Chegara",
+    locationModePin: "Nuqta",
     submit: "E'lon berish",
     missingBoundaryTitle: "Chegara yo'q",
     missingBoundaryMessage: "Avval xaritada joy chegarasini chizing.",
@@ -596,9 +774,15 @@ export const uz = {
     priceTo: "Gacha",
     anyPrice: "Istalgan narx",
     sortDefault: "Standart",
-    sortPriceAsc: "Avval arzoni",
-    sortPriceDesc: "Avval qimmati",
+    sortPriceAsc: "Arzoni",
+    sortPriceDesc: "Qimmati",
     reset: "Tozalash",
+    // The outcome, not the mechanism: the sheet knows how many listings the
+    // current filters match, and a button that says so is worth more than one
+    // that says "apply".
+    applyCount: "Ko'rsatish: {{count}}",
+    apply: "Natijalarni ko'rish",
+    close: "Yopish",
     empty: "Filtrga mos e'lon topilmadi",
   },
 
@@ -641,60 +825,6 @@ export const uz = {
     unavailable: "Joylashuvni aniqlab bo'lmadi",
   },
 
-  stories: {
-    copyLink: "Havolani nusxalash",
-    linkCopied: "Havola nusxalandi",
-    saved: "Galereyaga saqlandi",
-    save: "Saqlash",
-    report: "Shikoyat",
-    reportTitle: "Nega shikoyat qilyapsiz?",
-    reported: "Shikoyat yuborildi",
-    forward: "Yuborish",
-    more: "Yana",
-    sound: "Ovoz",
-    muted: "Ovozsiz",
-    seeViewers: "Kim ko'rgan",
-    archiveTitle: "Hikoyalar arxivi",
-    archiveHint: "Muddati tugaganlarini faqat siz ko'rasiz",
-    expired: "Tugagan",
-    title: "Hikoyalar",
-    add: "Qo'shish",
-    mine: "Siz",
-    compose: "Hikoya qo'shish",
-    photo: "Rasm",
-    video: "Video",
-    text: "Matn",
-    caption: "Izoh qo'shing…",
-    textPlaceholder: "Nima demoqchisiz?",
-    background: "Fon",
-    linkListing: "E'longa havola",
-    linkListingHint: "Ko'rganlar to'g'ridan-to'g'ri e'longa o'tadi",
-    noLink: "Havolasiz",
-    noListingsTitle: "Faol e'loningiz yo'q",
-    noListingsBody:
-      "Hikoyani e'longa bog'lash uchun avval e'lon bering. Hikoyani shundoq ham joylashingiz mumkin.",
-    postListing: "E'lon berish",
-    leaveDraft: "Hikoya qoralamasi saqlanmaydi. Davom etilsinmi?",
-    duration: "Qancha turadi",
-    hours: "{{count}} soat",
-    post: "Joylash",
-    posted: "Hikoya joylandi",
-    deleted: "Hikoya o'chirildi",
-    deleteTitle: "Hikoyani o'chirasizmi?",
-    deleteMessage: "Uni ko'rganlar ro'yxati ham o'chadi.",
-    viewers: "Ko'rganlar",
-    noViewers: "Hali hech kim ko'rmadi",
-    viewersOwnerOnly: "Buni faqat siz ko'rasiz",
-    openListing: "E'lonni ko'rish",
-    reactions: "Reaksiya",
-    expiresIn: "{{time}} qoldi",
-    expiresSoon: "Tez orada o'chadi",
-    emptyTitle: "Hali hikoyalar yo'q",
-    emptyHint: "Birinchi bo'lib joylang — 24 soat ko'rinadi.",
-    needMedia: "Rasm yoki video tanlang",
-    needText: "Biror narsa yozing",
-  },
-
   map: {
     priceFrom: "dan",
     stackCount: "Bu joyda {{count}} ta e'lon",
@@ -723,6 +853,8 @@ export const uz = {
     unavailableWeb: "Xarita brauzerda mavjud emas — ilovada oching.",
     unavailableNative:
       "Xarita Expo Go'da ishlamaydi — development build orqali oching.",
+    full: "Butun ekran",
+    exitFull: "Oddiy ko'rinish",
     radius: "Radius",
     radiusOn: "Radius bo'yicha qidirish",
     radiusWithin: "Shu radiusda",
@@ -750,10 +882,6 @@ export const uz = {
     gender: "Jins",
     genderMale: "Erkak",
     genderFemale: "Ayol",
-    address: "Manzil",
-    addressPlaceholder: "Viloyatni tanlang",
-    district: "Tuman",
-    districtPlaceholder: "Tumanni tanlang",
     socials: "Ijtimoiy tarmoqlar",
     socialsHint: "Foydalanuvchi nomi yoki to'liq havola",
     birthDateRequired: "Tug'ilgan sanangizni kiriting",
@@ -919,6 +1047,22 @@ export const uz = {
   },
 
   wallet: {
+    resultChecking: "To'lov tekshirilmoqda…",
+    resultCheckingBody:
+      "To'lov tizimi tasdiqlashini kutyapmiz. Bu odatda bir necha soniya oladi.",
+    resultPaid: "To'lov qabul qilindi",
+    resultPaidBody: "{{amount}} UZS balansingizga qo'shildi.",
+    resultPaidBodyNoAmount: "Mablag' balansingizga qo'shildi.",
+    resultCancelledBody:
+      "Hisobingizdan pul yechilmadi. Qaytadan urinib ko'rishingiz mumkin.",
+    resultPending: "To'lov hali tasdiqlanmadi",
+    resultPendingBody:
+      "Agar to'lagan bo'lsangiz, mablag' tez orada balansga tushadi — holatini to'lov tarixida ko'ring.",
+    resultBackToWallet: "Hamyonga qaytish",
+    cardNeedsPhoneTitle: "Virtual kartani yarating",
+    cardNeedsPhoneBody:
+      "Karta telefon raqamingizga bog'lanadi. Raqamni SMS kod orqali tasdiqlang — karta shundan keyin ochiladi.",
+    cardNeedsPhoneAction: "Telefon raqamni qo'shish",
     topupTitle: "Balansni to'ldirish",
     historyTitle: "To'lov tarixi",
     balance: "Balans",
@@ -953,7 +1097,7 @@ export const uz = {
     topupTx: "Hisobni to'ldirish",
     bonusTx: "To'ldirish bonusi",
     listingPostTx: "E'lon joylashtirish",
-    storyPostTx: "Hikoya joylashtirish",
+    videoPostTx: "Video joylashtirish",
     listingPromoteTx: "E'lonni ko'tarish",
     refundTx: "Mablag'ni qaytarish",
     adminAdjustTx: "Admin tomonidan o'zgartirish",

@@ -4,8 +4,6 @@ import {
   View,
   FlatList,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   RefreshControl,
 } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
@@ -17,6 +15,7 @@ import {
   ImageViewer,
   HEADER_EDGES,
   toast,
+  LoadingView,
 } from "../../../src/components/ui";
 import { uploadImages } from "../../../src/lib/upload-client";
 import { spacing } from "../../../src/theme/tokens";
@@ -179,10 +178,7 @@ export default function ListingCommentsScreen() {
   );
 
   const body = comments.isLoading ? (
-    <ActivityIndicator
-      style={{ marginTop: spacing.xxl }}
-      color={colors.primary}
-    />
+    <LoadingView />
   ) : comments.isError ? (
     <EmptyState
       icon="cloud-offline-outline"
@@ -198,6 +194,7 @@ export default function ListingCommentsScreen() {
       keyExtractor={(item) => item.id}
       contentContainerStyle={{ padding: spacing.md, flexGrow: 1 }}
       keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
       refreshControl={
         <RefreshControl
           refreshing={comments.isRefetching}
@@ -251,11 +248,10 @@ export default function ListingCommentsScreen() {
 
       {/* The composer has to ride above the keyboard — it is the only control
           on the screen, and a thread you cannot answer is a dead end. */}
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={insets.top + 44}
-      >
+      {/* Plain view: <Screen> already lifts this above the keyboard, on
+           both platforms. A second, iOS-only avoider here lifted it twice on
+           iOS and not at all on Android, where it hid the composer. */}
+      <View style={{ flex: 1 }}>
         <View style={{ flex: 1 }}>{body}</View>
 
         <CommentComposer
@@ -276,7 +272,7 @@ export default function ListingCommentsScreen() {
             setPhoto(null);
           }}
         />
-      </KeyboardAvoidingView>
+      </View>
 
       {viewing ? (
         <ImageViewer uri={viewing} onClose={() => setViewing(null)} />

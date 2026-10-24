@@ -1,13 +1,6 @@
 import { memo, useState } from "react";
 // app/listing/[id]/index.tsx
-import {
-  Text,
-  View,
-  ScrollView,
-  ActivityIndicator,
-  Pressable,
-  Share,
-} from "react-native";
+import { Text, View, ScrollView, Pressable, Share } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import * as Linking from "expo-linking";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,9 +9,11 @@ import {
   Button,
   Card,
   EmptyState,
+  Skeleton,
+  Avatar,
   HEADER_EDGES,
 } from "../../../src/components/ui";
-import { spacing, radii } from "../../../src/theme/tokens";
+import { spacing, radii, sizing } from "../../../src/theme/tokens";
 import { useTheme } from "../../../src/theme/useTheme";
 import { useT, useLanguage, type TranslationKey } from "../../../src/i18n";
 import { confirm } from "../../../src/lib/alerts";
@@ -41,7 +36,6 @@ import { ListingEditModal } from "../../../src/features/listings/components/List
 import { useConversations } from "../../../src/features/chat/hooks/useConversations";
 import { ActionIcons } from "../../../src/features/users/components/ActionIcons";
 import { VerifiedBadge } from "../../../src/features/users/components/VerifiedBadge";
-import { StoryAvatar } from "../../../src/features/stories/components/StoryAvatar";
 import { OfferBadge } from "../../../src/features/listings/components/OfferBadge";
 import {
   htmlToText,
@@ -62,6 +56,10 @@ import {
 } from "../../../src/features/tariffs/components/TopBadge";
 
 /** The six levels, as the detail page names them. */
+/** The pinned contact bar's own height plus its padding, so the scroll can
+ *  leave exactly that much and no arbitrary guess. */
+const CONTACT_BAR_CLEARANCE = sizing.control + spacing.md * 2 + spacing.lg;
+
 const REPAIR_LABELS: Record<RepairType, TranslationKey> = {
   NEEDS_REPAIR: "add.repairNeeds",
   AVERAGE: "add.repairAverage",
@@ -79,7 +77,7 @@ export default function ListingDetailScreen() {
   const restore = useRestoreListing();
   const isSaved = useIsSaved(id ?? "");
   const toggleSave = useToggleSave();
-  const { colors, text } = useTheme();
+  const { colors, text, shadow } = useTheme();
   const t = useT();
   const language = useLanguage();
   // Categories are admin-managed; the name comes from the server's list.
@@ -106,9 +104,23 @@ export default function ListingDetailScreen() {
   const relativeDate = useRelativeDate();
 
   if (isLoading) {
+    // The page's own shape rather than a centred spinner: photo, title,
+    // the two meta lines and the spec table, in the places they will land.
     return (
-      <Screen centered edges={HEADER_EDGES}>
-        <ActivityIndicator color={colors.primary} />
+      <Screen scroll={false} style={{ padding: 0 }} edges={HEADER_EDGES}>
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        >
+          <Skeleton height={260} radius={0} />
+          <View style={{ padding: spacing.lg, gap: spacing.md }}>
+            <Skeleton height={26} width="85%" />
+            <Skeleton height={14} width="55%" />
+            <Skeleton height={120} radius={radii.xl} />
+            <Skeleton height={14} width="70%" />
+            <Skeleton height={14} width="45%" />
+          </View>
+        </View>
       </Screen>
     );
   }
@@ -247,6 +259,32 @@ export default function ListingDetailScreen() {
 
   const isArchived = listing.status === "ARCHIVED";
 
+  /**
+   * Open the thread with the seller.
+   *
+   * Through requirePhone, so a signed-out reader lands on the login flow
+   * rather than a silent 401, and one without a verified number is asked for
+   * it before a stranger's inbox is opened. The thread opens in DRAFT mode:
+   * the opener is written for them, and nothing is sent until they press send.
+   */
+  const contactOwner = () =>
+    requirePhone(() => {
+      const existing = conversations?.find(
+        (c) => c.listingId === listing.id && c.role === "guest",
+      );
+      if (existing) {
+        router.push({
+          pathname: "/chat/[id]",
+          params: { id: existing.id, prefill: "1" },
+        });
+        return;
+      }
+      router.push({
+        pathname: "/chat/[id]",
+        params: { id: "new", listingId: listing.id },
+      });
+    });
+
   // Archiving is destructive (the photos go with it), so it asks first.
   // Restoring only puts the listing back, so it just runs.
   /**
@@ -286,7 +324,13 @@ export default function ListingDetailScreen() {
     // have nested one inside the other. edges drop "top" — the stack header
     // already clears the notch.
     <Screen style={{ padding: 0 }} scroll={false} edges={HEADER_EDGES}>
-      <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl }}>
+      <ScrollView
+        contentContainerStyle={{
+          // Clears the pinned contact bar for everyone who sees one; the
+          // owner has no bar, so they only need the usual tail margin.
+          paddingBottom: isOwner ? spacing.xxl : CONTACT_BAR_CLEARANCE,
+        }}
+      >
         <View>
           <ListingImageCarousel images={listing.images} />
 
@@ -619,13 +663,11 @@ export default function ListingDetailScreen() {
                       : colors.surface,
                   })}
                 >
-                  {/* Rings when they have a story up, and opens it on tap
-                      rather than the profile — the avatar is the story's
-                      affordance everywhere else in the app. */}
-                  <StoryAvatar
-                    userId={listing.owner.id}
+                  <Avatar
                     uri={
-                      listing.owner.avatarThumbUrl ?? listing.owner.avatarUrl
+                      listing.owner.avatarThumbUrl ??
+                      listing.owner.avatarUrl ??
+                      null
                     }
                     name={ownerName}
                     size={48}
@@ -690,36 +732,6 @@ export default function ListingDetailScreen() {
                   prefix={t("listings.seller")}
                 />
               )}
-              {/* The way in for everyone else — guests included: the tap routes
-                through requirePhone, so a signed-out user lands on the login
-                flow instead of a silent 401, and one without a verified
-                number is asked for it before a stranger's inbox is opened.
-                Sending the opener is what creates the conversation, so the
-                first message is written for them. */}
-              <Button
-                title={t("chat.contactOwner")}
-                icon="chatbubble-ellipses-outline"
-                // Opens the thread in DRAFT mode: composer prefilled, nothing
-                // sent until the buyer presses send themselves.
-                onPress={() =>
-                  requirePhone(() => {
-                    const existing = conversations?.find(
-                      (c) => c.listingId === listing.id && c.role === "guest",
-                    );
-                    if (existing) {
-                      router.push({
-                        pathname: "/chat/[id]",
-                        params: { id: existing.id, prefill: "1" },
-                      });
-                      return;
-                    }
-                    router.push({
-                      pathname: "/chat/[id]",
-                      params: { id: "new", listingId: listing.id },
-                    });
-                  })
-                }
-              />
             </View>
           )}
 
@@ -741,6 +753,33 @@ export default function ListingDetailScreen() {
           />
         </View>
       </ScrollView>
+
+      {/* The one thing a reader is here to do, kept on screen.
+          It used to sit in the scroll between the description and the
+          reviews, so on a listing with photos, a spec table and a comment
+          thread it was somewhere in the middle of a long page — reachable
+          only by remembering it was there. */}
+      {!isOwner ? (
+        <View
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            padding: spacing.md,
+            backgroundColor: colors.surface,
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+            ...shadow.raised,
+          }}
+        >
+          <Button
+            title={t("chat.contactOwner")}
+            icon="chatbubble-ellipses-outline"
+            onPress={contactOwner}
+          />
+        </View>
+      ) : null}
 
       <ReportListingSheet
         listingId={listing.id}

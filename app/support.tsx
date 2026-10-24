@@ -5,17 +5,13 @@ import {
   View,
   Text,
   FlatList,
-  ActivityIndicator,
-  KeyboardAvoidingView,
   Linking,
-  Platform,
   Pressable,
 } from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient } from "../src/lib/query-client";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Screen,
@@ -23,8 +19,9 @@ import {
   ImageViewer,
   HEADER_EDGES,
   toast,
+  LoadingView,
 } from "../src/components/ui";
-import { spacing, radii } from "../src/theme/tokens";
+import { spacing, radii, weight } from "../src/theme/tokens";
 import { useTheme } from "../src/theme/useTheme";
 import { useT, useLanguage } from "../src/i18n";
 import { errorMessage } from "../src/lib/api-error";
@@ -50,7 +47,6 @@ const noop = () => {};
 
 export default function SupportScreen() {
   const { colors, text } = useTheme();
-  const insets = useSafeAreaInsets();
   const t = useT();
   const language = useLanguage();
   const listRef = useRef<FlatList<SupportMessage>>(null);
@@ -176,11 +172,10 @@ export default function SupportScreen() {
 
   return (
     <Screen style={{ padding: 0 }} scroll={false} edges={HEADER_EDGES}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={insets.top + 44}
-      >
+      {/* Plain view: <Screen> already lifts this above the keyboard, on
+           both platforms. A second, iOS-only avoider here lifted it twice on
+           iOS and not at all on Android, where it hid the composer. */}
+      <View style={{ flex: 1 }}>
         {/* Above the list: the pin belongs at the top of the thread. */}
         {pinnedMessage ? (
           <Pressable
@@ -206,7 +201,7 @@ export default function SupportScreen() {
                 style={{
                   ...text.caption,
                   color: colors.primary,
-                  fontWeight: "600",
+                  ...weight("600"),
                 }}
               >
                 {t("chat.pinned")}
@@ -227,10 +222,7 @@ export default function SupportScreen() {
         ) : null}
 
         {isLoading ? (
-          <ActivityIndicator
-            style={{ marginTop: spacing.xxl }}
-            color={colors.primary}
-          />
+          <LoadingView />
         ) : isError ? (
           <EmptyState
             icon="cloud-offline-outline"
@@ -251,6 +243,7 @@ export default function SupportScreen() {
               flexGrow: 1,
             }}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             // The newest message is the one being read; a thread that opens
             // at the top makes every visit start with a scroll.
             onContentSizeChange={() =>
@@ -345,7 +338,7 @@ export default function SupportScreen() {
             onClearEdit={noop}
           />
         </View>
-      </KeyboardAvoidingView>
+      </View>
 
       <MessageActionSheet
         visible={!!actionsFor}
@@ -442,7 +435,7 @@ function Bubble({
             size={13}
             color={colors.primary}
           />
-          <Text style={{ ...text.caption, color: colors.primary, fontWeight: "600" }}>
+          <Text style={{ ...text.caption, color: colors.primary, ...weight("600") }}>
             {t("support.team")}
           </Text>
         </View>

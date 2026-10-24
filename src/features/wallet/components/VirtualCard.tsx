@@ -9,7 +9,9 @@ import {
 import Svg, { Path, Rect, G } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { weight } from "@/src/theme/tokens";
 import { useT } from "@/src/i18n";
+import { CreateCardPrompt } from "./CreateCardPrompt";
 import {
   CardTheme,
   useCardThemeStore,
@@ -18,6 +20,13 @@ import {
 interface VirtualCardProps {
   phone?: string | null;
   userId?: string | null;
+  /**
+   * The account number from GET /wallet. Preferred over `userId`: this is the
+   * number a payer actually types into Paynet, so it is the one worth printing
+   * on the card. `userId` stays as the fallback for the moment before the
+   * overview has loaded.
+   */
+  accountNo?: number | null;
   balance?: number | string;
   name?: string | null;
   variant?: "full" | "compact";
@@ -29,8 +38,15 @@ interface VirtualCardProps {
 
 const UZS_PER_USD = 12_850;
 
+/**
+ * The card's phone line, or "" when the account has none.
+ *
+ * Telegram sign-ins can have no phone at all. This used to fall back to a
+ * hardcoded real number, so every such account showed somebody else's phone
+ * on its card as if it were its own. No phone now means no phone line.
+ */
 export function formatPhone(phone?: string | null): string {
-  if (!phone) return "+998 (93) 100-40-27";
+  if (!phone) return "";
   const digits = phone.replace(/\D/g, "");
   if (digits.length === 12 && digits.startsWith("998")) {
     return `+998 (${digits.slice(3, 5)}) ${digits.slice(5, 8)}-${digits.slice(8, 10)}-${digits.slice(10, 12)}`;
@@ -41,7 +57,20 @@ export function formatPhone(phone?: string | null): string {
   return phone;
 }
 
-export function formatUserId(id?: string | null): string {
+/**
+ * What the card prints as the account's identifier.
+ *
+ * The account number when we have it — a payer types exactly these digits
+ * into Paynet, so it is shown whole and unformatted; a space or a "#" in the
+ * middle is something somebody will copy across and then wonder why the
+ * payment bounced.
+ *
+ * The uuid is only the fallback for the instant before GET /wallet answers.
+ * It is abbreviated because it is not a number anyone can use — it exists so
+ * the card is not blank.
+ */
+export function formatUserId(id?: string | null, accountNo?: number | null): string {
+  if (accountNo) return `ID: ${accountNo}`;
   if (!id) return "ID: #0001";
   const clean = id.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
   if (clean.length > 8) {
@@ -100,6 +129,7 @@ export function ContactlessIcon({ color = "#94A3B8" }: { color?: string }) {
 export function VirtualCard({
   phone,
   userId,
+  accountNo,
   balance = 0,
   name,
   variant = "full",
@@ -119,7 +149,7 @@ export function VirtualCard({
   const formattedBalanceUzs = formatThousands(balance);
   const formattedBalanceUsd = formatUsd(balance);
   const formattedPhone = formatPhone(phone);
-  const formattedId = formatUserId(userId);
+  const formattedId = formatUserId(userId, accountNo);
 
   const isCompact = variant === "compact";
 
@@ -160,6 +190,12 @@ export function VirtualCard({
     outputRange: [0, 0, 1, 1],
   });
 
+
+  // No phone, no card: the card is issued against the number. See
+  // CreateCardPrompt — it links the phone, and this renders the real card
+  // as soon as the session user has one.
+  if (!phone) return <CreateCardPrompt compact={isCompact} />;
+
   return (
     <Pressable
       onPress={handleFlip}
@@ -169,6 +205,10 @@ export function VirtualCard({
     >
       {/* Front Face: UZS */}
       <Animated.View
+        // Only the face showing takes touches. The back face is stacked
+        // exactly over this one; invisible, it still caught taps on Android
+        // and swallowed most of the top-up button — only its "+" got through.
+        pointerEvents={isFlipped ? "none" : "box-none"}
         style={[
           styles.card,
           isCompact ? styles.cardCompact : styles.cardFull,
@@ -255,6 +295,9 @@ export function VirtualCard({
                 e.stopPropagation();
                 onPressTopup();
               }}
+              accessibilityRole="button"
+              accessibilityLabel={resolvedTopupLabel}
+              hitSlop={8}
               style={({ pressed }) => [
                 styles.topupBtnBadge,
                 {
@@ -273,7 +316,9 @@ export function VirtualCard({
         {/* Card Footer: Phone, ID, and Name */}
         <View style={styles.footerRow}>
           <View style={styles.footerLeft}>
-            <Text style={styles.phoneText}>{formattedPhone}</Text>
+            {formattedPhone ? (
+              <Text style={styles.phoneText}>{formattedPhone}</Text>
+            ) : null}
             {name ? (
               <Text style={styles.nameText}>{name.toUpperCase()}</Text>
             ) : null}
@@ -287,6 +332,7 @@ export function VirtualCard({
 
       {/* Back Face: USD (Absolute overlay positioned directly behind front face) */}
       <Animated.View
+        pointerEvents={isFlipped ? "box-none" : "none"}
         style={[
           styles.card,
           styles.cardBack,
@@ -381,6 +427,9 @@ export function VirtualCard({
                 e.stopPropagation();
                 onPressTopup();
               }}
+              accessibilityRole="button"
+              accessibilityLabel={resolvedTopupLabel}
+              hitSlop={8}
               style={({ pressed }) => [
                 styles.topupBtnBadge,
                 {
@@ -399,7 +448,9 @@ export function VirtualCard({
         {/* Card Footer: Phone, ID, and Name */}
         <View style={styles.footerRow}>
           <View style={styles.footerLeft}>
-            <Text style={styles.phoneText}>{formattedPhone}</Text>
+            {formattedPhone ? (
+              <Text style={styles.phoneText}>{formattedPhone}</Text>
+            ) : null}
             {name ? (
               <Text style={styles.nameText}>{name.toUpperCase()}</Text>
             ) : null}
@@ -482,7 +533,7 @@ const styles = StyleSheet.create({
   brandText: {
     color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: "800",
+    ...weight("800"),
     letterSpacing: -0.2,
   },
   headerRight: {
@@ -503,7 +554,7 @@ const styles = StyleSheet.create({
   },
   currencyBadgeText: {
     fontSize: 10,
-    fontWeight: "700",
+    ...weight("700"),
   },
   virtualPill: {
     backgroundColor: "rgba(255, 255, 255, 0.08)",
@@ -516,7 +567,7 @@ const styles = StyleSheet.create({
   virtualPillText: {
     color: "#94A3B8",
     fontSize: 10,
-    fontWeight: "700",
+    ...weight("700"),
     letterSpacing: 0.8,
   },
   chipContainer: {
@@ -542,7 +593,7 @@ const styles = StyleSheet.create({
   balanceLabel: {
     color: "#94A3B8",
     fontSize: 11,
-    fontWeight: "500",
+    ...weight("500"),
     letterSpacing: 0.3,
     textTransform: "uppercase",
   },
@@ -554,7 +605,7 @@ const styles = StyleSheet.create({
   balanceNumber: {
     color: "#FFFFFF",
     fontSize: 30,
-    fontWeight: "800",
+    ...weight("800"),
     letterSpacing: -0.5,
   },
   balanceNumberCompact: {
@@ -562,7 +613,7 @@ const styles = StyleSheet.create({
   },
   balanceCurrency: {
     fontSize: 15,
-    fontWeight: "700",
+    ...weight("700"),
   },
   balanceCurrencyCompact: {
     fontSize: 13,
@@ -581,7 +632,7 @@ const styles = StyleSheet.create({
   topupBtnText: {
     color: "#FFFFFF",
     fontSize: 13,
-    fontWeight: "700",
+    ...weight("700"),
   },
   footerRow: {
     flexDirection: "row",
@@ -595,13 +646,13 @@ const styles = StyleSheet.create({
   phoneText: {
     color: "#E2E8F0",
     fontSize: 13.5,
-    fontWeight: "600",
+    ...weight("600"),
     letterSpacing: 0.3,
   },
   nameText: {
     color: "#94A3B8",
     fontSize: 10.5,
-    fontWeight: "600",
+    ...weight("600"),
     letterSpacing: 0.6,
   },
   idBadge: {
@@ -615,7 +666,7 @@ const styles = StyleSheet.create({
   idText: {
     color: "#CBD5E1",
     fontSize: 12,
-    fontWeight: "700",
+    ...weight("700"),
     letterSpacing: 0.5,
   },
 });

@@ -32,12 +32,12 @@ import {
   Chip,
   type Option,
 } from "../../src/components/ui";
-import { spacing, radii, sizing } from "../../src/theme/tokens";
+import { spacing, radii, sizing, type, weight } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import * as Location from "expo-location";
 import { useT, type TranslationKey } from "../../src/i18n";
 import { useIsAuthed } from "../../src/features/auth/guest";
-import { GuestPrompt } from "../../src/features/auth/components/GuestPrompt";
+import { RedirectToSignIn } from "../../src/features/auth/components/RedirectToSignIn";
 import { notify } from "../../src/lib/alerts";
 import { toast } from "../../src/components/ui/Toast";
 import { errorMessage } from "../../src/lib/api-error";
@@ -46,7 +46,11 @@ import { useImageUpload } from "../../src/features/listings/hooks/useImageUpload
 import { ImagePickerGrid } from "../../src/features/listings/components/ImagePickerGrid";
 import { router } from "expo-router";
 import { useLocationPicker } from "../../src/features/map/locationPickerStore";
-import { textToHtml } from "../../src/features/listings/utils/format";
+import {
+  decimalInput,
+  onlyDigits,
+  textToHtml,
+} from "../../src/features/listings/utils/format";
 import { PURPOSE_ICONS } from "../../src/features/listings/utils/icons";
 import { useCategories } from "../../src/features/listings/hooks/useCategories";
 import {
@@ -63,6 +67,137 @@ import { useAmenities } from "../../src/features/listings/hooks/useAmenities";
 import { PriceNotice } from "../../src/features/tariffs/components/PriceNotice";
 import { useTariffs } from "../../src/features/tariffs/hooks/useTariffs";
 import { useWalletOverview } from "../../src/features/wallet/hooks/useWalletOverview";
+
+/**
+ * Where you are in the post form, how much is left, and the way back to any
+ * of it.
+ *
+ * A bar alone could only report. These circles are the control: every step
+ * already reached is tappable, so correcting the price after seeing the
+ * photos is one tap rather than four presses of "back". Steps ahead of the
+ * furthest one reached stay locked — they are what "continue" validates, and
+ * a navigator that jumped the gate would quietly undo it.
+ */
+function StepNav({
+  total,
+  current,
+  reached,
+  title,
+  onJump,
+}: {
+  total: number;
+  /** 0-based. */
+  current: number;
+  /** 0-based index of the furthest step unlocked so far. */
+  reached: number;
+  title: string;
+  onJump: (index: number) => void;
+}) {
+  const { colors, text } = useTheme();
+  const t = useT();
+
+  return (
+    <View style={{ gap: spacing.md }}>
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        {Array.from({ length: total }, (_, i) => {
+          const done = i < current;
+          const activeStep = i === current;
+          const unlocked = i <= reached;
+
+          return (
+            <View
+              key={i}
+              style={{
+                // Every circle but the last carries the connector after it,
+                // and the connector is what takes up the slack.
+                flex: i === total - 1 ? 0 : 1,
+                flexDirection: "row",
+                alignItems: "center",
+              }}
+            >
+              <Pressable
+                onPress={() => onJump(i)}
+                disabled={!unlocked}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityState={{
+                  selected: activeStep,
+                  disabled: !unlocked,
+                }}
+                accessibilityLabel={t("add.stepCounter", {
+                  current: i + 1,
+                  total,
+                })}
+                style={({ pressed }) => ({
+                  width: 30,
+                  height: 30,
+                  borderRadius: radii.pill,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: activeStep ? 0 : 1,
+                  borderColor: unlocked ? colors.primaryBorder : colors.border,
+                  backgroundColor: activeStep
+                    ? colors.primary
+                    : done
+                      ? colors.primarySoft
+                      : colors.surface,
+                  opacity: pressed && unlocked ? 0.7 : 1,
+                })}
+              >
+                {done ? (
+                  <Ionicons name="checkmark" size={16} color={colors.primary} />
+                ) : (
+                  <Text
+                    style={{
+                      ...type.caption,
+                      ...weight("700"),
+                      color: activeStep
+                        ? colors.onPrimary
+                        : unlocked
+                          ? colors.primary
+                          : colors.textFaint,
+                    }}
+                  >
+                    {i + 1}
+                  </Text>
+                )}
+              </Pressable>
+
+              {i < total - 1 ? (
+                <View
+                  style={{
+                    flex: 1,
+                    height: 2,
+                    marginHorizontal: spacing.xs,
+                    borderRadius: radii.pill,
+                    backgroundColor:
+                      i < current ? colors.primary : colors.surfaceRaised,
+                  }}
+                />
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
+
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: spacing.sm,
+        }}
+      >
+        <Text style={{ ...text.heading, flex: 1 }} numberOfLines={1}>
+          {title}
+        </Text>
+        <Text style={text.caption}>
+          {t("add.stepCounter", { current: current + 1, total })}
+        </Text>
+      </View>
+    </View>
+  );
+}
 
 const PURPOSES = [
   "SALE",
@@ -177,21 +312,6 @@ const PRICE_PLACEHOLDERS: Record<OfferPurpose, Record<Currency, string>> = {
   RENT_MONTHLY: { USD: "500", UZS: "6000000" },
   RENT_DAILY: { USD: "40", UZS: "500000" },
 };
-
-/**
- * What a number-pad field keeps of what was typed or pasted. Several Android
- * keyboards still offer space, comma, dot and minus on "number-pad", and a
- * pasted "50 000" used to fail as "enter a price" with the number plainly
- * there — so separators are dropped as they arrive instead.
- */
-const onlyDigits = (v: string) => v.replace(/\D/g, "");
-
-/**
- * Same for the area, which may carry a fraction. Uzbek and Russian keyboards
- * put a comma on "decimal-pad", and "120,5" failed as "numbers only"; it is
- * read as the decimal point it is meant to be.
- */
-const decimalInput = (v: string) => v.replace(/,/g, ".").replace(/[^\d.]/g, "");
 
 /** 1250000 → "1 250 000", for the bounds quoted in error messages. */
 const groupDigits = (n: number) =>
@@ -328,6 +448,21 @@ const makeSchema = (t: ReturnType<typeof useT>) => {
 };
 
 type FormData = z.infer<ReturnType<typeof makeSchema>>;
+
+/**
+ * One step of the post form.
+ *
+ * `fields` is what "continue" validates — the same zod schema, asked earlier,
+ * so a missing price is caught on the step that asks for it instead of by a
+ * toast at the foot of a thousand-line scroll. A step whose controls are not
+ * form fields (the map, the photo grid, the amenity chips) lists none and
+ * stays governed by the guards onSubmit already runs.
+ */
+interface StepDef {
+  key: "what" | "property" | "price" | "place" | "media";
+  titleKey: TranslationKey;
+  fields: readonly (keyof FormData)[];
+}
 
 export default function AddListingScreen() {
   // Gated at the screen, not at every entry point: however a guest gets here
@@ -526,6 +661,86 @@ export default function AddListingScreen() {
     : false;
   const floorsDeclared = useWatch({ control, name: "hasFloors" }) === "yes";
 
+  const [stepIndex, setStepIndex] = useState(0);
+  /**
+   * How far the form has been opened up.
+   *
+   * The navigator unlocks a step once it has been reached, and never locks
+   * it again — a step already passed has already cleared its validation, so
+   * going back to it and forward again should not re-ask.
+   */
+  const [maxReached, setMaxReached] = useState(0);
+
+  /**
+   * The five steps, in the order they are asked.
+   *
+   * Built from the same flags that hide the optional questions, so a category
+   * with no repair or floor question simply carries fewer fields on step two
+   * rather than showing an empty one.
+   */
+  const STEPS = useMemo<StepDef[]>(
+    () => [
+      { key: "what", titleKey: "add.step1Title", fields: ["purpose"] },
+      {
+        key: "property",
+        titleKey: "add.step2Title",
+        fields: [
+          "sellerType",
+          ...(showBuildingType ? (["buildingType"] as const) : []),
+          ...(showRepairType ? (["repairType"] as const) : []),
+          ...(showFloors
+            ? (["hasFloors", "floor", "totalFloors"] as const)
+            : []),
+        ],
+      },
+      {
+        key: "price",
+        titleKey: "add.step3Title",
+        fields: ["title", "currency", "price", "rooms", "areaM2"],
+      },
+      {
+        key: "place",
+        titleKey: "add.step4Title",
+        fields: ["address", "phone", "description"],
+      },
+      { key: "media", titleKey: "add.step5Title", fields: [] },
+    ],
+    [showBuildingType, showRepairType, showFloors],
+  );
+
+  // Clamped rather than trusted: the step list is rebuilt when the category
+  // changes, and nothing guarantees the index still points inside it.
+  const active = STEPS[Math.min(stepIndex, STEPS.length - 1)];
+  const isLast = stepIndex >= STEPS.length - 1;
+
+  /** The single way the form changes step — clamped, and recording how far
+   *  the reader has got so the navigator knows what to unlock. */
+  const jumpTo = (index: number) => {
+    const clamped = Math.max(0, Math.min(index, STEPS.length - 1));
+    setStepIndex(clamped);
+    setMaxReached((m) => Math.max(m, clamped));
+  };
+
+  const goNext = async () => {
+    const ok =
+      active.fields.length === 0 || (await trigger([...active.fields]));
+    if (!ok) {
+      // The inline errors are already painted; this says which press was
+      // refused, for a step tall enough to hide the field that refused it.
+      toast.error(t("add.stepFixErrors"));
+      return;
+    }
+    jumpTo(stepIndex + 1);
+  };
+
+  const goBack = () => jumpTo(stepIndex - 1);
+
+  /** Jump to a step by name, for the submit guards that are not field errors. */
+  const goToStep = (key: StepDef["key"]) => {
+    const i = STEPS.findIndex((step) => step.key === key);
+    if (i >= 0) jumpTo(i);
+  };
+
   const resetFloorFields = () => {
     setValue("floor", "");
     setValue("totalFloors", "");
@@ -670,10 +885,14 @@ export default function AddListingScreen() {
     if (!selectedCategory) {
       notify("add.noCategoryTitle", "add.noCategoryMessage");
       void refetchCategories();
+      goToStep("what");
       return;
     }
     if (!hasLocation) {
       notify("add.missingLocationTitle", "add.missingLocationMessage");
+      // The map is two steps back from the button that refused: saying so
+      // without going there leaves them to find it.
+      goToStep("place");
       return;
     }
     // A listing with no photo is a listing nobody opens, so the API's optional
@@ -732,475 +951,563 @@ export default function AddListingScreen() {
   // button — so say what stopped it where it cannot be missed.
   const onInvalid = (errs: FieldErrors<FormData>) => {
     const first = Object.values(errs).find((e) => e?.message);
+    // Jump to the step that owns the first complaint, so the message and the
+    // field it is about are on screen together.
+    const broken = Object.keys(errs) as (keyof FormData)[];
+    const target = STEPS.findIndex((step) =>
+      step.fields.some((f) => broken.includes(f)),
+    );
+    if (target >= 0) jumpTo(target);
     toast.error(String(first?.message ?? t("validation.required")));
   };
 
   if (!authed) {
     return (
       <Screen centered>
-        <GuestPrompt subtitle={t("auth.guestAddSubtitle")} />
+        <RedirectToSignIn reasonKey="auth.guestAddSubtitle" />
       </Screen>
     );
   }
   return (
-    <Screen edges={HEADER_EDGES}>
+    <Screen edges={HEADER_EDGES} scrollResetKey={active.key}>
       <View style={{ gap: spacing.lg, paddingBottom: spacing.lg }}>
-        {/* The tab decides what the price means, so it comes before anything
-            else is typed — and switching it only swaps the price, never the
-            rest of the form. */}
-        <View style={{ gap: spacing.sm }}>
-          <SegmentedControl
-            size="lg"
-            segments={purposeTabs}
-            value={purpose}
-            onChange={switchPurpose}
-          />
-          {/* Keyed on the tab: each switch re-runs the fade, which is what
-              tells the eye the price rules below just changed. */}
-          <Animated.View key={purpose} entering={FadeIn.duration(220)}>
-            <Text style={text.caption}>{t(`add.tabHints.${purpose}`)}</Text>
-          </Animated.View>
-        </View>
+        <StepNav
+          total={STEPS.length}
+          current={stepIndex}
+          reached={maxReached}
+          title={t(active.titleKey)}
+          onJump={jumpTo}
+        />
 
-        <Section title={t("add.category")}>
-          {selectedCategory ? (
-            <SelectGrid
-              options={categoryOptions}
-              value={selectedCategory}
-              onChange={changeCategory}
-            />
-          ) : categoriesLoading ? (
-            <ActivityIndicator />
-          ) : (
-            // No saved copy and the server unreachable: say so, and offer the
-            // one action that can fix it.
-            <View style={{ gap: spacing.sm }}>
-              <Text style={text.caption}>{t("add.noCategoryMessage")}</Text>
-              <Button
-                title={t("common.retry")}
-                variant="secondary"
-                size="sm"
-                onPress={() => void refetchCategories()}
+        {active.key === "what" ? (
+          <View style={{ gap: spacing.lg }}>
+            {/* The tab decides what the price means, so it comes before anything
+                else is typed — and switching it only swaps the price, never the
+                rest of the form. */}
+            <Section title={t("add.purpose")}>
+              <SegmentedControl
+                size="lg"
+                segments={purposeTabs}
+                value={purpose}
+                onChange={switchPurpose}
               />
-            </View>
-          )}
-        </Section>
+              {/* Keyed on the tab: each switch re-runs the fade, which is what
+                  tells the eye the price rules below just changed. */}
+              <Animated.View key={purpose} entering={FadeIn.duration(220)}>
+                <Text style={text.caption}>{t(`add.tabHints.${purpose}`)}</Text>
+              </Animated.View>
+            </Section>
 
-        {/* Right after the category, because both answers change what the
-            rest of the form means — and a buyer scanning results filters on
-            them before they look at anything else. */}
-        <Section title={t("add.sellerTypeTitle")}>
-          <Controller
-            control={control}
-            name="sellerType"
-            render={({ field: { value, onChange } }) => (
-              <SelectGrid
-                options={sellerTypeOptions}
-                value={value || undefined}
-                columns={2}
-                onChange={onChange}
-              />
-            )}
-          />
-        </Section>
-
-        {/* Asked wherever the category says so — which is every category
-            with walls, and not land. It used to be asked for everything, so
-            a seller listing a plot was offered "new build or resale" about a
-            field. Admins decide per category now. */}
-        {showBuildingType ? (
-          <Section title={t("add.buildingTypeTitle")}>
-            <Controller
-              control={control}
-              name="buildingType"
-              render={({ field: { value, onChange } }) => (
+            <Section title={t("add.category")}>
+              {selectedCategory ? (
                 <SelectGrid
-                  options={buildingTypeOptions}
-                  value={value || undefined}
-                  columns={2}
-                  onChange={onChange}
+                  options={categoryOptions}
+                  value={selectedCategory}
+                  onChange={changeCategory}
                 />
-              )}
-            />
-          </Section>
-        ) : null}
-
-        {/* Six levels, so a sheet rather than a grid: "ta'mirlangan" covers
-            everything from fresh paint to a designer fit-out, and the gap
-            between them is most of the price. Land has none of them. */}
-        {showRepairType ? (
-          <Section title={t("add.repairTitle")}>
-            <Controller
-              control={control}
-              name="repairType"
-              render={({ field: { value, onChange } }) => (
-                <>
-                  <Pressable
-                    onPress={() => setRepairOpen(true)}
-                    accessibilityRole="button"
-                    style={({ pressed }) => ({
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: spacing.sm,
-                      height: sizing.control,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radii.lg,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      backgroundColor: pressed
-                        ? colors.surfaceRaised
-                        : colors.surface,
-                    })}
-                  >
-                    <Ionicons
-                      name="construct-outline"
-                      size={18}
-                      color={colors.textMuted}
-                    />
-                    <Text
-                      style={{
-                        ...text.body,
-                        flex: 1,
-                        color: value ? colors.text : colors.textFaint,
-                      }}
-                    >
-                      {value
-                        ? t(REPAIR_LABELS[value])
-                        : t("add.repairPlaceholder")}
-                    </Text>
-                    <Ionicons
-                      name="chevron-down"
-                      size={16}
-                      color={colors.textFaint}
-                    />
-                  </Pressable>
-
-                  <SelectSheet
-                    visible={repairOpen}
-                    title={t("add.repairTitle")}
-                    options={repairOptions}
-                    value={value}
-                    onSelect={onChange}
-                    onClose={() => setRepairOpen(false)}
+              ) : categoriesLoading ? (
+                <ActivityIndicator />
+              ) : (
+                // No saved copy and the server unreachable: say so, and offer the
+                // one action that can fix it.
+                <View style={{ gap: spacing.sm }}>
+                  <Text style={text.caption}>{t("add.noCategoryMessage")}</Text>
+                  <Button
+                    title={t("common.retry")}
+                    variant="secondary"
+                    size="sm"
+                    onPress={() => void refetchCategories()}
                   />
-                </>
+                </View>
               )}
-            />
-          </Section>
+            </Section>
+          </View>
         ) : null}
 
-        <Controller
-          control={control}
-          name="title"
-          render={({ field: { value, onChange, onBlur } }) => (
-            <TextField
-              label={t("add.listingTitle")}
-              placeholder={t("add.listingTitlePlaceholder")}
-              returnKeyType="next"
-              maxLength={TITLE_MAX}
-              onSubmitEditing={() => priceRef.current?.focus()}
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              error={errors.title?.message}
-            />
-          )}
-        />
-        {/* The seller quotes in whichever currency they think in; viewers see
-            it converted to their own preference either way. */}
-        <SegmentedControl
-          segments={[
-            { value: "USD", label: "USD" },
-            { value: "UZS", label: "UZS" },
-          ]}
-          value={offerCurrency}
-          onChange={changeCurrency}
-        />
-        <Controller
-          control={control}
-          name="price"
-          render={({ field: { value, onChange, onBlur } }) => (
-            <TextField
-              ref={priceRef}
-              label={t(`add.priceLabels.${purpose}`)}
-              placeholder={PRICE_PLACEHOLDERS[purpose][offerCurrency]}
-              keyboardType="number-pad"
-              maxLength={PRICE_MAX_DIGITS}
-              suffix={
-                (offerCurrency === "USD" ? "$" : t("listings.som")) +
-                pricePeriod
-              }
-              value={value}
-              onChangeText={(v) => onChange(onlyDigits(v))}
-              onBlur={onBlur}
-              error={errors.price?.message}
-            />
-          )}
-        />
-        <Controller
-          control={control}
-          name="rooms"
-          render={({ field: { value, onChange, onBlur } }) => (
-            <TextField
-              label={t("add.rooms")}
-              placeholder={t("add.roomsPlaceholder")}
-              keyboardType="number-pad"
-              value={value}
-              onChangeText={(v) => onChange(onlyDigits(v))}
-              onBlur={onBlur}
-              error={errors.rooms?.message}
-            />
-          )}
-        />
-        {/* One editable field in both modes. A drawn boundary pre-fills it
-            (see openDraw) but an outline is an estimate — walls, shared
-            land — so the owner can always correct it; the hint keeps the
-            measured figure in view for comparison. A pin knows nothing about
-            size, so there the owner types it from scratch. */}
-        <Controller
-          control={control}
-          name="areaM2"
-          render={({ field: { value, onChange, onBlur } }) => (
-            <TextField
-              label={t("add.area")}
-              placeholder={t("add.areaPlaceholder")}
-              suffix="m²"
-              keyboardType="decimal-pad"
-              value={value}
-              onChangeText={(v) => onChange(decimalInput(v))}
-              onBlur={onBlur}
-              error={errors.areaM2?.message}
-              hint={
-                locMode === "POLYGON" && hasBoundary
-                  ? t("add.areaFromBoundary", {
-                      area: Math.round(polygonAreaM2(polygon)),
-                    })
-                  : undefined
-              }
-            />
-          )}
-        />
-        {showFloors ? (
-          <Section title={t("add.floors")}>
-            <View style={{ gap: spacing.md }}>
+        {active.key === "property" ? (
+          <View style={{ gap: spacing.lg }}>
+            {/* Right after the category, because both answers change what the
+                rest of the form means — and a buyer scanning results filters on
+                them before they look at anything else. */}
+            <Section title={t("add.sellerTypeTitle")}>
               <Controller
                 control={control}
-                name="hasFloors"
+                name="sellerType"
                 render={({ field: { value, onChange } }) => (
                   <SelectGrid
-                    options={floorOptions}
-                    value={value}
+                    options={sellerTypeOptions}
+                    value={value || undefined}
                     columns={2}
-                    onChange={(next) => {
-                      onChange(next);
-                      // Answering "no" drops whatever was typed: leaving the
-                      // numbers behind a hidden branch is how a stale floor
-                      // reaches the server.
-                      if (next === "no") resetFloorFields();
-                    }}
+                    onChange={onChange}
                   />
                 )}
               />
+            </Section>
+            {/* Asked wherever the category says so — which is every category
+                with walls, and not land. It used to be asked for everything, so
+                a seller listing a plot was offered "new build or resale" about a
+                field. Admins decide per category now. */}
+            {showBuildingType ? (
+              <Section title={t("add.buildingTypeTitle")}>
+                <Controller
+                  control={control}
+                  name="buildingType"
+                  render={({ field: { value, onChange } }) => (
+                    <SelectGrid
+                      options={buildingTypeOptions}
+                      value={value || undefined}
+                      columns={2}
+                      onChange={onChange}
+                    />
+                  )}
+                />
+              </Section>
+            ) : null}
+            {/* Six levels, so a sheet rather than a grid: "ta'mirlangan" covers
+                everything from fresh paint to a designer fit-out, and the gap
+                between them is most of the price. Land has none of them. */}
+            {showRepairType ? (
+              <Section title={t("add.repairTitle")}>
+                <Controller
+                  control={control}
+                  name="repairType"
+                  render={({ field: { value, onChange } }) => (
+                    <>
+                      <Pressable
+                        onPress={() => setRepairOpen(true)}
+                        accessibilityRole="button"
+                        style={({ pressed }) => ({
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: spacing.sm,
+                          height: sizing.control,
+                          paddingHorizontal: spacing.md,
+                          borderRadius: radii.lg,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          backgroundColor: pressed
+                            ? colors.surfaceRaised
+                            : colors.surface,
+                        })}
+                      >
+                        <Ionicons
+                          name="construct-outline"
+                          size={18}
+                          color={colors.textMuted}
+                        />
+                        <Text
+                          style={{
+                            ...text.body,
+                            flex: 1,
+                            color: value ? colors.text : colors.textFaint,
+                          }}
+                        >
+                          {value
+                            ? t(REPAIR_LABELS[value])
+                            : t("add.repairPlaceholder")}
+                        </Text>
+                        <Ionicons
+                          name="chevron-down"
+                          size={16}
+                          color={colors.textFaint}
+                        />
+                      </Pressable>
 
-              {/* Paired on one row: both hold one or two digits, and "4 of 9"
-                  is how the pair is read back on the listing page. Aligned to
-                  the top so an error under one does not stretch the other. */}
-              {floorsDeclared ? (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "flex-start",
-                    gap: spacing.md,
-                  }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Controller
-                      control={control}
-                      name="floor"
-                      render={({ field: { value, onChange, onBlur } }) => (
-                        <TextField
-                          label={t("add.floor")}
-                          placeholder={t("add.floorPlaceholder")}
-                          keyboardType="number-pad"
-                          value={value}
-                          onChangeText={(v) => onChange(onlyDigits(v))}
-                          onBlur={onBlur}
-                          error={errors.floor?.message}
+                      <SelectSheet
+                        visible={repairOpen}
+                        title={t("add.repairTitle")}
+                        options={repairOptions}
+                        value={value}
+                        onSelect={onChange}
+                        onClose={() => setRepairOpen(false)}
+                      />
+                    </>
+                  )}
+                />
+              </Section>
+            ) : null}
+            {showFloors ? (
+              <Section title={t("add.floors")}>
+                <View style={{ gap: spacing.md }}>
+                  <Controller
+                    control={control}
+                    name="hasFloors"
+                    render={({ field: { value, onChange } }) => (
+                      <SelectGrid
+                        options={floorOptions}
+                        value={value}
+                        columns={2}
+                        onChange={(next) => {
+                          onChange(next);
+                          // Answering "no" drops whatever was typed: leaving the
+                          // numbers behind a hidden branch is how a stale floor
+                          // reaches the server.
+                          if (next === "no") resetFloorFields();
+                        }}
+                      />
+                    )}
+                  />
+
+                  {/* Paired on one row: both hold one or two digits, and "4 of 9"
+                      is how the pair is read back on the listing page. Aligned to
+                      the top so an error under one does not stretch the other. */}
+                  {floorsDeclared ? (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "flex-start",
+                        gap: spacing.md,
+                      }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Controller
+                          control={control}
+                          name="floor"
+                          render={({ field: { value, onChange, onBlur } }) => (
+                            <TextField
+                              label={t("add.floor")}
+                              placeholder={t("add.floorPlaceholder")}
+                              keyboardType="number-pad"
+                              value={value}
+                              onChangeText={(v) => onChange(onlyDigits(v))}
+                              onBlur={onBlur}
+                              error={errors.floor?.message}
+                            />
+                          )}
                         />
-                      )}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Controller
-                      control={control}
-                      name="totalFloors"
-                      render={({ field: { value, onChange, onBlur } }) => (
-                        <TextField
-                          label={t("add.totalFloors")}
-                          placeholder={t("add.totalFloorsPlaceholder")}
-                          keyboardType="number-pad"
-                          value={value}
-                          onChangeText={(v) => onChange(onlyDigits(v))}
-                          onBlur={onBlur}
-                          error={errors.totalFloors?.message}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Controller
+                          control={control}
+                          name="totalFloors"
+                          render={({ field: { value, onChange, onBlur } }) => (
+                            <TextField
+                              label={t("add.totalFloors")}
+                              placeholder={t("add.totalFloorsPlaceholder")}
+                              keyboardType="number-pad"
+                              value={value}
+                              onChangeText={(v) => onChange(onlyDigits(v))}
+                              onBlur={onBlur}
+                              error={errors.totalFloors?.message}
+                            />
+                          )}
                         />
-                      )}
-                    />
-                  </View>
+                      </View>
+                    </View>
+                  ) : null}
                 </View>
-              ) : null}
-            </View>
-          </Section>
+              </Section>
+            ) : null}
+          </View>
         ) : null}
 
-        {/* Seeded by the map when a boundary/pin lands, but the owner has
-            the last word — geocoders miss half the mahallas here. */}
-        <Controller
-          control={control}
-          name="address"
-          render={({ field: { value, onChange, onBlur } }) => (
-            <TextField
-              label={t("add.address")}
-              placeholder={t("add.addressPlaceholder")}
-              icon="location-outline"
-              maxLength={ADDRESS_MAX}
-              autoComplete="street-address"
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              error={errors.address?.message}
-            />
-          )}
-        />
-        <Controller
-          control={control}
-          name="phone"
-          render={({ field: { value, onChange, onBlur } }) => (
-            <TextField
-              label={t("add.phone")}
-              placeholder={t("add.phonePlaceholder")}
-              icon="call-outline"
-              keyboardType="phone-pad"
-              autoComplete="tel"
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              error={errors.phone?.message}
-            />
-          )}
-        />
-        <Controller
-          control={control}
-          name="description"
-          render={({ field: { value, onChange, onBlur } }) => (
-            <TextField
-              label={t("add.description")}
-              placeholder={t("add.descriptionPlaceholder")}
-              multiline
-              maxLength={DESCRIPTION_MAX}
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              error={errors.description?.message}
-            />
-          )}
-        />
-
-        <Section title={t("add.propertiesTitle")}>
-          <View
-            style={{
-              flexDirection: "row",
-              flexWrap: "wrap",
-              gap: spacing.sm,
-            }}
-          >
-            {amenities.map(({ key }) => (
-              <Chip
-                key={key}
-                label={amenityName(key)}
-                selected={properties.includes(key)}
-                onPress={() =>
-                  setProperties((current) =>
-                    current.includes(key)
-                      ? current.filter((k) => k !== key)
-                      : [...current, key],
-                  )
-                }
-              />
-            ))}
+        {active.key === "price" ? (
+          <View style={{ gap: spacing.lg }}>
+            {/* Name, price and size — the group a buyer actually filters on.
+                It had no heading at all: five inputs in a flat column
+                between "repair" and "floors". */}
+            <Section title={t("add.sectionBasics")}>
+              {/* The fields keep their own rhythm inside the group:
+                  Section's gap is for label-to-content, not field-to-field. */}
+              <View style={{ gap: spacing.md }}>
+                <Controller
+                  control={control}
+                  name="title"
+                  render={({ field: { value, onChange, onBlur } }) => (
+                    <TextField
+                      label={t("add.listingTitle")}
+                      placeholder={t("add.listingTitlePlaceholder")}
+                      hint={t("add.listingTitleHint")}
+                      returnKeyType="next"
+                      maxLength={TITLE_MAX}
+                      onSubmitEditing={() => priceRef.current?.focus()}
+                      value={value}
+                      onChangeText={onChange}
+                      onBlur={onBlur}
+                      error={errors.title?.message}
+                    />
+                  )}
+                />
+                {/* The seller quotes in whichever currency they think in; viewers see
+                    it converted to their own preference either way. */}
+                <SegmentedControl
+                  segments={[
+                    { value: "USD", label: "USD" },
+                    { value: "UZS", label: "UZS" },
+                  ]}
+                  value={offerCurrency}
+                  onChange={changeCurrency}
+                />
+                <Controller
+                  control={control}
+                  name="price"
+                  render={({ field: { value, onChange, onBlur } }) => (
+                    <TextField
+                      ref={priceRef}
+                      label={t(`add.priceLabels.${purpose}`)}
+                      placeholder={PRICE_PLACEHOLDERS[purpose][offerCurrency]}
+                      keyboardType="number-pad"
+                      maxLength={PRICE_MAX_DIGITS}
+                      suffix={
+                        (offerCurrency === "USD" ? "$" : t("listings.som")) +
+                        pricePeriod
+                      }
+                      value={value}
+                      onChangeText={(v) => onChange(onlyDigits(v))}
+                      onBlur={onBlur}
+                      error={errors.price?.message}
+                    />
+                  )}
+                />
+                <Controller
+                  control={control}
+                  name="rooms"
+                  render={({ field: { value, onChange, onBlur } }) => (
+                    <TextField
+                      label={t("add.rooms")}
+                      placeholder={t("add.roomsPlaceholder")}
+                      keyboardType="number-pad"
+                      value={value}
+                      onChangeText={(v) => onChange(onlyDigits(v))}
+                      onBlur={onBlur}
+                      error={errors.rooms?.message}
+                    />
+                  )}
+                />
+                {/* One editable field in both modes. A drawn boundary pre-fills it
+                    (see openDraw) but an outline is an estimate — walls, shared
+                    land — so the owner can always correct it; the hint keeps the
+                    measured figure in view for comparison. A pin knows nothing about
+                    size, so there the owner types it from scratch. */}
+                <Controller
+                  control={control}
+                  name="areaM2"
+                  render={({ field: { value, onChange, onBlur } }) => (
+                    <TextField
+                      label={t("add.area")}
+                      placeholder={t("add.areaPlaceholder")}
+                      suffix="m²"
+                      keyboardType="decimal-pad"
+                      value={value}
+                      onChangeText={(v) => onChange(decimalInput(v))}
+                      onBlur={onBlur}
+                      error={errors.areaM2?.message}
+                      hint={
+                        locMode === "POLYGON" && hasBoundary
+                          ? t("add.areaFromBoundary", {
+                              area: Math.round(polygonAreaM2(polygon)),
+                            })
+                          : undefined
+                      }
+                    />
+                  )}
+                />
+              </View>
+            </Section>
           </View>
-        </Section>
+        ) : null}
 
-        <Section title={t("add.location")}>
-          <Card>
-            <View style={{ gap: spacing.md }}>
-              {/* Icons only — the Russian labels truncated both segments;
-                  the summary line right below says the same in words. */}
-              <SegmentedControl
-                segments={[
-                  { value: "POLYGON", icon: "analytics-outline" },
-                  { value: "PIN", icon: "pin-outline" },
-                ]}
-                value={locMode}
-                onChange={setLocMode}
-              />
-              <Text style={text.caption}>
-                {t(
-                  locMode === "POLYGON"
-                    ? "add.locationPolygon"
-                    : "add.locationPin",
-                )}
-              </Text>
-              <Text style={text.body}>
-                {locMode === "POLYGON"
-                  ? hasBoundary
-                    ? t("add.boundarySummary", {
-                        count: polygon.length,
-                        area: formatAreaM2(polygonAreaM2(polygon)),
-                      })
-                    : t("add.noBoundary")
-                  : pin
-                    ? t("add.pinSet")
-                    : t("add.noPin")}
-              </Text>
+        {active.key === "place" ? (
+          <View style={{ gap: spacing.lg }}>
+            <Section title={t("add.location")}>
+              <Card>
+                <View style={{ gap: spacing.md }}>
+                  {/* Icon AND word. This was icon-only, because the earlier
+                      labels ("Chegara chizish" / "Nuqta qo'yish") truncated in
+                      Russian — but two bare glyphs asked the reader to guess at
+                      the one concept in the form they have likely never met.
+                      These are one word each, which fits a two-up track. */}
+                  <SegmentedControl
+                    segments={[
+                      {
+                        value: "POLYGON",
+                        icon: "analytics-outline",
+                        label: t("add.locationModePolygon"),
+                      },
+                      {
+                        value: "PIN",
+                        icon: "pin-outline",
+                        label: t("add.locationModePin"),
+                      },
+                    ]}
+                    value={locMode}
+                    onChange={setLocMode}
+                  />
+                  <Text style={text.caption}>
+                    {t(
+                      locMode === "POLYGON"
+                        ? "add.locationPolygon"
+                        : "add.locationPin",
+                    )}
+                  </Text>
+                  <Text style={text.body}>
+                    {locMode === "POLYGON"
+                      ? hasBoundary
+                        ? t("add.boundarySummary", {
+                            count: polygon.length,
+                            area: formatAreaM2(polygonAreaM2(polygon)),
+                          })
+                        : t("add.noBoundary")
+                      : pin
+                        ? t("add.pinSet")
+                        : t("add.noPin")}
+                  </Text>
+                  <Button
+                    title={
+                      locMode === "POLYGON"
+                        ? t("add.drawOnMap")
+                        : t("add.dropPin")
+                    }
+                    icon={locMode === "POLYGON" ? "map-outline" : "pin-outline"}
+                    variant="secondary"
+                    size="sm"
+                    onPress={locMode === "POLYGON" ? openDraw : openPin}
+                  />
+                </View>
+              </Card>
+            </Section>
+            {/* Where it is and who to call. Three fields that used to run on
+                from the price with no heading between them. */}
+            <Section title={t("add.sectionContact")}>
+              {/* The fields keep their own rhythm inside the group:
+                  Section's gap is for label-to-content, not field-to-field. */}
+              <View style={{ gap: spacing.md }}>
+                {/* Seeded by the map when a boundary/pin lands, but the owner has
+                    the last word — geocoders miss half the mahallas here. */}
+                <Controller
+                  control={control}
+                  name="address"
+                  render={({ field: { value, onChange, onBlur } }) => (
+                    <TextField
+                      label={t("add.address")}
+                      placeholder={t("add.addressPlaceholder")}
+                      icon="location-outline"
+                      maxLength={ADDRESS_MAX}
+                      autoComplete="street-address"
+                      value={value}
+                      onChangeText={onChange}
+                      onBlur={onBlur}
+                      error={errors.address?.message}
+                    />
+                  )}
+                />
+                <Controller
+                  control={control}
+                  name="phone"
+                  render={({ field: { value, onChange, onBlur } }) => (
+                    <TextField
+                      label={t("add.phone")}
+                      placeholder={t("add.phonePlaceholder")}
+                      hint={t("add.phoneHint")}
+                      icon="call-outline"
+                      keyboardType="phone-pad"
+                      autoComplete="tel"
+                      value={value}
+                      onChangeText={onChange}
+                      onBlur={onBlur}
+                      error={errors.phone?.message}
+                    />
+                  )}
+                />
+                <Controller
+                  control={control}
+                  name="description"
+                  render={({ field: { value, onChange, onBlur } }) => (
+                    <TextField
+                      label={t("add.description")}
+                      placeholder={t("add.descriptionPlaceholder")}
+                      multiline
+                      maxLength={DESCRIPTION_MAX}
+                      value={value}
+                      onChangeText={onChange}
+                      onBlur={onBlur}
+                      error={errors.description?.message}
+                    />
+                  )}
+                />
+              </View>
+            </Section>
+          </View>
+        ) : null}
+
+        {active.key === "media" ? (
+          <View style={{ gap: spacing.lg }}>
+            <Section title={t("add.propertiesTitle")}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  gap: spacing.sm,
+                }}
+              >
+                {amenities.map(({ key }) => (
+                  <Chip
+                    key={key}
+                    label={amenityName(key)}
+                    selected={properties.includes(key)}
+                    onPress={() =>
+                      setProperties((current) =>
+                        current.includes(key)
+                          ? current.filter((k) => k !== key)
+                          : [...current, key],
+                      )
+                    }
+                  />
+                ))}
+              </View>
+            </Section>
+            <ImagePickerGrid
+              images={images}
+              onAdd={pickAndUpload}
+              onRemove={remove}
+              onRetry={retry}
+              onReorder={reorder}
+            />
+          </View>
+        ) : null}
+
+        {isLast ? (
+          <View style={{ gap: spacing.md }}>
+            {/* What this will cost, before the button that costs it. Silent
+                when no tariff is set — an unpriced action is free. */}
+            <PriceNotice
+              price={priceOf("LISTING_POST")}
+              balance={wallet.data?.balance}
+            />
+            <ErrorBanner
+              message={create.isError ? errorMessage(create.error) : null}
+            />
+            <Button
+              title={isUploading ? t("images.uploading") : t("add.submit")}
+              onPress={handleSubmit(onSubmit, onInvalid)}
+              loading={create.isPending}
+              disabled={isUploading}
+            />
+            <Button
+              title={t("common.back")}
+              icon="arrow-back"
+              variant="ghost"
+              onPress={goBack}
+            />
+          </View>
+        ) : (
+          <View style={{ flexDirection: "row", gap: spacing.sm }}>
+            {stepIndex > 0 ? (
               <Button
-                title={
-                  locMode === "POLYGON" ? t("add.drawOnMap") : t("add.dropPin")
-                }
-                icon={locMode === "POLYGON" ? "map-outline" : "pin-outline"}
+                title={t("common.back")}
                 variant="secondary"
-                size="sm"
-                onPress={locMode === "POLYGON" ? openDraw : openPin}
+                onPress={goBack}
+                style={{ flex: 1 }}
               />
-            </View>
-          </Card>
-        </Section>
-
-        <ImagePickerGrid
-          images={images}
-          onAdd={pickAndUpload}
-          onRemove={remove}
-          onRetry={retry}
-          onReorder={reorder}
-        />
-
-        {/* What this will cost, before the button that costs it. Silent
-            when no tariff is set — an unpriced action is free. */}
-        <PriceNotice
-          price={priceOf("LISTING_POST")}
-          balance={wallet.data?.balance}
-        />
-
-        <ErrorBanner
-          message={create.isError ? errorMessage(create.error) : null}
-        />
-
-        <Button
-          title={isUploading ? t("images.uploading") : t("add.submit")}
-          onPress={handleSubmit(onSubmit, onInvalid)}
-          loading={create.isPending}
-          disabled={isUploading}
-        />
+            ) : null}
+            <Button
+              title={t("common.continue")}
+              icon="arrow-forward"
+              onPress={goNext}
+              style={{ flex: 2 }}
+            />
+          </View>
+        )}
       </View>
     </Screen>
   );

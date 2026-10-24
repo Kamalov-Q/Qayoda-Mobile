@@ -12,8 +12,13 @@ import { router, useLocalSearchParams, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Avatar, ImageViewer, toast } from "../../src/components/ui";
-import { spacing, radii, sizing } from "../../src/theme/tokens";
+import {
+  Avatar,
+  ImageViewer,
+  toast,
+  LoadingView,
+} from "../../src/components/ui";
+import { spacing, radii, sizing, weight } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT, useLanguage, type TranslationKey } from "../../src/i18n";
 import { confirm } from "../../src/lib/alerts";
@@ -61,15 +66,18 @@ const ATTACHMENT_LABEL: Record<string, TranslationKey> = {
 };
 
 export default function ChatThreadScreen() {
-  const { id, listingId, prefill } = useLocalSearchParams<{
+  const { id, listingId, peerId, prefill } = useLocalSearchParams<{
     id: string;
     listingId?: string;
+    /** Writing to a PERSON — a profile with no advert to enquire about. */
+    peerId?: string;
     prefill?: string;
   }>();
-  // "new" + a listing = draft mode: the composer opens prefilled and NOTHING
+  // "new" + a target = draft mode: the composer opens prefilled and NOTHING
   // exists server-side until the user sends — the send creates the thread and
-  // this screen is replaced by the real one.
-  const isDraft = id === "new" && !!listingId;
+  // this screen is replaced by the real one. The target is an advert, or a
+  // person when they have none.
+  const isDraft = id === "new" && (!!listingId || !!peerId);
   const userId = useAuthStore((s) => s.user?.id);
   const { colors, text } = useTheme();
   const t = useT();
@@ -99,7 +107,12 @@ export default function ChatThreadScreen() {
     queryFn: () => usersApi.getProfile(ownerId!),
     enabled: isDraft && !!ownerId,
   });
-  const startChat = useStartConversation(listingId ?? "", true);
+  const startChat = useStartConversation(
+    listingId
+      ? { kind: "listing", listingId }
+      : { kind: "direct", userId: peerId ?? "" },
+    true,
+  );
 
   const {
     data: messages,
@@ -510,7 +523,7 @@ export default function ChatThreadScreen() {
             <Ionicons name="pin" size={15} color={colors.primary} />
             <View style={{ flex: 1, gap: 1 }}>
               <Text
-                style={{ ...text.caption, color: colors.primary, fontWeight: "600" }}
+                style={{ ...text.caption, color: colors.primary, ...weight("600") }}
               >
                 {t("chat.pinned")}
               </Text>
@@ -533,7 +546,7 @@ export default function ChatThreadScreen() {
         {isDraft ? (
           <DraftContext listing={draftListing} />
         ) : isLoading ? (
-          <ActivityIndicator style={{ flex: 1 }} color={colors.primary} />
+          <LoadingView />
         ) : (
           <FlatList
             ref={listRef}
@@ -584,7 +597,7 @@ export default function ChatThreadScreen() {
                       style={{
                         ...text.caption,
                         color: colors.primary,
-                        fontWeight: "600",
+                        ...weight("600"),
                       }}
                     >
                       {t("chat.unreadDivider")}
@@ -674,7 +687,7 @@ function DraftContext({ listing }: { listing: Listing | undefined }) {
   const formatSpecs = useSpecsFormatter();
 
   if (!listing) {
-    return <ActivityIndicator style={{ flex: 1 }} color={colors.primary} />;
+    return <LoadingView />;
   }
 
   const offer = listing.offers.find((o) => o.isActive) ?? listing.offers[0];

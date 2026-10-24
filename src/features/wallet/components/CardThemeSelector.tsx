@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { weight } from "@/src/theme/tokens";
 import { useTheme } from "@/src/theme/useTheme";
 import { useT } from "@/src/i18n";
 import {
@@ -18,6 +19,8 @@ import {
 import { ColorPicker } from "@/src/features/wallet/components/ColorPicker";
 
 const CUSTOM_PALETTE = [
+  "#DCC083", // Growen gold
+  "#2FB8A8", // Growen teal
   "#10B981", // Emerald
   "#06B6D4", // Cyan
   "#3B82F6", // Blue
@@ -275,11 +278,11 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 14,
-    fontWeight: "700",
+    ...weight("700"),
   },
   hintText: {
     fontSize: 11.5,
-    fontWeight: "500",
+    ...weight("500"),
   },
   scrollList: {
     flexDirection: "row",
@@ -307,7 +310,7 @@ const styles = StyleSheet.create({
   },
   customButtonText: {
     fontSize: 12.5,
-    fontWeight: "700",
+    ...weight("700"),
   },
   modalBackdrop: {
     flex: 1,
@@ -340,11 +343,11 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 16,
-    fontWeight: "700",
+    ...weight("700"),
   },
   modalSubtitle: {
     fontSize: 12,
-    fontWeight: "600",
+    ...weight("600"),
     textTransform: "uppercase",
     letterSpacing: 0.4,
     marginBottom: 10,
@@ -378,7 +381,7 @@ const styles = StyleSheet.create({
   doneButtonText: {
     color: "#FFFFFF",
     fontSize: 15,
-    fontWeight: "700",
+    ...weight("700"),
     letterSpacing: 0.2,
   },
 });

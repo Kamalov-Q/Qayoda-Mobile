@@ -13,7 +13,13 @@ import { router } from "expo-router";
 import { pickFromLibrary } from "../src/lib/image-picker";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, Card, Button, HEADER_EDGES } from "../src/components/ui";
+import {
+  Screen,
+  Card,
+  Button,
+  HEADER_EDGES,
+  LoadingView,
+} from "../src/components/ui";
 import { toast } from "../src/components/ui/Toast";
 import { spacing, radii } from "../src/theme/tokens";
 import { useTheme } from "../src/theme/useTheme";
@@ -143,7 +149,7 @@ export default function VerifyProfileScreen() {
   if (isLoading) {
     return (
       <Screen edges={HEADER_EDGES}>
-          <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
+        <LoadingView />
       </Screen>
     );
   }

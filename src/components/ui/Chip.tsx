@@ -2,6 +2,7 @@ import { memo } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { spacing, radii, type } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 
@@ -28,7 +29,10 @@ export const Chip = memo(function Chip({
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        void Haptics.selectionAsync();
+        onPress();
+      }}
       accessibilityRole="radio"
       accessibilityState={{ selected: !!selected }}
     >

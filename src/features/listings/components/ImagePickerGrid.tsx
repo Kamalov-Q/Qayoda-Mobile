@@ -16,7 +16,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
-import { spacing, radii, type } from "../../../theme/tokens";
+import { spacing, radii, type, weight } from "../../../theme/tokens";
 import { useTheme } from "../../../theme/useTheme";
 import { useT } from "../../../i18n";
 import { resolveMediaUrl } from "../../../lib/media-url";
@@ -342,7 +342,7 @@ const ImageTile = memo(function ImageTile({
                 style={{
                   ...type.caption,
                   fontSize: 10,
-                  fontWeight: "700",
+                  ...weight("700"),
                   color: colors.onPrimary,
                 }}
                 numberOfLines={1}

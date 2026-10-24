@@ -8,6 +8,7 @@ import { spacing, radii } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT, type TranslationKey } from "../../src/i18n";
 import { useListingCounts } from "../../src/features/listings/hooks/useMyListings";
+import { useUnreadNotifications } from "../../src/features/notifications/hooks/useNotifications";
 
 interface Row {
   icon: keyof typeof Ionicons.glyphMap;
@@ -24,8 +25,18 @@ export default function ActivityScreen() {
   // Saved is the one count the app already keeps; the others would each cost
   // a request to show a number nobody navigates by.
   const counts = useListingCounts();
+  // The one number on this hub that is about other people's actions rather
+  // than your own, which is why it is first.
+  const unread = useUnreadNotifications();
 
   const rows: Row[] = [
+    {
+      icon: "notifications-outline",
+      labelKey: "notifications.title",
+      hintKey: "notifications.emptyHint",
+      href: "/activity/notifications",
+      count: unread || undefined,
+    },
     {
       icon: "bookmark-outline",
       labelKey: "activity.saved",

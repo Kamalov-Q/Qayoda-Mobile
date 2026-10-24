@@ -61,11 +61,15 @@ const makeSchema = (t: ReturnType<typeof useT>) =>
     name: z
       .string()
       .trim()
-      .min(2, t("validation.minChars", { count: 2 })),
+      .min(2, t("validation.minChars", { count: 2 }))
+      // The server's own bound (UpdateProfileDto: 2–64).
+      .max(64, t("validation.maxChars", { count: 64 })),
     surname: z
       .string()
       .trim()
-      .min(2, t("validation.minChars", { count: 2 })),
+      .min(2, t("validation.minChars", { count: 2 }))
+      // The server's own bound (UpdateProfileDto: 2–64).
+      .max(64, t("validation.maxChars", { count: 64 })),
     /**
      * Optional here, unlike registration: this is a patch, and an account
      * that predates the field has nothing to resend. Still validated when
@@ -88,7 +92,6 @@ const makeSchema = (t: ReturnType<typeof useT>) =>
       )
       .optional(),
     gender: z.enum(["MALE", "FEMALE"]).or(z.literal("")),
-    address: z.string().trim().max(255).optional(),
     bio: z.string().trim().max(500).optional(),
   });
 
@@ -153,7 +156,6 @@ function EditProfileForm({ profile }: { profile: Profile }) {
       // Stored ISO, typed DD.MM.YYYY.
       birthDate: fromIsoDate(profile.birthDate),
       gender: profile.gender ?? "",
-      address: profile.address ?? "",
       bio: profile.bio ?? "",
     },
   });
@@ -169,7 +171,6 @@ function EditProfileForm({ profile }: { profile: Profile }) {
    */
   const birthDateField = useController({ control, name: "birthDate" }).field;
   const genderField = useController({ control, name: "gender" }).field;
-  const addressField = useController({ control, name: "address" }).field;
   const bioField = useController({ control, name: "bio" }).field;
 
   /**
@@ -191,7 +192,7 @@ function EditProfileForm({ profile }: { profile: Profile }) {
    *
    * This used to send every field on every save, turning an empty box into
    * an explicit null. That made the form destructive: any save made before
-   * it had seeded itself from the profile DELETED the gender, address and
+   * it had seeded itself from the profile DELETED the gender and the
    * bio that were already stored — and because a wiped profile then loads
    * empty, the next save wiped it again. Social handles escaped only because
    * they are seeded from their own effect.
@@ -210,7 +211,6 @@ function EditProfileForm({ profile }: { profile: Profile }) {
       payload.birthDate = toIsoDate(d.birthDate) ?? undefined;
     }
     if (dirtyFields.gender) payload.gender = d.gender || null;
-    if (dirtyFields.address) payload.address = d.address || null;
     if (dirtyFields.bio) payload.bio = d.bio?.trim() || null;
 
     // Outside the form, so dirtiness is decided by comparing with what the
@@ -411,8 +411,6 @@ function EditProfileForm({ profile }: { profile: Profile }) {
             birthDateError={errors.birthDate?.message}
             gender={genderField.value}
             onGender={genderField.onChange}
-            address={addressField.value ?? ""}
-            onAddress={addressField.onChange}
             bio={bioField.value ?? ""}
             onBio={bioField.onChange}
             socials={socials}

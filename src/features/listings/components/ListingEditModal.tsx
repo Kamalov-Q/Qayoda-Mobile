@@ -14,7 +14,12 @@ import Animated, {
   useReducedMotion,
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
-import { useForm, useWatch, Controller } from "react-hook-form";
+import {
+  useForm,
+  useWatch,
+  Controller,
+  type FieldErrors,
+} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -51,7 +56,8 @@ import {
   formatAreaM2,
   polygonAreaM2,
 } from "../utils/geo";
-import { textToHtml } from "../utils/format";
+import { decimalInput, onlyDigits, textToHtml } from "../utils/format";
+import { toast } from "@/src/components/ui/Toast";
 import { PURPOSE_ICONS } from "../utils/icons";
 
 /**
@@ -467,6 +473,13 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
     resetFloorFields();
   };
 
+  // A failed check paints a message under its field, which may be scrolled
+  // far out of view — so say what stopped the save where it cannot be missed.
+  const onInvalid = (errs: FieldErrors<FormData>) => {
+    const first = Object.values(errs).find((e) => e?.message);
+    toast.error(String(first?.message ?? t("validation.required")));
+  };
+
   const pricePeriod =
     purpose === "RENT_MONTHLY"
       ? ` / ${t("add.perMonth")}`
@@ -510,10 +523,15 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
         title: d.title.trim(),
         rooms: d.rooms ? Number(d.rooms) : undefined,
         sellerType: d.sellerType ? (d.sellerType as SellerType) : undefined,
-        buildingType: d.buildingType
-          ? (d.buildingType as BuildingType)
-          : undefined,
-        repairType: d.repairType ? (d.repairType as RepairType) : undefined,
+        // Only answers the current category asks — the server refuses the rest.
+        buildingType:
+          showBuildingType && d.buildingType
+            ? (d.buildingType as BuildingType)
+            : undefined,
+        repairType:
+          showRepairType && d.repairType
+            ? (d.repairType as RepairType)
+            : undefined,
         floor: sendFloors && d.floor ? Number(d.floor) : null,
         totalFloors: sendFloors && d.totalFloors ? Number(d.totalFloors) : null,
         address: d.address?.trim() || undefined,
@@ -604,6 +622,11 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
 
       {/* Form Content */}
       <ScrollView
+        // flexShrink: the panel is capped at 92% of the screen, and without
+        // this the ScrollView sizes to its content, overflows that cap and
+        // pushes the sticky footer off the bottom — on a long form the Save
+        // button simply is not on screen.
+        style={{ flexShrink: 1 }}
         contentContainerStyle={{
           paddingHorizontal: spacing.lg,
           paddingTop: spacing.md,
@@ -612,6 +635,7 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
         }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         {/* Purpose */}
         <View style={{ gap: spacing.xs }}>
@@ -781,7 +805,7 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
                 pricePeriod
               }
               value={value}
-              onChangeText={onChange}
+              onChangeText={(v) => onChange(onlyDigits(v))}
               onBlur={onBlur}
               error={errors.price?.message}
             />
@@ -798,7 +822,7 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
               placeholder={t("add.roomsPlaceholder")}
               keyboardType="number-pad"
               value={value}
-              onChangeText={onChange}
+              onChangeText={(v) => onChange(onlyDigits(v))}
               onBlur={onBlur}
               error={errors.rooms?.message}
             />
@@ -816,7 +840,7 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
               suffix="m²"
               keyboardType="decimal-pad"
               value={value}
-              onChangeText={onChange}
+              onChangeText={(v) => onChange(decimalInput(v))}
               onBlur={onBlur}
               error={errors.areaM2?.message}
             />
@@ -861,7 +885,7 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
                           placeholder={t("add.floorPlaceholder")}
                           keyboardType="number-pad"
                           value={value}
-                          onChangeText={onChange}
+                          onChangeText={(v) => onChange(onlyDigits(v))}
                           onBlur={onBlur}
                           error={errors.floor?.message}
                         />
@@ -878,7 +902,7 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
                           placeholder={t("add.totalFloorsPlaceholder")}
                           keyboardType="number-pad"
                           value={value}
-                          onChangeText={onChange}
+                          onChangeText={(v) => onChange(onlyDigits(v))}
                           onBlur={onBlur}
                           error={errors.totalFloors?.message}
                         />
@@ -1067,7 +1091,7 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
           <Button
             title={isUploading ? t("images.uploading") : t("common.save")}
             variant="primary"
-            onPress={handleSubmit(onSubmit)}
+            onPress={handleSubmit(onSubmit, onInvalid)}
             loading={updateMutation.isPending}
             // A half-uploaded photo would be dropped from the payload and
             // silently lost, so Save waits for the uploads to land.
@@ -1135,6 +1159,13 @@ export function ListingEditModal({
       transparent
       animationType="fade"
       statusBarTranslucent
+      // Both bars, not just the top one. statusBarTranslucent alone leaves
+      // the modal window stopping ABOVE the navigation bar, so a sheet that
+      // anchors its footer to the bottom has that footer clipped by the
+      // system strip — and the dim never reaches it either, so whatever is
+      // behind shows through at full brightness. Android is edge-to-edge
+      // from targetSdk 35, which makes this the matching half of a pair.
+      navigationBarTranslucent
       onRequestClose={onClose}
     >
       <GestureHandlerRootView

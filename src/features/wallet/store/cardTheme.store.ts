@@ -5,7 +5,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 export interface CardTheme {
   id: string;
   name: string;
-  accent: string; // Vibrant accent color (e.g. #10B981)
+  accent: string; // Vibrant accent color (e.g. #DCC083)
   bgDark: string; // Deep card background
   glowStart: string; // Radial glow
   glowEnd: string;
@@ -14,6 +14,15 @@ export interface CardTheme {
 }
 
 export const PRESET_CARD_THEMES: CardTheme[] = [
+  {
+    id: "growen",
+    name: "Growen",
+    accent: "#DCC083",
+    bgDark: "#0A2024",
+    glowStart: "rgba(220, 192, 131, 0.20)",
+    glowEnd: "rgba(47, 184, 168, 0.18)",
+    textColor: "#FFFFFF",
+  },
   {
     id: "emerald",
     name: "Emerald",

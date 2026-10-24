@@ -8,6 +8,7 @@ import {
   Button,
   EmptyState,
   HEADER_EDGES,
+  LoadingView,
 } from "../../../src/components/ui";
 import { spacing } from "../../../src/theme/tokens";
 import { useTheme } from "../../../src/theme/useTheme";
@@ -74,10 +75,7 @@ export default function ListingReviewsScreen() {
     return (
       <Screen edges={HEADER_EDGES} scroll={false}>
         <Stack.Screen options={{ title: t("reviews.title") }} />
-        <ActivityIndicator
-          style={{ marginTop: spacing.xxl }}
-          color={colors.primary}
-        />
+        <LoadingView />
       </Screen>
     );
   }

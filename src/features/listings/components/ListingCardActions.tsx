@@ -9,7 +9,7 @@ import { View, Text, Pressable, Share } from "react-native";
 import { router } from "expo-router";
 import * as Linking from "expo-linking";
 import { Ionicons } from "@expo/vector-icons";
-import { spacing } from "../../../theme/tokens";
+import { spacing, weight } from "../../../theme/tokens";
 import { useTheme } from "../../../theme/useTheme";
 import { useT } from "../../../i18n";
 import { requireAuth } from "../../auth/guest";
@@ -57,13 +57,20 @@ export const ListingCardActions = memo(function ListingCardActions({
   };
 
   const size = compact ? 17 : 19;
+  // A grid tile is half a phone wide and this row has five things in it, so
+  // nothing in it may be sized for the roomy case. Counts are the variable:
+  // two digits on the comments and three on the views is what used to push
+  // the view count off the end of the card, where `overflow: hidden` cut it
+  // in half rather than wrapping it.
+  const gap = compact ? spacing.sm : spacing.lg;
+  const countSize = compact ? 12 : 13;
 
   return (
     <View
       style={{
         flexDirection: "row",
         alignItems: "center",
-        gap: compact ? spacing.md : spacing.lg,
+        gap,
         paddingHorizontal: compact ? spacing.sm : spacing.md,
         paddingVertical: compact ? 6 : spacing.sm,
         borderTopWidth: 1,
@@ -74,6 +81,7 @@ export const ListingCardActions = memo(function ListingCardActions({
         icon={isSaved ? "heart" : "heart-outline"}
         tint={isSaved ? colors.danger : colors.textMuted}
         size={size}
+        countSize={countSize}
         label={t(isSaved ? "saved.unsave" : "saved.save")}
         selected={isSaved}
         // Guests have no saved set — requireAuth sends them to sign in
@@ -89,6 +97,7 @@ export const ListingCardActions = memo(function ListingCardActions({
         icon="chatbubble-outline"
         tint={colors.textMuted}
         size={size}
+        countSize={countSize}
         count={commentCount}
         label={t("comments.title")}
         // Straight into the thread. Reading is public, so no gate here —
@@ -100,11 +109,14 @@ export const ListingCardActions = memo(function ListingCardActions({
         icon="paper-plane-outline"
         tint={colors.textMuted}
         size={size}
+        countSize={countSize}
         label={t("listings.share")}
         onPress={onShare}
       />
 
-      <View style={{ flex: 1 }} />
+      {/* The only flexible thing in the row: everything else is an icon
+          or a number, and a number that shrinks is a number you misread. */}
+      <View style={{ flex: 1, minWidth: spacing.xs }} />
 
       {/* Not a button: it is the one number here that nobody can change.
           Printed at zero too, unlike the comment count beside it — "nobody
@@ -112,16 +124,33 @@ export const ListingCardActions = memo(function ListingCardActions({
           an invitation and reads better as a bare icon. */}
       {viewCount != null ? (
         <View
-          style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 3,
+            // Never squeezed by the row: it is the last thing in it, so it
+            // is the first thing the card's clipped corner would eat.
+            flexShrink: 0,
+          }}
           accessibilityRole="text"
           accessibilityLabel={t("listings.viewCount", { count: viewCount })}
         >
+          {/* Muted rather than faint, and a point closer to the other
+              glyphs: at the faint tier it was a grey smudge in the corner
+              of a card that is mostly photograph. */}
           <Ionicons
             name="eye-outline"
-            size={size - 3}
-            color={colors.textFaint}
+            size={size - 2}
+            color={colors.textMuted}
           />
-          <Text style={{ ...text.caption, color: colors.textFaint }}>
+          <Text
+            style={{
+              ...text.caption,
+              fontSize: countSize,
+              color: colors.textMuted,
+            }}
+            numberOfLines={1}
+          >
             {viewCount}
           </Text>
         </View>
@@ -134,6 +163,7 @@ function Action({
   icon,
   tint,
   size,
+  countSize,
   count,
   label,
   selected,
@@ -142,6 +172,7 @@ function Action({
   icon: keyof typeof Ionicons.glyphMap;
   tint: string;
   size: number;
+  countSize: number;
   count?: number;
   label: string;
   selected?: boolean;
@@ -159,7 +190,8 @@ function Action({
       style={({ pressed }) => ({
         flexDirection: "row",
         alignItems: "center",
-        gap: 4,
+        flexShrink: 0,
+        gap: 3,
         opacity: pressed ? 0.5 : 1,
         transform: [{ scale: pressed ? 0.92 : 1 }],
       })}
@@ -168,7 +200,15 @@ function Action({
       {/* Zero is not worth printing — "0" beside an icon reads as a broken
           counter, and an empty thread is better shown by the plain icon. */}
       {count ? (
-        <Text style={{ ...text.caption, color: tint, fontWeight: "600" }}>
+        <Text
+          style={{
+            ...text.caption,
+            fontSize: countSize,
+            color: tint,
+            ...weight("600"),
+          }}
+          numberOfLines={1}
+        >
           {count}
         </Text>
       ) : null}

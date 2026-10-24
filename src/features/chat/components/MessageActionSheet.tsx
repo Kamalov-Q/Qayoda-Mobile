@@ -45,6 +45,13 @@ export function MessageActionSheet({
       // reason: with a persistent mount they would only ever fire once.
       animationType="fade"
       statusBarTranslucent
+      // Both bars, not just the top one. statusBarTranslucent alone leaves
+      // the modal window stopping ABOVE the navigation bar, so a sheet that
+      // anchors its footer to the bottom has that footer clipped by the
+      // system strip — and the dim never reaches it either, so whatever is
+      // behind shows through at full brightness. Android is edge-to-edge
+      // from targetSdk 35, which makes this the matching half of a pair.
+      navigationBarTranslucent
       onRequestClose={onClose}
     >
       <View

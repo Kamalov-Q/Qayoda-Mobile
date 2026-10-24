@@ -1,10 +1,16 @@
 // The people you have blocked. Telegram keeps this in settings; here it sits
 // with the rest of "your activity", which is where everything else you have
 // done to the app already lives.
-import { View, Text, FlatList, ActivityIndicator, Pressable } from "react-native";
+import { View, Text, FlatList, Pressable } from "react-native";
 import { Stack, router } from "expo-router";
-import { Avatar, Screen, EmptyState, HEADER_EDGES } from "../../src/components/ui";
-import { spacing, radii } from "../../src/theme/tokens";
+import {
+  Avatar,
+  Screen,
+  EmptyState,
+  HEADER_EDGES,
+  LoadingView,
+} from "../../src/components/ui";
+import { spacing, radii, weight } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT, useLanguage } from "../../src/i18n";
 import { errorMessage } from "../../src/lib/api-error";
@@ -34,10 +40,7 @@ export default function BlockedScreen() {
       <Stack.Screen options={{ title: t("blocks.title") }} />
 
       {isLoading ? (
-        <ActivityIndicator
-          style={{ marginTop: spacing.xxl }}
-          color={colors.primary}
-        />
+        <LoadingView />
       ) : isError ? (
         <EmptyState
           icon="cloud-offline-outline"
@@ -117,7 +120,7 @@ export default function BlockedScreen() {
                     style={{
                       ...text.caption,
                       color: colors.primary,
-                      fontWeight: "600",
+                      ...weight("600"),
                     }}
                   >
                     {t("blocks.unblock")}

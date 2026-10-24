@@ -124,3 +124,18 @@ export function useRelativeDate() {
     [t],
   );
 }
+
+/**
+ * What a number-pad field keeps of what was typed or pasted. Several Android
+ * keyboards still offer space, comma, dot and minus on "number-pad", and a
+ * pasted "50 000" used to fail as "enter a price" with the number plainly
+ * there — so separators are dropped as they arrive instead.
+ */
+export const onlyDigits = (v: string) => v.replace(/\D/g, "");
+
+/**
+ * Same for the area, which may carry a fraction. Uzbek and Russian keyboards
+ * put a comma on "decimal-pad", and "120,5" failed as "numbers only"; it is
+ * read as the decimal point it is meant to be.
+ */
+export const decimalInput = (v: string) => v.replace(/,/g, ".").replace(/[^\d.]/g, "");

@@ -1,11 +1,14 @@
 // src/features/listings/components/ListingLocationMap.tsx
-// Loads the MapLibre map only where the binary has it — see
-// map/mapSupport.ts. The implementation is ListingLocationMap.maplibre.tsx.
-import { MAP_SUPPORTED } from "../../map/mapSupport";
+// Loads the MapKit map only where the binary has it — see mapSupport.ts.
+// The implementation is ListingLocationMap.yandex.tsx.
+import { loadMapImpl } from "../../map/mapSupport";
 import { MapUnavailable } from "../../map/MapUnavailable";
-import type * as Impl from "./ListingLocationMap.maplibre";
+import type * as Impl from "./ListingLocationMap.yandex";
 
-export const ListingLocationMap: typeof Impl.ListingLocationMap = MAP_SUPPORTED
-  ? // eslint-disable-next-line @typescript-eslint/no-require-imports -- must stay lazy, see mapSupport.ts
-    require("./ListingLocationMap.maplibre").ListingLocationMap
-  : () => <MapUnavailable height={170} />;
+const impl = loadMapImpl(
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- must stay lazy, see mapSupport.ts
+  () => require("./ListingLocationMap.yandex").ListingLocationMap,
+) as typeof Impl.ListingLocationMap | null;
+
+export const ListingLocationMap: typeof Impl.ListingLocationMap =
+  impl ?? (() => <MapUnavailable height={170} />);

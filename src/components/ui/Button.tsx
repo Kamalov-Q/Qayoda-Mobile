@@ -38,7 +38,7 @@ export const Button = memo(function Button({
       case "primary":
         return pressed ? colors.primaryPressed : colors.primary;
       case "danger":
-        return pressed ? colors.dangerSurface : colors.dangerSurface;
+        return pressed ? colors.dangerBorder : colors.dangerSurface;
       case "secondary":
         return pressed ? colors.surfaceRaised : colors.surface;
       default:

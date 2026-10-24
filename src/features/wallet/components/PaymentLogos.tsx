@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
+import { weight } from "@/src/theme/tokens";
 
 export function UzcardLogo({ width = 32, height = 22 }: { width?: number; height?: number }) {
   return (
@@ -135,13 +136,13 @@ const styles = StyleSheet.create({
   humoText: {
     color: "#FFFFFF",
     fontSize: 7.5,
-    fontWeight: "900",
+    ...weight("900"),
     letterSpacing: 0.4,
   },
   visaText: {
     color: "#FFFFFF",
     fontSize: 9,
-    fontWeight: "900",
+    ...weight("900"),
     fontStyle: "italic",
     letterSpacing: 0.5,
   },
@@ -162,7 +163,7 @@ const styles = StyleSheet.create({
   unionPayText: {
     color: "#004B87",
     fontSize: 5.5,
-    fontWeight: "800",
+    ...weight("800"),
     marginLeft: 10,
   },
   brandRow: {
@@ -172,12 +173,12 @@ const styles = StyleSheet.create({
   },
   paymeText: {
     color: "#00BBC7",
-    fontWeight: "800",
+    ...weight("800"),
     letterSpacing: -0.3,
   },
   clickText: {
     color: "#18181B",
-    fontWeight: "800",
+    ...weight("800"),
     letterSpacing: -0.2,
   },
   uzumIcon: {
@@ -191,12 +192,12 @@ const styles = StyleSheet.create({
   },
   uzumText: {
     color: "#7000FF",
-    fontWeight: "900",
+    ...weight("900"),
     letterSpacing: -0.5,
   },
   uzumPayText: {
     color: "#18181B",
-    fontWeight: "800",
+    ...weight("800"),
     letterSpacing: -0.2,
   },
   paynetBadge: {
@@ -211,11 +212,11 @@ const styles = StyleSheet.create({
   paynetP: {
     color: "#FFFFFF",
     fontSize: 13,
-    fontWeight: "900",
+    ...weight("900"),
   },
   paynetText: {
     color: "#00A859",
-    fontWeight: "800",
+    ...weight("800"),
     letterSpacing: -0.2,
   },
 });

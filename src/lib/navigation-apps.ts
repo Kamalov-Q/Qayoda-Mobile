@@ -28,7 +28,6 @@ export function navTargets(
   label?: string | null,
 ): NavTarget[] {
   const point = `${lat},${lng}`;
-  const name = encodeURIComponent(label?.trim() || "");
   // A browser cannot open `yandexnavi://`, and unlike a phone it fails
   // silently — the tab simply does nothing. On web every target is its link.
   const native = Platform.OS !== "web";
@@ -47,8 +46,11 @@ export function navTargets(
       key: "yandex-maps",
       label: "Yandex Maps",
       icon: "map",
+      // `build_route_on_map` is a Navigator action; Yandex Maps ignored it and
+      // just opened on wherever it was last. Maps takes the same route
+      // request its website does.
       app: native
-        ? `yandexmaps://build_route_on_map?lat_to=${lat}&lon_to=${lng}`
+        ? `yandexmaps://maps.yandex.ru/?rtext=~${point}&rtt=auto`
         : undefined,
       web: `https://yandex.uz/maps/?rtext=~${point}&rtt=auto`,
     },
@@ -60,8 +62,10 @@ export function navTargets(
         ? undefined
         : Platform.OS === "ios"
           ? `comgooglemaps://?daddr=${point}&directionsmode=driving`
-          : // The geo: scheme is Android's own, and Google Maps answers it.
-            `geo:${point}?q=${point}${name ? `(${name})` : ""}`,
+          : // Not geo: — that is answered by whichever map app is the
+            // default, so "Google Maps" opened Yandex on phones that have it.
+            // google.navigation: is Google Maps' own, and starts a route.
+            `google.navigation:q=${point}&mode=d`,
       web: `https://www.google.com/maps/dir/?api=1&destination=${point}`,
     },
   ];
@@ -102,10 +106,12 @@ export async function availableNavTargets(
   );
 
   const installed = checked.filter((c) => c.installed).map((c) => c.target);
+  if (installed.length) return installed;
 
-  // Nothing detected (a bare emulator, a missing plist entry) is not a reason
-  // to show an empty sheet: every target has a web link that works.
-  return installed.length ? installed : targets;
+  // No maps app at all: one browser route rather than a sheet of app names
+  // that would each quietly open a web page instead of the app they promise.
+  const google = targets.find((t) => t.key === "google") ?? targets[0];
+  return [{ ...google, app: undefined }];
 }
 
 /** Opens one, falling back to its web link. Resolves to false if neither took. */

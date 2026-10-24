@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { weight } from "@/src/theme/tokens";
 import { useTheme } from "@/src/theme/useTheme";
 import { useT } from "@/src/i18n";
 import type { TranslationKey } from "@/src/i18n/types";
@@ -30,11 +31,16 @@ import { formatThousands } from "@/src/features/wallet/components/VirtualCard";
 import { ClickBrand, PaymeBrand, PaynetBrand } from "@/src/features/wallet/components/PaymentLogos";
 import { getTxConfig } from "@/src/features/wallet/utils/txConfig";
 
-const STATUS: Record<PaymentStatus, { key: TranslationKey; color: string; icon: keyof typeof Ionicons.glyphMap }> = {
-  PAID: { key: "wallet.statusPaid", color: "#10B981", icon: "checkmark-circle" },
-  CREATED: { key: "wallet.statusPending", color: "#F59E0B", icon: "time" },
-  PREPARED: { key: "wallet.statusPending", color: "#F59E0B", icon: "time" },
-  CANCELLED: { key: "wallet.statusCancelled", color: "#EF4444", icon: "close-circle" },
+const STATUS: Record<
+  PaymentStatus,
+  { key: TranslationKey; tone: "success" | "vip" | "danger"; icon: keyof typeof Ionicons.glyphMap }
+> = {
+  PAID: { key: "wallet.statusPaid", tone: "success", icon: "checkmark-circle" },
+  // Gold for "not finished yet": the brand already owns the colour, and amber
+  // next to it only looked like a second, slightly wrong gold.
+  CREATED: { key: "wallet.statusPending", tone: "vip", icon: "time" },
+  PREPARED: { key: "wallet.statusPending", tone: "vip", icon: "time" },
+  CANCELLED: { key: "wallet.statusCancelled", tone: "danger", icon: "close-circle" },
 };
 
 const RECEIPT: Record<FiscalStatus, TranslationKey> = {
@@ -69,7 +75,7 @@ const formatDateTime = (iso: string | null | undefined) => {
 export default function WalletTransactionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
+  const { colors, scheme } = useTheme();
   const t = useT();
   const queryClient = useQueryClient();
 
@@ -143,9 +149,12 @@ export default function WalletTransactionScreen() {
   }
 
   const amountNum = Number(data.amount);
-  const config = getTxConfig(data.kind, amountNum, t);
+  const config = getTxConfig(data.kind, amountNum, t, scheme);
   const payment = data.payment;
   const status = payment ? STATUS[payment.status] : null;
+  // Resolved here rather than stored in STATUS: the tone names a palette slot,
+  // and which hex that is depends on the scheme in play.
+  const statusColor = status ? colors[status.tone] : colors.success;
   const isPositive = amountNum > 0;
   const bonusNum = payment ? Number(payment.bonusAmount) : 0;
 
@@ -206,23 +215,20 @@ export default function WalletTransactionScreen() {
             <Ionicons name={config.icon} size={30} color={config.color} />
           </View>
           <Text style={[styles.heroLabel, { color: colors.textMuted }]}>{config.label}</Text>
-          <Text style={[styles.heroAmount, { color: isPositive ? "#10B981" : colors.text }]}>
+          <Text style={[styles.heroAmount, { color: isPositive ? colors.success : colors.text }]}>
             {`${isPositive ? "+" : ""}${formatThousands(amountNum)}`}
             <Text style={styles.heroCurrency}> UZS</Text>
           </Text>
 
           <View
-            style={[
-              styles.statusPill,
-              { backgroundColor: `${status?.color ?? "#10B981"}1F` },
-            ]}
+            style={[styles.statusPill, { backgroundColor: `${statusColor}1F` }]}
           >
             <Ionicons
               name={status?.icon ?? "checkmark-circle"}
               size={14}
-              color={status?.color ?? "#10B981"}
+              color={statusColor}
             />
-            <Text style={[styles.statusText, { color: status?.color ?? "#10B981" }]}>
+            <Text style={[styles.statusText, { color: statusColor }]}>
               {t(status?.key ?? "wallet.statusCompleted")}
             </Text>
           </View>
@@ -262,7 +268,7 @@ export default function WalletTransactionScreen() {
               <Row
                 label={t("wallet.fieldStatus")}
                 value={
-                  <Text style={[styles.rowValue, { color: status?.color ?? colors.text }]}>
+                  <Text style={[styles.rowValue, { color: status ? statusColor : colors.text }]}>
                     {status ? t(status.key) : payment.status}
                   </Text>
                 }
@@ -317,8 +323,10 @@ export default function WalletTransactionScreen() {
               { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 },
             ]}
           >
-            <Ionicons name="open-outline" size={16} color="#FFFFFF" />
-            <Text style={styles.linkButtonText}>{t("wallet.openListing")}</Text>
+            <Ionicons name="open-outline" size={16} color={colors.onPrimary} />
+            <Text style={[styles.linkButtonText, { color: colors.onPrimary }]}>
+              {t("wallet.openListing")}
+            </Text>
           </Pressable>
         ) : null}
       </ScrollView>
@@ -350,7 +358,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 17,
-    fontWeight: "700",
+    ...weight("700"),
     textAlign: "center",
   },
   center: {
@@ -386,17 +394,17 @@ const styles = StyleSheet.create({
   },
   heroLabel: {
     fontSize: 14,
-    fontWeight: "600",
+    ...weight("600"),
     marginBottom: 4,
   },
   heroAmount: {
     fontSize: 32,
-    fontWeight: "800",
+    ...weight("800"),
     marginBottom: 12,
   },
   heroCurrency: {
     fontSize: 16,
-    fontWeight: "700",
+    ...weight("700"),
   },
   statusPill: {
     flexDirection: "row",
@@ -409,15 +417,15 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12.5,
-    fontWeight: "700",
+    ...weight("700"),
   },
   heroDate: {
     fontSize: 12.5,
-    fontWeight: "500",
+    ...weight("500"),
   },
   sectionTitle: {
     fontSize: 12.5,
-    fontWeight: "700",
+    ...weight("700"),
     textTransform: "uppercase",
     letterSpacing: 0.6,
     marginBottom: 8,
@@ -438,7 +446,7 @@ const styles = StyleSheet.create({
   },
   rowLabel: {
     fontSize: 13.5,
-    fontWeight: "500",
+    ...weight("500"),
   },
   rowValueWrap: {
     flexDirection: "row",
@@ -449,7 +457,7 @@ const styles = StyleSheet.create({
   },
   rowValue: {
     fontSize: 13.5,
-    fontWeight: "700",
+    ...weight("700"),
     flexShrink: 1,
     textAlign: "right",
   },
@@ -465,8 +473,8 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   linkButtonText: {
-    color: "#FFFFFF",
+    // colour comes from the theme at the call site (colors.onPrimary)
     fontSize: 14.5,
-    fontWeight: "700",
+    ...weight("700"),
   },
 });

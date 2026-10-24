@@ -14,7 +14,7 @@ import {
   HEADER_EDGES,
   type Option,
 } from "../src/components/ui";
-import { spacing, radii } from "../src/theme/tokens";
+import { spacing, radii, weight } from "../src/theme/tokens";
 import { useTheme, useThemeMode } from "../src/theme/useTheme";
 import {
   usePreferences,
@@ -51,8 +51,16 @@ export default function SettingsScreen() {
 
   const themeOptions = useMemo<Option<ThemeMode>[]>(
     () => [
-      { value: "system", label: t("settings.themeSystem"), icon: "contrast-outline" },
-      { value: "light", label: t("settings.themeLight"), icon: "sunny-outline" },
+      {
+        value: "system",
+        label: t("settings.themeSystem"),
+        icon: "contrast-outline",
+      },
+      {
+        value: "light",
+        label: t("settings.themeLight"),
+        icon: "sunny-outline",
+      },
       { value: "dark", label: t("settings.themeDark"), icon: "moon-outline" },
     ],
     [t],
@@ -86,7 +94,9 @@ export default function SettingsScreen() {
                 borderRadius: radii.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
-                backgroundColor: pressed ? colors.surfaceRaised : colors.surface,
+                backgroundColor: pressed
+                  ? colors.surfaceRaised
+                  : colors.surface,
               })}
             >
               <Ionicons
@@ -138,7 +148,9 @@ export default function SettingsScreen() {
                 borderRadius: radii.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
-                backgroundColor: pressed ? colors.surfaceRaised : colors.surface,
+                backgroundColor: pressed
+                  ? colors.surfaceRaised
+                  : colors.surface,
               })}
             >
               <Ionicons name="pulse-outline" size={20} color={colors.primary} />
@@ -171,7 +183,9 @@ export default function SettingsScreen() {
                 borderRadius: radii.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
-                backgroundColor: pressed ? colors.surfaceRaised : colors.surface,
+                backgroundColor: pressed
+                  ? colors.surfaceRaised
+                  : colors.surface,
               })}
             >
               <Ionicons
@@ -196,7 +210,11 @@ export default function SettingsScreen() {
                   }}
                 >
                   <Text
-                    style={{ ...text.caption, color: colors.onPrimary, fontWeight: "700" }}
+                    style={{
+                      ...text.caption,
+                      color: colors.onPrimary,
+                      ...weight("700"),
+                    }}
                   >
                     {supportUnread}
                   </Text>
@@ -211,35 +229,13 @@ export default function SettingsScreen() {
           </Section>
         ) : null}
 
+        {/* Which ways in this account has — a number, a Telegram login, or
+            both. No password row: there are no passwords any more, here or
+            on the way in. A number that can receive an SMS is the whole
+            credential. */}
         {authed ? (
           <Section title={t("auth.methods")}>
             <SignInMethods />
-            <Pressable
-              onPress={() => router.push("/change-password")}
-              accessibilityRole="button"
-              accessibilityLabel={t("auth.changePassword")}
-              style={({ pressed }) => ({
-                flexDirection: "row",
-                alignItems: "center",
-                gap: spacing.md,
-                padding: spacing.md,
-                marginTop: spacing.sm,
-                borderRadius: radii.lg,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: pressed ? colors.surfaceRaised : colors.surface,
-              })}
-            >
-              <Ionicons name="key-outline" size={20} color={colors.primary} />
-              <Text style={{ ...text.bodyStrong, flex: 1 }}>
-                {t("auth.changePassword")}
-              </Text>
-              <Ionicons
-                name="chevron-forward"
-                size={16}
-                color={colors.textFaint}
-              />
-            </Pressable>
           </Section>
         ) : null}
 
@@ -301,7 +297,11 @@ export default function SettingsScreen() {
               <Text style={{ ...text.bodyStrong, flex: 1 }}>
                 {t("about.title")}
               </Text>
-              <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={colors.textFaint}
+              />
             </Pressable>
           </Card>
         </Section>

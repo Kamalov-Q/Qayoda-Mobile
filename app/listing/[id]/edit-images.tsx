@@ -1,13 +1,14 @@
 // app/listing/[id]/edit-images.tsx
 // The route pushed from the detail screen is `/listing/[id]/edit-images`; this
 // file used to be named `edit-image.tsx`, so that push landed on nothing.
-import { Text, View, ActivityIndicator } from "react-native";
+import { Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import {
   Screen,
   Button,
   EmptyState,
   HEADER_EDGES,
+  LoadingView,
 } from "../../../src/components/ui";
 import { spacing } from "../../../src/theme/tokens";
 import { useTheme } from "../../../src/theme/useTheme";
@@ -23,13 +24,12 @@ import { ListingImage } from "../../../src/features/listings/api/listings.api";
 export default function EditImagesScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: listing, isLoading, isError, refetch } = useListing(id);
-  const { colors } = useTheme();
   const t = useT();
 
   if (isLoading) {
     return (
       <Screen centered edges={HEADER_EDGES}>
-        <ActivityIndicator color={colors.primary} />
+        <LoadingView />
       </Screen>
     );
   }

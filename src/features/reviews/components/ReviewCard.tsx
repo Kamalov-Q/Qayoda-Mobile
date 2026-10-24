@@ -5,7 +5,7 @@ import { View, Text, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "@/src/components/ui";
-import { spacing, radii } from "@/src/theme/tokens";
+import { spacing, radii, weight } from "@/src/theme/tokens";
 import { useTheme } from "@/src/theme/useTheme";
 import { useT, useLanguage } from "@/src/i18n";
 import { Stars } from "./Stars";
@@ -139,7 +139,7 @@ function RowAction({
       })}
     >
       <Ionicons name={icon} size={15} color={color} />
-      <Text style={{ ...text.caption, color, fontWeight: "600" }}>{label}</Text>
+      <Text style={{ ...text.caption, color, ...weight("600") }}>{label}</Text>
     </Pressable>
   );
 }

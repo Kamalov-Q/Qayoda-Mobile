@@ -1,24 +1,52 @@
 // app/(tabs)/chat.tsx
 import { memo, useCallback } from "react";
-import {
-  View,
-  Text,
-  FlatList,
-  Pressable,
-  ActivityIndicator,
-  RefreshControl,
-} from "react-native";
+import { View, Text, FlatList, Pressable, RefreshControl } from "react-native";
 import { router } from "expo-router";
-import { Screen, EmptyState, Avatar, TAB_EDGES } from "../../src/components/ui";
+import {
+  Screen,
+  EmptyState,
+  Avatar,
+  Skeleton,
+  TAB_EDGES,
+} from "../../src/components/ui";
 import { Ionicons } from "@expo/vector-icons";
-import { spacing, radii } from "../../src/theme/tokens";
+import { spacing, radii, weight } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT, useLanguage } from "../../src/i18n";
 import { useConversations } from "../../src/features/chat/hooks/useConversations";
 import type { Conversation } from "../../src/features/chat/api/chat.api";
 import { useIsAuthed } from "../../src/features/auth/guest";
-import { GuestPrompt } from "../../src/features/auth/components/GuestPrompt";
+import { RedirectToSignIn } from "../../src/features/auth/components/RedirectToSignIn";
 import { useSupportUnread } from "../../src/features/support/hooks/useSupport";
+
+/** What the thread list looks like before it lands — avatar, name and the
+ *  last-message line, at the size the real rows draw them. */
+function ConversationsSkeleton() {
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={{ padding: spacing.lg, gap: spacing.lg }}
+    >
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <View
+          key={i}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: spacing.md,
+          }}
+        >
+          <Skeleton width={52} height={52} radius={radii.pill} />
+          <View style={{ flex: 1, gap: spacing.sm }}>
+            <Skeleton height={15} width="45%" />
+            <Skeleton height={12} width="75%" />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 export default function ChatInboxScreen() {
   const { text, colors, shadow } = useTheme();
@@ -36,21 +64,16 @@ export default function ChatInboxScreen() {
 
   return (
     <Screen style={{ padding: 0 }} scroll={false} edges={TAB_EDGES}>
-      <View
-        style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.md }}
-      >
+      <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.md }}>
         <Text style={text.display} numberOfLines={1}>
           {t("chat.title")}
         </Text>
       </View>
 
       {!authed ? (
-        <GuestPrompt subtitle={t("auth.guestChatSubtitle")} />
+        <RedirectToSignIn reasonKey="auth.guestChatSubtitle" />
       ) : isLoading ? (
-        <ActivityIndicator
-          style={{ marginTop: spacing.xxl }}
-          color={colors.primary}
-        />
+        <ConversationsSkeleton />
       ) : isError ? (
         <EmptyState
           icon="cloud-offline-outline"
@@ -114,11 +137,7 @@ export default function ChatInboxScreen() {
             ...shadow.raised,
           })}
         >
-          <Ionicons
-            name="headset"
-            size={26}
-            color={colors.onPrimary}
-          />
+          <Ionicons name="headset" size={26} color={colors.onPrimary} />
 
           {supportUnread > 0 ? (
             <View
@@ -139,9 +158,9 @@ export default function ChatInboxScreen() {
             >
               <Text
                 style={{
-                  color: "#FFFFFF",
+                  color: colors.onDanger,
                   fontSize: 11,
-                  fontWeight: "700",
+                  ...weight("700"),
                 }}
               >
                 {supportUnread}
@@ -253,7 +272,7 @@ const ConversationRow = memo(function ConversationRow({
                 style={{
                   color: colors.onPrimary,
                   fontSize: 12,
-                  fontWeight: "700",
+                  ...weight("700"),
                 }}
               >
                 {item.unreadCount}

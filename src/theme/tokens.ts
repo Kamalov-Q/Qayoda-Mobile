@@ -1,4 +1,5 @@
 // Design tokens. Nothing here reads the current scheme — use useTheme() for that.
+import type { TextStyle } from "react-native";
 
 export interface Palette {
   bg: string;
@@ -21,80 +22,121 @@ export interface Palette {
   success: string;
   successSurface: string;
   successBorder: string;
+  /**
+   * Labels for text and glyphs that sit ON a filled accent, rather than on a
+   * surface. A filled badge is light in one scheme and dark in the other, so
+   * a hardcoded white works in exactly one of them — which is what the unread
+   * pill, the TOP mark and the avatar's edit button each used to do.
+   */
+  onDanger: string;
+  onSuccess: string;
+  onVip: string;
   /** Payme brand teal, for payment buttons and badges. */
   payme: string;
-  /** Promoted / VIP listings. */
+  /** Promoted / VIP listings. Same gold as the emblem's leaf. */
   vip: string;
+  /** The emblem's gold, for brand moments and premium marks. */
+  gold: string;
+  /** Tinted fill behind a gold mark. */
+  goldSoft: string;
+  goldBorder: string;
   overlay: string;
   /** Scrim over photography, so white text stays legible on any image. */
   imageScrim: string;
 }
 
-// Brand palette: slate neutrals with an emerald accent. The base values
-// (bg, surface, text, textMuted, border, primary, danger, payme, vip, overlay)
-// are the brand spec; everything else is derived from the same Tailwind
-// slate / emerald / red scales so tints stay in family.
+// Brand palette: the emblem's own two colours. The icon is a gold leaf on a
+// deep teal field (#143338 sampled from brand-emblem.png, gold #DCC083 from
+// BrandLeaf's gradients) — the app used to open in slate blue with an emerald
+// accent, which matched nothing the brand had already committed to.
+//
+// Teal carries the surfaces and every interactive state; gold is kept scarce,
+// for promoted listings, the brand mark and premium marks, so it still reads
+// as special when it appears. Every text/background pair below clears WCAG AA
+// (4.5:1 for text, 3:1 for the faint tier) — see scripts note in the review.
 const dark: Palette = {
-  // Backgrounds, from furthest back to most elevated.
-  bg: "#0F172A",
-  surface: "#1E293B", // cards / segmented track
-  surfaceRaised: "#273449", // input fills, pressed segments
-  surfaceSunken: "#0B1120", // wells behind elevated content
+  // Backgrounds, from furthest back to most elevated. Deeper than the emblem
+  // itself, so a card in the emblem's own teal lifts off the page.
+  bg: "#07191D",
+  surface: "#0E2A30", // cards / segmented track
+  surfaceRaised: "#15383F", // input fills, pressed segments
+  surfaceSunken: "#041115", // wells behind elevated content
   // Borders
-  border: "#334155",
-  borderStrong: "#475569",
+  border: "#1C4249",
+  borderStrong: "#2B5C65",
   // Text
-  text: "#F8FAFC",
-  textMuted: "#94A3B8",
-  textFaint: "#64748B",
+  text: "#EEF5F4",
+  textMuted: "#A3BABB",
+  textFaint: "#74908F",
   // Accent
-  primary: "#10B981",
-  primaryPressed: "#059669",
-  primarySoft: "#10302D", // tinted fill behind accents
-  primaryBorder: "#065F46",
-  onPrimary: "#FFFFFF",
+  primary: "#2FB8A8",
+  primaryPressed: "#26998C",
+  primarySoft: "#0C2F31", // tinted fill behind accents
+  primaryBorder: "#1C5F58",
+  // Dark label on a bright accent, the way a saturated teal wants to be read:
+  // white on #2FB8A8 is 2.3:1 and fails, this is 6.95:1.
+  onPrimary: "#04201D",
   // Feedback
-  danger: "#F87171",
-  dangerSurface: "#2D1A22",
-  dangerBorder: "#5B2A33",
-  success: "#4ADE80",
-  successSurface: "#0F2A1E",
-  successBorder: "#1E4D36",
+  danger: "#FF8A8A",
+  dangerSurface: "#2E1A1E",
+  dangerBorder: "#5C2B31",
+  success: "#5FE08F",
+  successSurface: "#0C2A20",
+  successBorder: "#1C4E38",
+  // The feedback accents are light in this scheme, so what sits on them is
+  // the page colour: 7.9:1 on danger, 10.8:1 on success, 10.2:1 on gold.
+  onDanger: "#07191D",
+  onSuccess: "#07191D",
+  onVip: "#07191D",
   // Brand extras
   payme: "#33CCCC",
-  vip: "#FBBF24",
+  vip: "#DCC083",
+  gold: "#DCC083",
+  goldSoft: "#2A2416",
+  goldBorder: "#5B4A24",
   // Fixed
   overlay: "rgba(0, 0, 0, 0.7)",
-  imageScrim: "rgba(6,8,12,0.55)",
+  imageScrim: "rgba(3,12,14,0.55)",
 };
 
 const light: Palette = {
-  // Cards are white and the page behind them is faintly tinted — a
+  // Cards are white and the page behind them is faintly teal-tinted — a
   // white-on-white version of this UI loses every card edge.
-  bg: "#F8FAFC",
+  bg: "#F4F7F7",
   surface: "#FFFFFF",
-  surfaceRaised: "#F1F5F9", // input fills, pressed states
-  surfaceSunken: "#EDF2F7",
-  border: "#E2E8F0",
-  borderStrong: "#CBD5E1",
-  text: "#0F172A",
-  textMuted: "#64748B",
-  textFaint: "#94A3B8",
-  primary: "#059669",
-  primaryPressed: "#047857",
-  primarySoft: "#ECFDF5",
-  primaryBorder: "#A7F3D0",
+  surfaceRaised: "#EDF3F2", // input fills, pressed states
+  surfaceSunken: "#E6EDEC",
+  border: "#DCE6E5",
+  borderStrong: "#BFCFCE",
+  text: "#072226",
+  textMuted: "#52696B",
+  textFaint: "#6F8384",
+  // Deeper than the dark scheme's teal: this one carries white button labels
+  // and has to clear AA as text on white too.
+  primary: "#0A7569",
+  primaryPressed: "#07564E",
+  primarySoft: "#E6F5F2",
+  primaryBorder: "#A7DCD4",
   onPrimary: "#FFFFFF",
-  danger: "#EF4444",
+  danger: "#D32F2F",
   dangerSurface: "#FEF2F2",
-  dangerBorder: "#FECACA",
-  success: "#16A34A",
+  dangerBorder: "#FBC9C9",
+  success: "#14804A",
   successSurface: "#F0FDF4",
-  successBorder: "#BBF7D0",
+  successBorder: "#B7E6C9",
+  // Dark accents here, so the label inverts: ~5:1 on each.
+  onDanger: "#FFFFFF",
+  onSuccess: "#FFFFFF",
+  onVip: "#FFFFFF",
   payme: "#33CCCC",
-  vip: "#D97706",
+  // The emblem's gold is a 1.6:1 blur on white, so light mode carries the
+  // same hue taken down to a bronze that reads as text.
+  vip: "#806224",
+  gold: "#806224",
+  goldSoft: "#FBF4E4",
+  goldBorder: "#E4D3A6",
   overlay: "rgba(0, 0, 0, 0.4)",
-  imageScrim: "rgba(6,8,12,0.45)",
+  imageScrim: "rgba(3,12,14,0.45)",
 };
 
 export const palettes = { dark, light } as const;
@@ -108,18 +150,19 @@ export type SchemeName = keyof typeof palettes;
  * A drop shadow is nearly invisible on a near-black background, so the dark
  * scheme spends almost nothing on it and leans on borders instead; the light
  * scheme is where shadows do the lifting. Same keys either way, so components
- * apply `theme.shadow.card` without branching.
+ * apply `theme.shadow.card` without branching. Tinted with the brand teal
+ * rather than neutral grey — a grey shadow over a teal-tinted page greys it.
  */
 export const shadows = {
   light: {
-    card: { boxShadow: "0px 1px 2px rgba(11,18,32,0.04), 0px 6px 16px rgba(11,18,32,0.06)" },
-    raised: { boxShadow: "0px 2px 6px rgba(11,18,32,0.08), 0px 16px 32px rgba(11,18,32,0.12)" },
-    control: { boxShadow: "0px 2px 8px rgba(5,150,105,0.28)" },
+    card: { boxShadow: "0px 1px 2px rgba(7,34,38,0.04), 0px 6px 16px rgba(7,34,38,0.06)" },
+    raised: { boxShadow: "0px 2px 6px rgba(7,34,38,0.08), 0px 16px 32px rgba(7,34,38,0.14)" },
+    control: { boxShadow: "0px 2px 10px rgba(10,117,105,0.28)" },
   },
   dark: {
     card: { boxShadow: "0px 2px 8px rgba(0,0,0,0.35)" },
     raised: { boxShadow: "0px 12px 32px rgba(0,0,0,0.55)" },
-    control: { boxShadow: "0px 2px 12px rgba(0,0,0,0.45)" },
+    control: { boxShadow: "0px 2px 14px rgba(0,0,0,0.45)" },
   },
 } as const;
 
@@ -138,15 +181,64 @@ export const radii = { sm: 10, md: 14, lg: 18, xl: 24, xxl: 28, pill: 999 } as c
 /** Control heights — inputs and buttons must match to line up in a stack. */
 export const sizing = { control: 54, controlSm: 40, controlMd: 46 } as const;
 
-/** Colour-free type scale. useTheme() pairs these with palette colours. */
+/**
+ * The Inter faces loaded at boot, keyed by the weight they stand in for.
+ *
+ * Android picks a face by family name and ignores `fontWeight` once a custom
+ * family is set, so a weight can never be asked for on its own — the face has
+ * to be named. `weight()` below is the only correct way to set one.
+ */
+export const fonts = {
+  "400": "Inter_400Regular",
+  "500": "Inter_500Medium",
+  "600": "Inter_600SemiBold",
+  "700": "Inter_700Bold",
+  "800": "Inter_800ExtraBold",
+  "900": "Inter_900Black",
+} as const;
+
+export type FontWeightKey = keyof typeof fonts;
+
+/**
+ * A weight, as both the Inter face and the numeric weight.
+ *
+ * Spread it instead of writing `fontWeight` by hand: the family is what
+ * Android renders, and the number keeps iOS and web correct when the face
+ * itself has not loaded yet (the first frame, or a web cold start).
+ */
+export const weight = (w: FontWeightKey) =>
+  ({ fontFamily: fonts[w], fontWeight: w }) as const;
+
+/**
+ * Colour-free type scale. useTheme() pairs these with palette colours.
+ *
+ * Every entry names its Inter face. The old scale asked for weight 800 and
+ * 700 from the system font, which on Android's Roboto has neither — so the
+ * display and title tiers quietly rendered at plain bold, flattening exactly
+ * the type that was meant to carry the screen.
+ */
 export const type = {
-  display: { fontSize: 34, fontWeight: "800", letterSpacing: -0.8, lineHeight: 40 },
-  title: { fontSize: 26, fontWeight: "700", letterSpacing: -0.5, lineHeight: 32 },
-  heading: { fontSize: 18, fontWeight: "700", letterSpacing: -0.2, lineHeight: 24 },
-  body: { fontSize: 15, fontWeight: "400", lineHeight: 21 },
-  bodyStrong: { fontSize: 15, fontWeight: "600", lineHeight: 21 },
-  caption: { fontSize: 13, fontWeight: "400", lineHeight: 18 },
+  display: { ...weight("800"), fontSize: 34, letterSpacing: -0.8, lineHeight: 40 },
+  title: { ...weight("700"), fontSize: 26, letterSpacing: -0.5, lineHeight: 32 },
+  heading: { ...weight("700"), fontSize: 18, letterSpacing: -0.2, lineHeight: 24 },
+  body: { ...weight("400"), fontSize: 15, lineHeight: 21 },
+  bodyStrong: { ...weight("600"), fontSize: 15, lineHeight: 21 },
+  caption: { ...weight("400"), fontSize: 13, lineHeight: 18 },
   // Section labels. Sentence case at a readable size beats the old tracked-out
   // uppercase micro-type, which Cyrillic renders especially poorly.
-  label: { fontSize: 13, fontWeight: "600", letterSpacing: 0 },
+  label: { ...weight("600"), fontSize: 13, letterSpacing: 0 },
+  /**
+   * Prices and any other figure that sits in a column or ticks upward.
+   * Tabular figures keep every digit the same width, so a price stops
+   * jittering sideways as it changes and a column of them lines up.
+   */
+  price: {
+    ...weight("700"),
+    fontSize: 20,
+    letterSpacing: -0.4,
+    lineHeight: 26,
+    // Typed rather than inferred: the `as const` on this object would
+    // otherwise freeze the array too, and TextStyle wants a mutable one.
+    fontVariant: ["tabular-nums"] as TextStyle["fontVariant"],
+  },
 } as const;

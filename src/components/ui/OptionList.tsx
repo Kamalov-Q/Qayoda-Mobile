@@ -1,6 +1,6 @@
 import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { spacing, type } from "../../theme/tokens";
+import { spacing, type, weight } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 
 export interface Option<T extends string> {
@@ -64,7 +64,7 @@ export function OptionList<T extends string>({
                 ...type.body,
                 flex: 1,
                 color: colors.text,
-                fontWeight: selected ? "600" : "400",
+                ...weight(selected ? "600" : "400"),
               }}
             >
               {option.label}

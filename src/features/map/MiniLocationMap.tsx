@@ -1,13 +1,16 @@
 // src/features/map/MiniLocationMap.tsx
-// Loads the MapLibre map only where the binary has it — see mapSupport.ts.
-// The implementation is MiniLocationMap.maplibre.tsx.
-import { MAP_SUPPORTED } from "./mapSupport";
+// Loads the MapKit map only where the binary has it — see mapSupport.ts.
+// The implementation is MiniLocationMap.yandex.tsx.
+import { loadMapImpl } from "./mapSupport";
 import { MapUnavailable } from "./MapUnavailable";
-import type * as Impl from "./MiniLocationMap.maplibre";
+import type * as Impl from "./MiniLocationMap.yandex";
 
-export const MiniLocationMap: typeof Impl.MiniLocationMap = MAP_SUPPORTED
-  ? // eslint-disable-next-line @typescript-eslint/no-require-imports -- must stay lazy, see mapSupport.ts
-    require("./MiniLocationMap.maplibre").MiniLocationMap
-  : () => <MapUnavailable height={170} />;
+const impl = loadMapImpl(
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- must stay lazy, see mapSupport.ts
+  () => require("./MiniLocationMap.yandex").MiniLocationMap,
+) as typeof Impl.MiniLocationMap | null;
+
+export const MiniLocationMap: typeof Impl.MiniLocationMap =
+  impl ?? (() => <MapUnavailable height={170} />);
 
 export default MiniLocationMap;

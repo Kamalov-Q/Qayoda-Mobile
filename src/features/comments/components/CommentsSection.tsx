@@ -4,7 +4,7 @@
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { spacing, radii } from "@/src/theme/tokens";
+import { spacing, radii, weight } from "@/src/theme/tokens";
 import { useTheme } from "@/src/theme/useTheme";
 import { useT } from "@/src/i18n";
 import { requirePhone } from "@/src/features/auth/guest";
@@ -58,7 +58,7 @@ export function CommentsSection({ listingId }: { listingId: string }) {
               style={{
                 ...text.caption,
                 color: colors.primary,
-                fontWeight: "600",
+                ...weight("600"),
               }}
             >
               {t("comments.seeAll", { count: comments.total })}

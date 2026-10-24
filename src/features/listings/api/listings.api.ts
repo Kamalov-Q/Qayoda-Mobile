@@ -1,3 +1,4 @@
+import type { ListingVideo } from "@/src/features/listing-videos/api/listing-videos.api";
 import { api } from "@/src/lib/api-client";
 
 export type OfferPurpose = "SALE" | "RENT_MONTHLY" | "RENT_DAILY";
@@ -98,6 +99,15 @@ export interface Listing {
   contactPhone: string | null;
   offers: Offer[];
   images: ListingImage[];
+  /**
+   * The walkthrough film, when this advert has one. At most one, ever, and
+   * absent entirely on adverts without one.
+   *
+   * Rides along with the listing rather than being fetched separately: it is
+   * the first slide of the gallery, and a second round trip for the first
+   * thing on the screen is the wrong shape.
+   */
+  video?: ListingVideo | null;
   /** The drawn boundary, GeoJSON — rings of [lng, lat]. */
   geom: { type: "Polygon"; coordinates: [number, number][][] } | null;
   centroid: { type: "Point"; coordinates: [number, number] } | null;
@@ -152,10 +162,14 @@ export interface MapPointFeature {
   price: string;
   currency: string;
   thumbUrl: string;
+  /** The listing has a published walkthrough — the pin says so. */
+  hasVideo?: boolean;
 }
 
 export interface MapPolygonFeature {
   id: string;
+  /** The listing has a published walkthrough — the pin says so. */
+  hasVideo?: boolean;
   /** Null for PIN listings — only the price bubble is drawn then. */
   geom: { type: "Polygon"; coordinates: [number, number][][] } | null;
   centroid: { type: "Point"; coordinates: [number, number] } | null;

@@ -73,7 +73,8 @@ export function ActivityRow({
             source={{ uri: cover }}
             style={{ width: "100%", height: "100%" }}
             contentFit="cover"
-            cachePolicy="memory-disk"
+            // Scrolled past once, like the feed — see ListingPhotoSlider.
+            cachePolicy="disk"
           />
         ) : (
           <Ionicons name="home-outline" size={18} color={colors.textFaint} />

@@ -22,7 +22,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Button } from "../../components/ui";
 import { toast } from "../../components/ui/Toast";
-import { spacing, radii } from "../../theme/tokens";
+import { spacing, radii, weight } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 import { useT, type TranslationKey } from "../../i18n";
 import { ApiError } from "../../lib/api-client";
@@ -95,6 +95,13 @@ export function ReportSheet<R extends string>({
       transparent
       animationType="fade"
       statusBarTranslucent
+      // Both bars, not just the top one. statusBarTranslucent alone leaves
+      // the modal window stopping ABOVE the navigation bar, so a sheet that
+      // anchors its footer to the bottom has that footer clipped by the
+      // system strip — and the dim never reaches it either, so whatever is
+      // behind shows through at full brightness. Android is edge-to-edge
+      // from targetSdk 35, which makes this the matching half of a pair.
+      navigationBarTranslucent
       onRequestClose={close}
     >
       <KeyboardAvoidingView
@@ -156,6 +163,7 @@ export function ReportSheet<R extends string>({
             style={{ flexShrink: 1 }}
             contentContainerStyle={{ gap: spacing.md, paddingBottom: 2 }}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             showsVerticalScrollIndicator={false}
           >
             <View style={{ gap: 2 }}>
@@ -191,7 +199,7 @@ export function ReportSheet<R extends string>({
                         ...text.body,
                         flex: 1,
                         color: selected ? colors.primary : colors.text,
-                        fontWeight: selected ? "600" : "400",
+                        ...weight(selected ? "600" : "400"),
                       }}
                     >
                       {labelFor(key)}

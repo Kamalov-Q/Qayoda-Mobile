@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { radii, spacing, type } from "@/src/theme/tokens";
+import { radii, spacing, type, weight } from "@/src/theme/tokens";
 import { useTheme } from "@/src/theme/useTheme";
 import { useT } from "@/src/i18n";
 
@@ -70,14 +70,14 @@ export const TopBadge = memo(function TopBadge({
         backgroundColor: colors.vip,
       }}
     >
-      <Ionicons name="flame" size={compact ? 11 : 13} color="#FFFFFF" />
+      <Ionicons name="flame" size={compact ? 11 : 13} color={colors.onVip} />
       {!compact ? (
         <Text
           style={{
             ...type.caption,
             fontSize: 11,
-            fontWeight: "800",
-            color: "#FFFFFF",
+            ...weight("800"),
+            color: colors.onVip,
             letterSpacing: 0.5,
           }}
         >

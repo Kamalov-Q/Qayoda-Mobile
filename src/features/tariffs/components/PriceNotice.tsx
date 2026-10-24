@@ -2,7 +2,7 @@ import { memo } from "react";
 import { Text, View, Pressable } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { radii, spacing, type } from "@/src/theme/tokens";
+import { radii, spacing, type, weight } from "@/src/theme/tokens";
 import { useTheme } from "@/src/theme/useTheme";
 import { useT } from "@/src/i18n";
 import { formatThousands } from "@/src/features/wallet/components/VirtualCard";
@@ -69,7 +69,7 @@ export const PriceNotice = memo(function PriceNotice({
         <Text style={{ ...text.body, flex: 1, color: colors.textMuted }}>
           {t("tariffs.cost")}
         </Text>
-        <Text style={{ ...type.body, fontWeight: "700", color: colors.text }}>
+        <Text style={{ ...type.body, ...weight("700"), color: colors.text }}>
           {formatThousands(price)} {t("listings.som")}
           {durationDays
             ? ` · ${t("tariffs.days", { count: durationDays })}`
@@ -115,7 +115,7 @@ export const PriceNotice = memo(function PriceNotice({
               <Text
                 style={{
                   ...text.caption,
-                  fontWeight: "700",
+                  ...weight("700"),
                   color: colors.primary,
                 }}
               >

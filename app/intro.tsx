@@ -1,14 +1,19 @@
 // app/intro.tsx — the first-launch story, told once. Four swipes: the brand,
-// then what makes this app different, then straight into browsing. The flag persists, so a
-// returning user never sees it again; there is deliberately no skip — four
-// screens is the whole cost, the way banking apps do it.
+// then what makes this app different, then straight into browsing. The flag
+// persists, so a returning user never sees it again.
+//
+// Skippable, deliberately. It used to insist on all four screens "the way
+// banking apps do it", which is a cost paid by exactly the people least
+// willing to pay it: someone who already knows what they came to do. Skip
+// marks the intro seen, so it is a choice made once, not a nag.
 import { useCallback, useRef, useState } from "react";
 import {
   View,
   Text,
   FlatList,
   useWindowDimensions,
-  type ViewToken,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -66,24 +71,47 @@ export default function IntroScreen() {
 
   const last = page === SLIDES.length - 1;
 
-  // FlatList throws if this callback changes identity between renders, so it
-  // must be created once. useCallback with no deps does that without reading
-  // a ref during render (which makes the React Compiler skip the screen).
-  const onViewableItemsChanged = useCallback(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      const first = viewableItems[0];
-      if (first?.index != null) setPage(first.index);
-    },
-    [],
-  );
+  /**
+   * Which slide is showing, from the scroll offset rather than from
+   * onViewableItemsChanged.
+   *
+   * Viewability is driven by the cell measurements VirtualizedList collects
+   * from onLayout, and on react-native-web those are unreliable enough that
+   * the callback can simply never fire — leaving `page` pinned at 0, the
+   * dots frozen on the first slide, and the button below re-targeting slide
+   * 1 on every press. An offset divided by the viewport width is the same
+   * answer with nothing to measure.
+   *
+   * layoutMeasurement rather than the `width` from useWindowDimensions: it is
+   * the list's own width, so this stays correct if the list ever stops being
+   * full-bleed, and it keeps the callback free of render-scoped deps.
+   */
+  const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const viewport = e.nativeEvent.layoutMeasurement.width;
+    if (!viewport) return;
+    const next = Math.round(e.nativeEvent.contentOffset.x / viewport);
+    setPage((current) => (current === next ? current : next));
+  }, []);
+
+  /** Mark the story told and go in. Shared by "skip" and the last slide. */
+  const finish = () => {
+    setIntroSeen();
+    router.replace("/(tabs)/home");
+  };
 
   const advance = () => {
     if (last) {
-      setIntroSeen();
-      router.replace("/(tabs)/home");
+      finish();
       return;
     }
-    listRef.current?.scrollToIndex({ index: page + 1, animated: true });
+    // scrollToOffset, not scrollToIndex: the latter asks VirtualizedList
+    // where an index lives, and without getItemLayout that answer comes from
+    // measured frames which web does not reliably have. The slides are
+    // exactly one viewport wide, so the offset is arithmetic.
+    listRef.current?.scrollToOffset({
+      offset: (page + 1) * width,
+      animated: true,
+    });
   };
 
   return (
@@ -98,9 +126,23 @@ export default function IntroScreen() {
         }}
       >
         <BrandMark size={40} />
-        {/* The very first screen is exactly where the language choice
-            belongs — everything after it reads in the right one. */}
-        <LanguageSwitcher />
+        <View
+          style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}
+        >
+          {/* The very first screen is exactly where the language choice
+              belongs — everything after it reads in the right one. */}
+          <LanguageSwitcher />
+          {/* Hidden on the last slide: the button below already leaves, and
+              two ways out side by side only makes the reader choose. */}
+          {!last ? (
+            <Button
+              title={t("common.skip")}
+              variant="link"
+              size="sm"
+              onPress={finish}
+            />
+          ) : null}
+        </View>
       </View>
 
       <FlatList
@@ -110,8 +152,15 @@ export default function IntroScreen() {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        // Fixed-width slides, so the list never has to measure a cell to know
+        // where it starts — which is what made paging fragile on web.
+        getItemLayout={(_, index) => ({
+          length: width,
+          offset: width * index,
+          index,
+        })}
         renderItem={({ item }) => (
           <View
             style={{

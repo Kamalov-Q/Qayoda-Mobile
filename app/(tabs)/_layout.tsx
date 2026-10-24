@@ -3,17 +3,18 @@ import { Tabs, router } from "expo-router";
 import { View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { radii } from "../../src/theme/tokens";
+import { radii, weight } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT } from "../../src/i18n";
 import { useChatSocket } from "@/src/features/chat/hooks/useChatSocket";
 import { useUnreadTotal } from "@/src/features/chat/hooks/useConversations";
+import { useImmersiveStore } from "@/src/features/videos/store/immersive.store";
 
 // Filled when selected, outline when not — the icon carries the active state
 // alongside the tint, so it still reads for colour-blind users.
 const ICONS = {
   home: ["home", "home-outline"],
-  sotuv: ["pricetag", "pricetag-outline"],
+  videos: ["videocam", "videocam-outline"],
   chat: ["chatbubble", "chatbubble-outline"],
   about: ["information-circle", "information-circle-outline"],
   account: ["person-circle", "person-circle-outline"],
@@ -36,6 +37,11 @@ export default function TabsLayout() {
   const { colors, shadow } = useTheme();
   const insets = useSafeAreaInsets();
   const t = useT();
+  // A reel held down clears the screen to the footage, and the bar is part
+  // of what is in the way. Faded, never unmounted: taking 58pt out of the
+  // layout mid-gesture re-measures every page of the pager and drops the
+  // feed somewhere other than where the finger found it.
+  const immersive = useImmersiveStore((s) => s.immersive);
 
   return (
     <Tabs
@@ -56,11 +62,12 @@ export default function TabsLayout() {
           // off, which is exactly what an earlier paddingTop/Bottom pair did.
           height: BAR_HEIGHT + insets.bottom,
           paddingBottom: insets.bottom,
+          opacity: immersive ? 0 : 1,
         },
         tabBarLabelStyle: {
           fontSize: 11,
           lineHeight: 14, // pinned so the label's box can't vary by platform
-          fontWeight: "600",
+          ...weight("600"),
           marginTop: 2,
         },
         sceneStyle: { backgroundColor: colors.bg },
@@ -80,22 +87,27 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="sotuv"
+        name="videos"
         options={{
-          title: t("tabs.sale"),
+          title: t("tabs.videos"),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
-              name={ICONS.sotuv[focused ? 0 : 1]}
+              name={ICONS.videos[focused ? 0 : 1]}
               color={color}
               size={ICON_SIZE}
             />
           ),
         }}
       />
-      {/* The centre button. It is a tab in the bar and nothing else: the
-          press is intercepted and pushed onto the stack instead, so the post
-          form gets the whole screen with no tab bar under it — and coming
-          back returns to whichever tab you were on rather than resetting. */}
+      {/* The centre button, lifted out of the bar the way every marketplace
+          draws its post button. It briefly became a flat tab when folding
+          Sotuv into Home left only four slots and a raised disc at 37%
+          across read as a mistake; the videos tab restores the fifth, so the
+          circle is back in the middle where the emphasis works.
+          Still a tab in the bar and nothing else: the press is intercepted
+          and pushed onto the stack instead, so the post form gets the whole
+          screen with no tab bar under it — and coming back returns to
+          whichever tab you were on rather than resetting. */}
       <Tabs.Screen
         name="add"
         options={{
@@ -103,16 +115,17 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <View
               style={{
-                // Lifted out of the bar, the way every marketplace draws its
-                // post button. The negative margin is what makes it read as
-                // the primary action rather than a fifth equal tab.
+                // The negative margin is what makes it read as the primary
+                // action rather than a fifth equal tab.
                 marginTop: -16,
                 width: 46,
                 height: 46,
                 borderRadius: radii.pill,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: focused ? colors.primaryPressed : colors.primary,
+                backgroundColor: focused
+                  ? colors.primaryPressed
+                  : colors.primary,
                 ...shadow.raised,
               }}
             >

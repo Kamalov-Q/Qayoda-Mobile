@@ -85,6 +85,38 @@ export interface UserProfile {
   facets: OwnerFacets;
 }
 
+/**
+ * One row of a people search. Deliberately NOT a UserProfile: that carries a
+ * page of listings, facets and stats, which is a lot of work for the server
+ * and a lot of bytes for a list someone is scrolling past. These are the
+ * fields a row actually prints.
+ */
+export interface UserSearchResult {
+  id: string;
+  name: string | null;
+  surname: string | null;
+  avatarThumbUrl: string | null;
+  isVerifiedRealtor: boolean;
+  /** Both printed under the name, as the two numbers that say "worth a tap". */
+  followerCount: number;
+  listingCount: number;
+  /**
+   * Whether the viewer has blocked them. Blocked people stay in the results
+   * \u2014 hiding them would make a block detectable by its own absence, and
+   * would leave no way to find somebody in order to unblock them \u2014 so the
+   * row is marked instead.
+   */
+  blockedByMe: boolean;
+}
+
+export interface UserSearchPage {
+  total: number;
+  items: UserSearchResult[];
+}
+
+/** Matches the server's page size for `GET /users`. */
+export const USER_SEARCH_PAGE = 25;
+
 /** One page of someone's listings, with the total for the filter in force. */
 export interface OwnerListingsPage {
   total: number;
@@ -117,5 +149,24 @@ export const usersApi = {
     if (filters.sort && filters.sort !== "newest")
       params.set("sort", filters.sort);
     return api<OwnerListingsPage>(`/users/${id}/listings?${params}`);
+  },
+
+  /**
+   * People, by name.
+   *
+   * `GET /users?q=` — the server matches name and surname only. Not the
+   * phone number: a directory you can reverse-lookup a number in is a
+   * different and much worse product than a way to find a seller you have
+   * heard of.
+   */
+  search: (q = "", limit = USER_SEARCH_PAGE, offset = 0) => {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+    });
+    // Omitted entirely when empty: the server reads an ABSENT q as "browse
+    // the directory" and an empty one as a bad request.
+    if (q) params.set("q", q);
+    return api<UserSearchPage>(`/users?${params}`);
   },
 };

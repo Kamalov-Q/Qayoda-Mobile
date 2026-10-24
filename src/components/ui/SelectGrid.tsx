@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { spacing, radii, type } from "../../theme/tokens";
+import { spacing, radii, type, weight } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 
 export interface SelectGridOption<T extends string> {
@@ -84,7 +84,7 @@ function SelectGridInner<T extends string>({
             <Text
               style={{
                 ...type.caption,
-                fontWeight: selected ? "700" : "500",
+                ...weight(selected ? "700" : "500"),
                 color: selected ? colors.primary : colors.text,
                 textAlign: "center",
               }}
