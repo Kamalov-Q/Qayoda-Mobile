@@ -63,6 +63,34 @@ export const uz = {
     removed: "Saqlanganlardan olib tashlandi",
   },
 
+  deleteAccount: {
+    title: "Akkauntni o'chirish",
+    intro:
+      "Bu amalni ortga qaytarib bo'lmaydi. O'chirilgan ma'lumotlar tiklanmaydi.",
+    balanceWarning:
+      "Hamyoningizda {{balance}} bor. Akkaunt o'chirilgandan keyin bu mablag' qaytarilmaydi — avval sarflashni tavsiya qilamiz.",
+    removedTitle: "Nima o'chiriladi",
+    goesProfile: "Ismingiz, rasmingiz va profilingizdagi barcha ma'lumotlar",
+    goesListings: "Barcha e'lonlaringiz — ular xaritadan va qidiruvdan yo'qoladi",
+    goesVideos: "Yuklagan videolaringiz",
+    goesContacts: "Telefon raqamingiz va Telegram bog'lanishi",
+    goesPush: "Bildirishnomalar uchun qurilma ro'yxati",
+    keptTitle: "Nima saqlanib qoladi",
+    staysMessages:
+      "Yozishmalaringiz suhbatdoshingizda qoladi, lekin sizning ismingiz ko'rinmaydi",
+    staysPayments:
+      "To'lov yozuvlari — qonun talabiga ko'ra, shaxsingizga bog'lanmagan holda",
+    reasonTitle: "Sabab (ixtiyoriy)",
+    reasonPlaceholder: "Nima uchun ketyapsiz? Bu bizga yordam beradi.",
+    action: "Akkauntni o'chirish",
+    confirmTitle: "Akkaunt o'chirilsinmi?",
+    confirmMessage:
+      "Bu amalni ortga qaytarib bo'lmaydi. Akkauntingiz va e'lonlaringiz darhol o'chiriladi.",
+    done: "Akkaunt o'chirildi",
+    footnote:
+      "Savollar bo'lsa: +998 95 555 52 29 yoki agromind5229@gmail.com",
+  },
+
   about: {
     title: "Ilova haqida",
     version: "Versiya {{version}}",
@@ -74,9 +102,9 @@ export const uz = {
     contactPhone: "Telefon",
     contactWebsite: "Veb-sayt",
     legalTitle: "Hujjatlar",
-    terms: "Foydalanish shartlari",
     privacy: "Maxfiylik siyosati",
-    soon: "Tez orada qo'shiladi",
+    offer: "Ommaviy oferta shartlari",
+    deleteAccount: "Akkauntni o'chirish",
   },
 
   auth: {

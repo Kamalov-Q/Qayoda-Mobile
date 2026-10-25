@@ -42,3 +42,6 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Firebase service account key (secret — never commit)
+*-firebase-adminsdk-*.json

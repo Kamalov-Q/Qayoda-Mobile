@@ -1,8 +1,9 @@
 // app/(tabs)/about.tsx
-// About the app. The prose is placeholder; the contact values are dummies to
-// be replaced when the real ones exist. Structure and rows are final.
+// About the app. The description is still placeholder prose; the contacts and
+// the document links are real.
 import { Text, View, Pressable, Linking } from "react-native";
 import Constants from "expo-constants";
+import * as WebBrowser from "expo-web-browser";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Screen,
@@ -13,40 +14,60 @@ import {
 } from "../../src/components/ui";
 import { spacing, type } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
-import { useT, type TranslationKey } from "../../src/i18n";
-import { toast } from "../../src/components/ui/Toast";
+import { useT, useLanguage, type TranslationKey } from "../../src/i18n";
 
-// Dummy contact details — swap for the real ones. Not translated: an email
-// address is the same in every language.
+// Not translated: a phone number and an email address read the same in every
+// language.
 const CONTACTS = [
   {
     labelKey: "about.contactEmail" as TranslationKey,
     icon: "mail-outline",
-    value: "support@growencity.uz",
-    url: "mailto:support@growencity.uz",
+    value: "agromind5229@gmail.com",
+    url: "mailto:agromind5229@gmail.com",
   },
   {
     labelKey: "about.contactPhone" as TranslationKey,
     icon: "call-outline",
-    value: "+998 71 200 00 00",
-    url: "tel:+998712000000",
-  },
-  {
-    labelKey: "about.contactWebsite" as TranslationKey,
-    icon: "globe-outline",
-    value: "growencity.uz",
-    url: "https://growencity.uz",
+    value: "+998 95 555 52 29",
+    url: "tel:+998955555229",
   },
 ] as const;
 
+/**
+ * The documents, hosted rather than bundled.
+ *
+ * Google Play and the App Store both require the privacy policy and the
+ * account-deletion page to be reachable at a public URL, so the website holds
+ * the only copy — a correction there needs no new build.
+ *
+ * Uzbek lives at the root and Russian under /ru/, which is why the language
+ * is a path segment rather than a query: the pages link to each other.
+ */
+const LEGAL_BASE = "https://api.growencity.uz/legal";
+
 const LEGAL = [
-  { labelKey: "about.terms" as TranslationKey, icon: "document-text-outline" },
-  { labelKey: "about.privacy" as TranslationKey, icon: "shield-checkmark-outline" },
+  {
+    labelKey: "about.privacy" as TranslationKey,
+    icon: "shield-checkmark-outline",
+    file: "privacy.html",
+  },
+  {
+    labelKey: "about.offer" as TranslationKey,
+    icon: "document-text-outline",
+    file: "offer.html",
+  },
+  {
+    labelKey: "about.deleteAccount" as TranslationKey,
+    icon: "trash-outline",
+    file: "delete-account.html",
+  },
 ] as const;
 
 export default function AboutScreen() {
   const { text } = useTheme();
   const t = useT();
+  const language = useLanguage();
+  const legalDir = language === "ru" ? `${LEGAL_BASE}/ru` : LEGAL_BASE;
   const version = Constants.expoConfig?.version ?? "1.0.0";
 
   return (
@@ -95,9 +116,11 @@ export default function AboutScreen() {
                 icon={row.icon}
                 label={t(row.labelKey)}
                 divider={index > 0}
-                // No documents exist yet — an honest "coming soon" beats a
-                // link that opens nothing.
-                onPress={() => toast.infoKey("about.soon")}
+                onPress={() => {
+                  WebBrowser.openBrowserAsync(
+                    `${legalDir}/${row.file}`,
+                  ).catch(() => {});
+                }}
               />
             ))}
           </Card>

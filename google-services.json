@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "832171378903",
+    "project_id": "growencity",
+    "storage_bucket": "growencity.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:832171378903:android:2cf26259bf8d48eeb70892",
+        "android_client_info": {
+          "package_name": "uz.growencity.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBRnObF1Q19I5pr--V20mn1TMOhV-QkKoQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

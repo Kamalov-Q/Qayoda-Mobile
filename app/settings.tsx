@@ -306,6 +306,47 @@ export default function SettingsScreen() {
           </Card>
         </Section>
 
+        {/* Last, and only for a signed-in account. Apple requires the path to
+            account deletion to be reachable from inside the app, and settings
+            is the first place a reviewer looks for it. */}
+        {authed ? (
+          <Section title={t("deleteAccount.title")}>
+            <Card flush>
+              <Pressable
+                onPress={() => router.push("/delete-account")}
+                accessibilityRole="button"
+                accessibilityLabel={t("deleteAccount.title")}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: spacing.md,
+                  padding: spacing.md,
+                  backgroundColor: pressed
+                    ? colors.surfaceRaised
+                    : "transparent",
+                })}
+              >
+                <Ionicons
+                  name="trash-outline"
+                  size={20}
+                  color={colors.danger}
+                />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ ...text.bodyStrong, color: colors.danger }}>
+                    {t("deleteAccount.title")}
+                  </Text>
+                  <Text style={text.caption}>{t("deleteAccount.intro")}</Text>
+                </View>
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={colors.textFaint}
+                />
+              </Pressable>
+            </Card>
+          </Section>
+        ) : null}
+
         <Text style={{ ...text.caption, textAlign: "center" }}>
           {t("about.version", {
             version: Constants.expoConfig?.version ?? "1.0.0",

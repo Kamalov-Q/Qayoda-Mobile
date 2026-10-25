@@ -100,4 +100,15 @@ export const profileApi = {
   uploadAvatar,
 
   removeAvatar: () => api<Profile>("/profile/avatar", { method: "DELETE" }),
+
+  /**
+   * Delete this account. Irreversible, and the session dies with it: every
+   * refresh token is revoked server-side, so the caller must tear the local
+   * session down immediately after — see useDeleteAccount.
+   */
+  deleteAccount: (reason?: string) =>
+    api<void>("/profile", {
+      method: "DELETE",
+      body: reason ? { reason } : {},
+    }),
 };
