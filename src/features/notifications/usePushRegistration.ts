@@ -7,11 +7,21 @@
 // refuses permission or cannot reach Expo must end up with a working app.
 import { useEffect, useRef } from "react";
 import { router } from "expo-router";
-import * as Notifications from "expo-notifications";
 import { useAuthStore } from "@/src/features/auth/store/auth.store";
+import { PUSH_SUPPORTED } from "./pushSupport";
 import { queryClient } from "@/src/lib/query-client";
 import { notificationsApi } from "./api/notifications.api";
-import { devicePlatform, getPushToken } from "../../features/notifications/push";
+import { devicePlatform, getPushToken } from "./push";
+
+/**
+ * expo-notifications, or null without its native module — see pushSupport.
+ * This hook is mounted in the ROOT layout, so a throwing import here is an
+ * app that will not open at all.
+ */
+const Notifications: typeof import("expo-notifications") | null =
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  PUSH_SUPPORTED ? require("expo-notifications") : null;
+
 
 /**
  * Where a notification's payload says to go.
@@ -92,6 +102,7 @@ export function usePushRegistration(): void {
 
   // --- a push arriving while the app is open -----------------------------
   useEffect(() => {
+    if (!Notifications) return;
     const received = Notifications.addNotificationReceivedListener(() => {
       // The row is already on the server; this just stops the bell waiting
       // out the rest of its sixty-second poll to agree with the banner the
@@ -103,6 +114,7 @@ export function usePushRegistration(): void {
 
   // --- a tap, warm or cold ----------------------------------------------
   useEffect(() => {
+    if (!Notifications) return;
     let handled = false;
 
     const go = (data: unknown) => {

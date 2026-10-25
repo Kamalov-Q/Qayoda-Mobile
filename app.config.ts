@@ -8,19 +8,41 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
 /**
- * Missing key = a map that renders an empty grey field with no error, which
- * is a confusing hour to spend. Prebuild is the last place this can be caught
- * cheaply, so it is caught loudly here instead.
+ * The MapKit key, or undefined.
+ *
+ * It does NOT throw when absent, and that is deliberate. EAS CLI evaluates
+ * this file with EXPO_NO_DOTENV=1 — it manages environment variables itself
+ * through `eas env` — so .env is not loaded for `eas init`, `eas env:*`,
+ * `eas build` or any other command that reads the config. A hard throw here
+ * made every one of them fail with a bare "config --json exited with
+ * non-zero code: 1", which points nowhere near the cause.
+ *
+ * The protection that matters is kept: on a real cloud build the secret IS
+ * injected, so a missing key there is a genuine misconfiguration and still
+ * stops the build rather than shipping an app whose every map is blank.
+ * Everywhere else it is a loud warning and the build carries on.
  */
-function mapKitApiKey(): string {
+function mapKitApiKey(): string | undefined {
   const key = process.env.YANDEX_MAPKIT_API_KEY;
-  if (!key) {
+  if (key) return key;
+
+  if (process.env.EAS_BUILD === "true") {
     throw new Error(
-      "YANDEX_MAPKIT_API_KEY is not set — every map would render blank. " +
-        "Add it to .env (see .env.example).",
+      "YANDEX_MAPKIT_API_KEY is not set for this build — every map would " +
+        "render blank. Add it with: eas env:set --name YANDEX_MAPKIT_API_KEY",
     );
   }
-  return key;
+
+  // Silent under EXPO_NO_DOTENV, which is how EAS CLI reads this file: .env
+  // is not loaded there BY DESIGN, so a missing key is expected and warning
+  // about it just prints a scary line four times during `eas init`.
+  if (!process.env.EXPO_NO_DOTENV) {
+    console.warn(
+      "[app.config] YANDEX_MAPKIT_API_KEY is not set — a prebuild from here " +
+        "produces a binary whose maps are blank. Add it to .env.",
+    );
+  }
+  return undefined;
 }
 
 export default ({ config }: ConfigContext): ExpoConfig => {

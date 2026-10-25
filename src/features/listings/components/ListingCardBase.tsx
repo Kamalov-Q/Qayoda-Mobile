@@ -10,6 +10,8 @@ import { RatingPill } from "../../reviews/components/RatingPill";
 
 interface Props {
   thumbUrl: string | null | undefined;
+  /** Stable id, so the strip can ask whether this card is on screen. */
+  itemId?: string;
   /** Every photo, for the slider. One or none falls back to `thumbUrl`. */
   photos?: SliderPhoto[];
   /** Preformatted — currency symbol and any /month suffix already applied. */
@@ -50,6 +52,7 @@ const PHOTO_HEIGHT = 200;
  */
 export const ListingCardBase = memo(function ListingCardBase({
   thumbUrl,
+  itemId,
   photos,
   price,
   title,
@@ -91,6 +94,7 @@ export const ListingCardBase = memo(function ListingCardBase({
             case, so there is one code path for "what does this card show". */}
         <ListingPhotoSlider
           photos={photos?.length ? photos : [{ thumbUrl }]}
+          itemId={itemId}
           height={PHOTO_HEIGHT}
           onPress={onPress}
         />

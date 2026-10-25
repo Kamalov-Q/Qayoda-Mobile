@@ -14,6 +14,7 @@ import { useIsFocused } from "expo-router";
 import { spacing, radii, weight } from "../../../theme/tokens";
 import { useTheme } from "../../../theme/useTheme";
 import { resolveMediaUrl } from "../../../lib/media-url";
+import { useIsCardVisible } from "../utils/feed-visibility";
 
 export interface SliderPhoto {
   thumbUrl?: string | null;
@@ -29,6 +30,16 @@ interface Props {
   autoPlay?: boolean;
   /** No arrows, and a smaller placeholder — grid width has no room for them. */
   compact?: boolean;
+  /**
+   * The listing this strip belongs to, when it is inside a list that tracks
+   * which of its rows are on screen.
+   *
+   * Autoplay is per card and the feed mounts far more cards than it shows —
+   * without this, every card in the windowed range ran its own interval and
+   * its own animated scroll, most of them off screen. Omit it outside such
+   * a list and the strip plays as it always did.
+   */
+  itemId?: string;
   /**
    * Whether a drag pages the photos.
    *
@@ -64,6 +75,7 @@ export const ListingPhotoSlider = memo(function ListingPhotoSlider({
   onPress,
   autoPlay = true,
   compact,
+  itemId,
   swipeable = true,
 }: Props) {
   const { colors } = useTheme();
@@ -91,7 +103,11 @@ export const ListingPhotoSlider = memo(function ListingPhotoSlider({
   const [dragging, setDragging] = useState(false);
 
   const count = photos.length;
-  const canPlay = autoPlay && isFocused && !dragging && count > 1 && width > 0;
+  // Screen focus is not enough: it is true for every card the list has
+  // mounted, on screen or not.
+  const onScreen = useIsCardVisible(itemId);
+  const canPlay =
+    autoPlay && isFocused && onScreen && !dragging && count > 1 && width > 0;
 
   useEffect(() => {
     if (!canPlay) return;

@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   StyleSheet,
+  type ViewToken,
 } from "react-native";
 import { router, useIsFocused } from "expo-router";
 import Animated, {
@@ -40,6 +41,7 @@ import {
   BrandGlyph,
   TAB_EDGES,
 } from "../../src/components/ui";
+import { useFeedVisibilityStore } from "../../src/features/listings/utils/feed-visibility";
 import { HomeShortcuts } from "../../src/features/listings/components/HomeShortcuts";
 import { spacing, radii, sizing, type, weight } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
@@ -296,6 +298,9 @@ type CategoryFilter = string;
  * The three icons keep their opacity — a navigation control that fades is a
  * navigation control you hesitate over.
  */
+/** Stable: FlatList rejects a viewabilityConfig that changes identity. */
+const VIEWABILITY = { itemVisiblePercentThreshold: 40 } as const;
+
 const LOGO_FADE_DISTANCE = 120;
 /**
  * 1 = no fade. It was 0.32, which on the dark glass chip over a dark feed is
@@ -727,6 +732,28 @@ export default function HomeScreen() {
     [t, categories, nameOf, iconOf],
   );
 
+  /**
+   * Which cards are on screen, for the photo strips.
+   *
+   * Written to a store, not to state: this fires on every scroll settle,
+   * and re-rendering this screen each time would cost more than the timers
+   * it switches off. FlatList also throws if the callback changes identity
+   * between renders, so it is created once.
+   */
+  // useCallback with no deps, not a ref: FlatList needs one stable identity,
+  // and reading `.current` during render is what makes the React Compiler
+  // bail out of this whole screen — the same note intro.tsx carries.
+  const onViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      useFeedVisibilityStore.getState().setVisible(
+        viewableItems
+          .map((v) => (v.item as FeedItem | undefined)?.id)
+          .filter((id): id is string => !!id),
+      );
+    },
+    [],
+  );
+
   const onPressItem = useCallback(
     (id: string) => router.push(`/listing/${id}`),
     [],
@@ -1141,6 +1168,11 @@ export default function HomeScreen() {
                 ? { columnWrapperStyle: { gap: spacing.md } }
                 : {})}
               ListHeaderComponent={feedHeader}
+              onViewableItemsChanged={onViewableItemsChanged}
+              // 40%: a card peeking in at the bottom is on screen enough to
+              // be worth playing; stricter and the strip only starts once
+              // the card is nearly past.
+              viewabilityConfig={VIEWABILITY}
               contentContainerStyle={{
                 // md, not lg: at two columns the page gutter is paid twice
                 // over, and the 16pt it gives back is the difference between
@@ -1598,6 +1630,10 @@ const FeedRow = memo(function FeedRow({
   if (grid) {
     return (
       <ListingGridCard
+        // Only the feed opts in: it is the list that reports which
+        // rows are on screen, so it is the only one where the strip can
+        // ask. Elsewhere the id is absent and the strip plays as before.
+        itemId={item.id}
         thumbUrl={item.thumbUrl}
         photos={item.photos}
         price={price}
@@ -1618,6 +1654,10 @@ const FeedRow = memo(function FeedRow({
 
   return (
     <ListingCardBase
+        // Only the feed opts in: it is the list that reports which
+        // rows are on screen, so it is the only one where the strip can
+        // ask. Elsewhere the id is absent and the strip plays as before.
+        itemId={item.id}
       thumbUrl={item.thumbUrl}
       photos={item.photos}
       price={price}

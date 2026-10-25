@@ -11,9 +11,28 @@
 // simulator without the right Xcode. A development build is required, which
 // this project already uses for maps.
 import { Platform } from "react-native";
-import * as Notifications from "expo-notifications";
-import * as Device from "expo-device";
+import { PUSH_SUPPORTED } from "./pushSupport";
+
 import Constants from "expo-constants";
+
+/**
+ * expo-notifications, or null on a binary without it.
+ *
+ * require(), not import: an import binds the native module at module load,
+ * which throws before anything can catch it. See pushSupport.ts.
+ */
+/**
+ * expo-device, same treatment. It was installed alongside push and binds
+ * its own native module on import, so it took the app down for exactly the
+ * same reason the notifications import did.
+ */
+const Device: typeof import("expo-device") | null =
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  PUSH_SUPPORTED ? require("expo-device") : null;
+
+const Notifications: typeof import("expo-notifications") | null =
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  PUSH_SUPPORTED ? require("expo-notifications") : null;
 
 /**
  * How a notification behaves while the app is OPEN.
@@ -25,7 +44,7 @@ import Constants from "expo-constants";
  * Set at module scope on purpose: the handler must exist before any
  * notification can arrive, which can be before React has mounted anything.
  */
-Notifications.setNotificationHandler({
+Notifications?.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
     shouldShowList: true,
@@ -43,7 +62,7 @@ Notifications.setNotificationHandler({
  * no channel still lands here rather than in "Miscellaneous".
  */
 async function ensureAndroidChannel(): Promise<void> {
-  if (Platform.OS !== "android") return;
+  if (Platform.OS !== "android" || !Notifications) return;
   await Notifications.setNotificationChannelAsync("default", {
     name: "Default",
     importance: Notifications.AndroidImportance.DEFAULT,
@@ -75,9 +94,12 @@ function projectId(): string | undefined {
  * change it in Settings. Nothing here nags.
  */
 export async function getPushToken(): Promise<string | null> {
+  // A build without the native module, which is every binary made before
+  // push was added — the inbox still works by polling.
+  if (!Notifications) return null;
   // A simulator has no push service to register with, and asking produces a
   // confusing error rather than a useful one.
-  if (!Device.isDevice) return null;
+  if (!Device?.isDevice) return null;
 
   const id = projectId();
   if (!id) {

@@ -9,6 +9,8 @@ import { RatingPill } from "../../reviews/components/RatingPill";
 
 interface Props {
   thumbUrl: string | null | undefined;
+  /** Stable id, so the strip can ask whether this card is on screen. */
+  itemId?: string;
   /** Every photo, for the slider. */
   photos?: SliderPhoto[];
   /** Preformatted — currency symbol and any /month suffix already applied. */
@@ -49,6 +51,7 @@ const PHOTO_HEIGHT = 148;
  */
 export const ListingGridCard = memo(function ListingGridCard({
   thumbUrl,
+  itemId,
   photos,
   price,
   title,
@@ -93,6 +96,7 @@ export const ListingGridCard = memo(function ListingGridCard({
             are the only way through the photos and they earn their space. */}
         <ListingPhotoSlider
           photos={photos?.length ? photos : [{ thumbUrl }]}
+          itemId={itemId}
           height={PHOTO_HEIGHT}
           onPress={onPress}
           compact={!rail}
