@@ -15,6 +15,8 @@ import {
   type PressEvent,
   type ViewAnnotationEvent,
 } from "@maplibre/maplibre-react-native";
+// Installs the log filter — see the file for what it silences and why.
+import "./mapLogging";
 import { Button } from "../../components/ui";
 import { toast } from "../../components/ui/Toast";
 import { spacing, radii, sizing, type } from "../../theme/tokens";

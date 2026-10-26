@@ -530,6 +530,10 @@ export const uz = {
     camera: "Kamera",
     record: "Kamerada olish",
     replace: "Boshqa video",
+    replaceTitle: "Videoni almashtirasizmi?",
+    replaceMessage:
+      "Eski video o'chiriladi va yangisini yuklash oynasi ochiladi. Ko'rishlar va yoqtirishlar yangi videoga o'tmaydi.",
+    replaceConfirm: "Almashtirish",
     maxDuration: "Maksimal 1 daqiqa",
     tooLong: "Video 1 daqiqadan uzun bo'lmasligi kerak",
     caption: "Izoh",
@@ -899,6 +903,38 @@ export const uz = {
     radiusClose: "Yopish",
     metres: "m",
     kilometres: "km",
+  },
+
+  membership: {
+    member: "GrowenCity a'zosi",
+    guest: "Mehmon",
+    guestHint: "Profilni to'ldiring — GrowenCity a'zosi bo'ling",
+  },
+
+  completeProfile: {
+    title: "Profilingizni to'ldiring",
+    subtitle:
+      "Ism va telefon bor — qolgani esa sizni kim ekaningizni ko'rsatadi.",
+    benefitTrust: "Xaridorlar kim bilan gaplashayotganini ko'radi",
+    benefitReach: "To'liq profil e'lonlariga ko'proq javob keladi",
+    benefitContact: "Sotuvchi va realtorlar tezroq bog'lanadi",
+    start: "To'ldirish",
+    later: "Keyinroq",
+    stepIdentity: "Asosiy ma'lumotlar",
+    stepAbout: "Siz haqingizda",
+    stepReach: "O'zingiz haqingizda yozing",
+    next: "Keyingisi",
+    finish: "Saqlash",
+    skip: "O'tkazib yuborish",
+    photoHint: "Profil rasmini tanlang",
+    done: "Profil to'ldirildi",
+    bannerTitle: "Profilingiz to'liq emas",
+    fieldSurname: "familiya",
+    fieldGender: "jins",
+    fieldBirthDate: "tug'ilgan sana",
+    fieldBio: "o'zingiz haqingizda",
+    bannerMissing: "Qolgani: {{fields}}",
+    bannerText: "Ma'lumotlarni to'ldiring — GrowenCity a'zosi bo'ling",
   },
 
   profileInfo: {

@@ -22,6 +22,8 @@ import {
   type ViewAnnotationEvent,
   type ViewStateChangeEvent,
 } from "@maplibre/maplibre-react-native";
+// Installs the log filter — see the file for what it silences and why.
+import "./mapLogging";
 import Svg, { Circle, Rect, Text as SvgText } from "react-native-svg";
 import { spacing } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";

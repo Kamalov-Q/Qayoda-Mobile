@@ -2,7 +2,11 @@ import { useMemo } from "react";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/src/lib/query-client";
 import { useAuthStore } from "@/src/features/auth/store/auth.store";
-import { NOTIFICATIONS_PAGE, notificationsApi } from "../api/notifications.api";
+import {
+  NOTIFICATIONS_PAGE,
+  notificationsApi,
+  type AppNotification,
+} from "../api/notifications.api";
 
 const LIST_KEY = ["notifications", "list"] as const;
 const UNREAD_KEY = ["notifications", "unread"] as const;
@@ -59,17 +63,49 @@ export function useNotifications() {
 /**
  * Marking the inbox read.
  *
- * Called when the screen opens, and optimistic on the count: the dot should
- * go the moment the list appears, not a round trip later. The list itself is
- * left as it is — rows fading from "new" to "seen" under the reader's eyes
- * is a distraction, and the next fetch will carry the real state.
+ * Optimistic on BOTH caches, which is the fix for a real bug: this used to
+ * zero the bell and leave the list alone, on the reasoning that rows fading
+ * under the reader's eyes is a distraction and "the next fetch will carry
+ * the real state". The next fetch never came. Queries are fresh for a minute
+ * (see query-client), so the rows kept their unread wash while the screen
+ * was open, and again on every return inside that minute — the inbox looked
+ * broken, because nothing it showed ever changed.
+ *
+ * So the rows are flipped here, in place, and the list is invalidated on
+ * settle like the count always was. The wash going is the acknowledgement
+ * that the tap was seen.
  */
 export function useMarkNotificationsRead() {
   return useMutation({
     mutationFn: (ids?: string[]) => notificationsApi.markRead(ids),
-    onMutate: () => queryClient.setQueryData(UNREAD_KEY, { count: 0 }),
+    onMutate: (ids) => {
+      queryClient.setQueryData(UNREAD_KEY, { count: 0 });
+
+      // `undefined` means "everything", which is what opening the screen
+      // sends; a list of ids marks only those.
+      const target = ids?.length ? new Set(ids) : null;
+      queryClient.setQueryData<{
+        pages: { total: number; items: AppNotification[] }[];
+        pageParams: unknown[];
+      }>(LIST_KEY, (cached) =>
+        cached
+          ? {
+              ...cached,
+              pages: cached.pages.map((page) => ({
+                ...page,
+                items: page.items.map((item) =>
+                  !item.read && (!target || target.has(item.id))
+                    ? { ...item, read: true }
+                    : item,
+                ),
+              })),
+            }
+          : cached,
+      );
+    },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: UNREAD_KEY });
+      void queryClient.invalidateQueries({ queryKey: LIST_KEY });
     },
   });
 }

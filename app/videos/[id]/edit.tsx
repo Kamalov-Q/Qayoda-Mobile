@@ -22,7 +22,11 @@ import { useT } from "@/src/i18n";
 import { errorMessage } from "@/src/lib/api-error";
 import { useMyListings } from "@/src/features/listings/hooks/useMyListings";
 import { useVideo } from "@/src/features/videos/hooks/useVideoFeed";
-import { useUpdateVideo } from "@/src/features/videos/hooks/useVideoActions";
+import {
+  useDeleteVideo,
+  useUpdateVideo,
+} from "@/src/features/videos/hooks/useVideoActions";
+import { confirm } from "@/src/lib/alerts";
 import {
   VIDEO_CAPTION_MAX,
   type Video as VideoRow,
@@ -74,6 +78,7 @@ function EditForm({ video }: { video: VideoRow }) {
   const t = useT();
   const { data: listings } = useMyListings();
   const update = useUpdateVideo();
+  const remove = useDeleteVideo();
 
   const [caption, setCaption] = useState(video.caption ?? "");
   const [listingId, setListingId] = useState<string>(
@@ -223,6 +228,63 @@ function EditForm({ video }: { video: VideoRow }) {
         onPress={onSave}
         loading={update.isPending}
         disabled={!dirty}
+      />
+
+      {/* Swapping the footage out.
+          The clip itself cannot be edited in place — a different file is a
+          different upload, a different encode and a different asset, and
+          carrying the old one's views and likes across to it would be a lie
+          about what people watched. So this takes the old one down and goes
+          straight to the upload screen, with the same advert already
+          attached: the two steps the person would otherwise do by hand, in
+          the order they would have to do them. */}
+      <Button
+        title={t("videos.replace")}
+        icon="swap-horizontal"
+        variant="secondary"
+        loading={remove.isPending}
+        onPress={() =>
+          confirm({
+            titleKey: "videos.replaceTitle",
+            messageKey: "videos.replaceMessage",
+            confirmKey: "videos.replaceConfirm",
+            onConfirm: () =>
+              remove.mutate(video.id, {
+                onSuccess: () =>
+                  router.replace(
+                    video.listing?.id
+                      ? `/videos/new?listingId=${video.listing.id}`
+                      : "/videos/new",
+                  ),
+              }),
+          })
+        }
+      />
+
+      {/* Removing it from the screen that edits it.
+          The shelf has a bin on every row, but somebody who opened this
+          screen to fix a caption and decided the clip was the problem had
+          to back out to find it. Confirmed, because the file is gone for
+          good — a video cannot be restored once Bunny has dropped it. */}
+      <Button
+        title={t("videos.delete")}
+        icon="trash-outline"
+        variant="danger"
+        loading={remove.isPending}
+        onPress={() =>
+          confirm({
+            titleKey: "videos.deleteTitle",
+            messageKey: "videos.deleteMessage",
+            confirmKey: "common.delete",
+            destructive: true,
+            onConfirm: () =>
+              remove.mutate(video.id, {
+                // Back to the shelf: this screen is about a video that no
+                // longer exists the moment the call returns.
+                onSuccess: () => router.back(),
+              }),
+          })
+        }
       />
 
       <SelectSheet

@@ -163,13 +163,12 @@ export default function TabsLayout() {
           ),
         }}
       />
-      {/* Off the bar, but still routes: Home and Account both push into these,
-          so the screens stay mounted-on-demand rather than deleted. Every file
-          under (tabs) becomes a tab unless it says otherwise, hence href:null
-          rather than simply omitting them. */}
-      <Tabs.Screen name="places" options={{ href: null }} />
-      {/* Reached from Settings and the profile quick links, not the bar —
-          the bar keeps the four things people actually live in. */}
+      {/* Off the bar, but still a route: reached from Settings and the
+          profile quick links. Every file under (tabs) becomes a tab unless it
+          says otherwise, hence href:null rather than simply omitting it.
+          (My listings used to live here too; it is a stack route now — a
+          hidden tab cannot show a back button, so pushing it stranded people
+          on the home feed. See app/listings/mine.tsx.) */}
       <Tabs.Screen name="about" options={{ href: null }} />
       <Tabs.Screen
         name="account"

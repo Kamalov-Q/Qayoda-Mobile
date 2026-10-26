@@ -279,6 +279,9 @@ export default function UserProfileScreen() {
         avatarUri={photo}
         name={name}
         verified={data?.isVerifiedRealtor}
+        // Server-computed: see users.api.ts for why this cannot be worked
+        // out from the public fields.
+        member={data?.isMember}
         online={presence?.online}
         onPressPhoto={photo ? () => setViewingAvatar(true) : undefined}
         subtitle={

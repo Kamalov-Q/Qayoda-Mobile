@@ -515,6 +515,10 @@ export const ru: Dictionary = {
     camera: "Камера",
     record: "Снять на камеру",
     replace: "Другое видео",
+    replaceTitle: "Заменить видео?",
+    replaceMessage:
+      "Старое видео будет удалено, затем откроется загрузка нового. Просмотры и лайки на новое не переносятся.",
+    replaceConfirm: "Заменить",
     maxDuration: "Максимум 1 минута",
     tooLong: "Видео должно быть не длиннее 1 минуты",
     caption: "Описание",
@@ -866,6 +870,38 @@ export const ru: Dictionary = {
     radiusClose: "Закрыть",
     metres: "м",
     kilometres: "км",
+  },
+
+  membership: {
+    member: "Участник GrowenCity",
+    guest: "Гость",
+    guestHint: "Заполните профиль — станьте участником GrowenCity",
+  },
+
+  completeProfile: {
+    title: "Заполните профиль",
+    subtitle:
+      "Имя и телефон уже есть — остальное показывает, кто вы.",
+    benefitTrust: "Покупатели видят, с кем говорят",
+    benefitReach: "На полный профиль отвечают чаще",
+    benefitContact: "Продавцы и риелторы свяжутся быстрее",
+    start: "Заполнить",
+    later: "Позже",
+    stepIdentity: "Основные данные",
+    stepAbout: "О вас",
+    stepReach: "Расскажите о себе",
+    next: "Далее",
+    finish: "Сохранить",
+    skip: "Пропустить",
+    photoHint: "Выберите фото профиля",
+    done: "Профиль заполнен",
+    bannerTitle: "Профиль заполнен не полностью",
+    fieldSurname: "фамилия",
+    fieldGender: "пол",
+    fieldBirthDate: "дата рождения",
+    fieldBio: "о себе",
+    bannerMissing: "Осталось: {{fields}}",
+    bannerText: "Заполните данные — станьте участником GrowenCity",
   },
 
   profileInfo: {

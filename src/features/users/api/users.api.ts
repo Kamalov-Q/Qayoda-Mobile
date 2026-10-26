@@ -66,6 +66,14 @@ export interface UserProfile {
   avatarThumbUrl: string | null;
   /** Manually verified by an admin. */
   isVerifiedRealtor: boolean;
+  /**
+   * Whether the optional half of their profile is filled in.
+   *
+   * A boolean from the server, not something to work out here: two of the
+   * fields behind it (age, gender) are never public, so a client computing
+   * it from what it can see would call every complete profile incomplete.
+   */
+  isMember: boolean;
   /** Whatever they wrote about themselves. */
   bio: string | null;
   /**

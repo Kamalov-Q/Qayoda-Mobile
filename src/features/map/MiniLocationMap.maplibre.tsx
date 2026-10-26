@@ -10,6 +10,8 @@ import {
   NativeUserLocation,
   type CameraRef,
 } from "@maplibre/maplibre-react-native";
+// Installs the log filter — see the file for what it silences and why.
+import "./mapLogging";
 import * as Location from "expo-location";
 import {
   useSafeAreaInsets,

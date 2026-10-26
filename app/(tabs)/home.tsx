@@ -7,6 +7,7 @@
 // The story tray used to ride on top of the feed. Stories are gone from the
 // app entirely — the Videos tab is where listings get advertised now.
 import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { CompleteProfileGate } from "@/src/features/profile/components/CompleteProfileGate";
 import {
   Text,
   View,
@@ -1596,6 +1597,9 @@ export default function HomeScreen() {
           <ChipGroup options={sortOptions} value={sort} onChange={setSort} />
         </Section>
       </FilterSheet>
+      {/* Offers the profile sheet once, to a signed-in account that is
+          still just a name and a phone. Renders nothing otherwise. */}
+      <CompleteProfileGate />
     </Screen>
   );
 }

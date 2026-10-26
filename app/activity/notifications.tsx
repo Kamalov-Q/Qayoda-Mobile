@@ -19,6 +19,8 @@ import { radii, spacing, weight } from "@/src/theme/tokens";
 import { useTheme } from "@/src/theme/useTheme";
 import { useT, type TranslationKey } from "@/src/i18n";
 import { errorMessage } from "@/src/lib/api-error";
+import { useAuthStore } from "@/src/features/auth/store/auth.store";
+import { RedirectToSignIn } from "@/src/features/auth/components/RedirectToSignIn";
 import { useCommentTime } from "@/src/features/comments/utils/time";
 import {
   useMarkNotificationsRead,
@@ -82,6 +84,7 @@ const TEXT: Record<NotificationKind, TranslationKey> = {
 export default function NotificationsScreen() {
   const { colors } = useTheme();
   const t = useT();
+  const authed = useAuthStore((s) => s.status === "authenticated");
   const list = useNotifications();
   const markRead = useMarkNotificationsRead();
 
@@ -91,6 +94,22 @@ export default function NotificationsScreen() {
   useEffect(() => {
     read(undefined);
   }, [read]);
+
+  /**
+   * A guest has no inbox, and the query that would fill one is disabled for
+   * them — so the screen used to render its empty state and tell somebody
+   * with no account that they had "no notifications yet". That is a true
+   * sentence about the wrong thing: there is nothing to have yet, because
+   * there is nobody to have it.
+   */
+  if (!authed) {
+    return (
+      <Screen scroll={false} edges={HEADER_EDGES}>
+        <Stack.Screen options={{ title: t("notifications.title") }} />
+        <RedirectToSignIn />
+      </Screen>
+    );
+  }
 
   return (
     <Screen style={{ padding: 0 }} scroll={false} edges={HEADER_EDGES}>
@@ -136,7 +155,9 @@ export default function NotificationsScreen() {
               void list.fetchNextPage();
             }
           }}
-          renderItem={({ item }) => <NotificationRow notification={item} />}
+          renderItem={({ item }) => (
+            <NotificationRow notification={item} onRead={read} />
+          )}
         />
       )}
     </Screen>
@@ -145,8 +166,11 @@ export default function NotificationsScreen() {
 
 function NotificationRow({
   notification: n,
+  onRead,
 }: {
   notification: AppNotification;
+  /** Marks THIS row read — see the tap handler for why that is not redundant. */
+  onRead: (ids: string[]) => void;
 }) {
   const { colors, text } = useTheme();
   const t = useT();
@@ -161,6 +185,12 @@ function NotificationRow({
   // outlived its welcome, so every kind lands somewhere: the video, the
   // person, or — for one waiting to be paid for — the shelf with the button.
   const open = () => {
+    // Opening the screen marks everything read, so this is usually a no-op.
+    // It is not redundant for a row that ARRIVED while the screen was open:
+    // that one missed the on-mount sweep, and tapping it is the clearest
+    // possible statement that it has been seen.
+    if (!n.read) onRead([n.id]);
+
     if (n.kind === "VIDEO_AWAITING_PAYMENT" || n.kind === "VIDEO_FAILED") {
       router.push("/videos/mine");
       return;

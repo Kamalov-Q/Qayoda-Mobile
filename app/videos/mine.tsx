@@ -60,29 +60,33 @@ export default function MyVideosScreen() {
     [remove],
   );
 
+  /**
+   * Shared by both branches on purpose.
+   *
+   * The "+" lived only on the LOADING screen's header, so it flashed up for
+   * as long as the request took and then vanished — leaving the footer
+   * button at the bottom of the list as the only way to add a second video,
+   * and the empty state's button as the only way anybody found.
+   */
+  const headerOptions = {
+    title: t("videos.mine"),
+    headerRight: () => (
+      <Pressable
+        onPress={() => router.push("/videos/new")}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel={t("videos.add")}
+        style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+      >
+        <Ionicons name="add" size={26} color={colors.primary} />
+      </Pressable>
+    ),
+  };
+
   if (videos.isLoading) {
     return (
       <Screen scroll={false} edges={HEADER_EDGES}>
-        <Stack.Screen
-        options={{
-          title: t("videos.mine"),
-          // In the header, not only in the empty state: the action that
-          // adds the SECOND video was reachable only by deleting the first,
-          // because the EmptyState's button is the only thing that offered
-          // it and an empty list is the one case it cannot be used in.
-          headerRight: () => (
-            <Pressable
-              onPress={() => router.push("/videos/new")}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={t("videos.add")}
-              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-            >
-              <Ionicons name="add" size={26} color={colors.primary} />
-            </Pressable>
-          ),
-        }}
-      />
+        <Stack.Screen options={headerOptions} />
         <LoadingView />
       </Screen>
     );
@@ -90,7 +94,7 @@ export default function MyVideosScreen() {
 
   return (
     <Screen style={{ padding: 0 }} scroll={false} edges={HEADER_EDGES}>
-      <Stack.Screen options={{ title: t("videos.mine") }} />
+      <Stack.Screen options={headerOptions} />
 
       <FlatList
         data={videos.items}

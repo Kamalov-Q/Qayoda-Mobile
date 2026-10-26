@@ -38,22 +38,23 @@ export default function SavedScreen() {
 
   return (
     <Screen style={{ padding: 0 }} scroll={false} edges={HEADER_EDGES}>
-      <View
-        style={{
-          paddingHorizontal: spacing.lg,
-          paddingTop: spacing.md,
-          gap: 2,
-        }}
-      >
-        <Text style={text.display} numberOfLines={1}>
-          {t("saved.title")}
-        </Text>
-        {!isLoading && !isError && data?.length ? (
+      {/* The count only. The screen used to repeat its own name here in
+          display type, directly under the navigation bar already showing it —
+          two titles, and the lower one truncated ("Избранные объяв…") because
+          it had one line to say what the bar said in full. */}
+      {!isLoading && !isError && data?.length ? (
+        <View
+          style={{
+            paddingHorizontal: spacing.lg,
+            paddingTop: spacing.sm,
+            paddingBottom: spacing.xs,
+          }}
+        >
           <Text style={text.caption}>
             {t("listings.countFound", { count: data.length })}
           </Text>
-        ) : null}
-      </View>
+        </View>
+      ) : null}
 
       {isLoading ? (
         <LoadingView />

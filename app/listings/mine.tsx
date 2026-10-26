@@ -1,4 +1,14 @@
-// app/(tabs)/places.tsx
+// app/listings/mine.tsx — the seller's own adverts.
+//
+// A STACK route, not a tab. It used to be `(tabs)/places` with `href: null`
+// — a hidden tab — and pushing one of those from the profile resolves into
+// the tabs navigator, which lands on whatever tab is current. Tapping "my
+// listings" sent people to the home feed with no way back, because a tab has
+// no back button to offer.
+//
+// `status` arrives as a route param so the profile's "Active" tile opens the
+// list already narrowed, rather than opening everything and making the
+// reader find the filter.
 import { useCallback, useMemo, useState } from "react";
 import {
   Text,
@@ -7,7 +17,7 @@ import {
   RefreshControl,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { router, Stack, useLocalSearchParams } from "expo-router";
 import {
   Screen,
   EmptyState,
@@ -17,7 +27,7 @@ import {
   FilterButton,
   PriceRangeFilter,
   TextField,
-  TAB_EDGES,
+  HEADER_EDGES,
   LoadingView,
 } from "../../src/components/ui";
 import { spacing } from "../../src/theme/tokens";
@@ -59,7 +69,9 @@ type Choice<T extends string> = {
   icon?: keyof typeof Ionicons.glyphMap;
 };
 
-export default function PlacesScreen() {
+export default function MyListingsScreen() {
+  // "ACTIVE" from the profile's Active tile; absent means show everything.
+  const params = useLocalSearchParams<{ status?: string }>();
   const { text, colors } = useTheme();
   const t = useT();
   const {
@@ -73,7 +85,11 @@ export default function PlacesScreen() {
     isFetchingNextPage,
   } = useMyListings();
 
-  const [status, setStatus] = useState<StatusFilter>(ALL);
+  const [status, setStatus] = useState<StatusFilter>(
+    (STATUSES as readonly string[]).includes(params.status ?? "")
+      ? (params.status as Status)
+      : ALL,
+  );
   const [category, setCategory] = useState<CategoryFilter>(ALL);
   // Admin-managed categories (GET /categories), in their display order.
   const { categories, nameOf, iconOf } = useCategories();
@@ -147,7 +163,10 @@ export default function PlacesScreen() {
   }, []);
 
   return (
-    <Screen style={{ padding: 0 }} scroll={false} edges={TAB_EDGES}>
+    <Screen style={{ padding: 0 }} scroll={false} edges={HEADER_EDGES}>
+      {/* The native header carries the back chevron this screen never had
+          while it was a hidden tab. */}
+      <Stack.Screen options={{ title: t("profile.linkMyListings") }} />
       <View
         style={{
           paddingHorizontal: spacing.lg,
@@ -159,10 +178,11 @@ export default function PlacesScreen() {
           gap: spacing.md,
         }}
       >
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={text.display} numberOfLines={1}>
-            {t("listings.myListingsTitle")}
-          </Text>
+        {/* The count, not the name. The navigation bar above already says
+            what this screen is — repeating it in display type was the same
+            doubled heading the saved list had, and on a long Uzbek title it
+            truncates to say even less. */}
+        <View style={{ flex: 1 }}>
           {!isLoading && !isError && data?.length ? (
             <Text style={text.caption} numberOfLines={1}>
               {t("listings.countFound", { count: listings.length })}

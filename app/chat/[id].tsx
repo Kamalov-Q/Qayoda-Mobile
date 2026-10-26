@@ -97,6 +97,19 @@ export default function ChatThreadScreen() {
   const ownerId = draftListing?.ownerId;
   // Old conversations predate `listingTitle` being denormalised onto the row;
   // the prefill then needs the listing itself or it says "Nomsiz e'lon".
+  /**
+   * The advert this thread is about, so the card can stay above the
+   * messages instead of disappearing with the draft screen.
+   *
+   * Cached under the same key as everywhere else, so opening a chat from
+   * the listing you were just reading paints from cache with no request.
+   */
+  const { data: threadListing } = useQuery({
+    queryKey: ["listings", "byId", conversation?.listingId],
+    queryFn: () => listingApi.getById(conversation!.listingId),
+    enabled: !isDraft && !!conversation?.listingId,
+  });
+
   const { data: prefillListing } = useQuery({
     queryKey: ["listings", "byId", conversation?.listingId],
     queryFn: () => listingApi.getById(conversation!.listingId),
@@ -543,6 +556,24 @@ export default function ChatThreadScreen() {
           </Pressable>
         ) : null}
 
+        {/* Pinned above the messages: which flat this conversation is about.
+            Two threads with the same seller about two different adverts used
+            to be told apart only by whatever the opening line quoted. */}
+        {!isDraft && threadListing ? (
+          <View
+            style={{
+              paddingHorizontal: spacing.md,
+              paddingTop: spacing.sm,
+              paddingBottom: spacing.xs,
+            }}
+          >
+            <ChatListingCard
+              listing={threadListing}
+              onPress={() => router.push(`/listing/${threadListing.id}`)}
+            />
+          </View>
+        ) : null}
+
         {isDraft ? (
           <DraftContext listing={draftListing} />
         ) : isLoading ? (
@@ -680,21 +711,108 @@ export default function ChatThreadScreen() {
 
 /** What the draft is about, sitting where messages will be: the listing's
  *  photo and facts, plus the one-line explanation that nothing is sent yet. */
-function DraftContext({ listing }: { listing: Listing | undefined }) {
+/**
+ * The advert this conversation is about, as a card.
+ *
+ * Shared by the draft screen and the thread itself. It used to exist only
+ * before the first message went out: you saw the flat you were writing
+ * about, pressed send, and it vanished — leaving a thread whose only clue
+ * was the title the opening line happened to quote. Two chats about two
+ * flats from the same seller were then indistinguishable.
+ *
+ * Tappable in the thread, where the listing is somewhere to go back to.
+ */
+function ChatListingCard({
+  listing,
+  onPress,
+}: {
+  listing: Listing;
+  onPress?: () => void;
+}) {
   const { colors, text } = useTheme();
   const t = useT();
   const formatPrice = usePriceFormatter();
   const formatSpecs = useSpecsFormatter();
-
-  if (!listing) {
-    return <LoadingView />;
-  }
 
   const offer = listing.offers.find((o) => o.isActive) ?? listing.offers[0];
   const thumb = resolveMediaUrl(
     (listing.images.find((i) => i.isPrimary) ?? listing.images[0])?.thumbUrl ??
       null,
   );
+  const specs = formatSpecs(listing);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? "button" : undefined}
+      accessibilityLabel={listing.title ?? t("listings.untitled")}
+      style={({ pressed }) => ({
+        width: "100%",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: spacing.md,
+        padding: spacing.md,
+        borderRadius: radii.xl,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor:
+          pressed && onPress ? colors.surfaceRaised : colors.surface,
+      })}
+    >
+      <View
+        style={{
+          width: 64,
+          height: 64,
+          borderRadius: radii.md,
+          overflow: "hidden",
+          backgroundColor: colors.surfaceRaised,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {thumb ? (
+          <Image
+            source={{ uri: thumb }}
+            style={{ width: "100%", height: "100%" }}
+            contentFit="cover"
+          />
+        ) : (
+          <Ionicons name="image-outline" size={22} color={colors.textFaint} />
+        )}
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        {offer ? (
+          <Text style={text.bodyStrong} numberOfLines={1}>
+            {formatPrice(offer.price, offer.currency, offer.purpose)}
+          </Text>
+        ) : null}
+        <Text style={text.caption} numberOfLines={2}>
+          {listing.title ?? t("listings.untitled")}
+        </Text>
+        {specs ? (
+          <Text
+            style={{ ...text.caption, color: colors.textMuted }}
+            numberOfLines={1}
+          >
+            {specs}
+          </Text>
+        ) : null}
+      </View>
+      {onPress ? (
+        <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
+      ) : null}
+    </Pressable>
+  );
+}
+
+function DraftContext({ listing }: { listing: Listing | undefined }) {
+  const { text } = useTheme();
+  const t = useT();
+
+  if (!listing) {
+    return <LoadingView />;
+  }
 
   return (
     <View
@@ -706,59 +824,7 @@ function DraftContext({ listing }: { listing: Listing | undefined }) {
         gap: spacing.md,
       }}
     >
-      <View
-        style={{
-          width: "100%",
-          flexDirection: "row",
-          alignItems: "center",
-          gap: spacing.md,
-          padding: spacing.md,
-          borderRadius: radii.xl,
-          borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: colors.surface,
-        }}
-      >
-        <View
-          style={{
-            width: 64,
-            height: 64,
-            borderRadius: radii.md,
-            overflow: "hidden",
-            backgroundColor: colors.surfaceRaised,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {thumb ? (
-            <Image
-              source={{ uri: thumb }}
-              style={{ width: "100%", height: "100%" }}
-              contentFit="cover"
-            />
-          ) : (
-            <Ionicons name="image-outline" size={22} color={colors.textFaint} />
-          )}
-        </View>
-        <View style={{ flex: 1, gap: 2 }}>
-          {offer ? (
-            <Text style={text.bodyStrong} numberOfLines={1}>
-              {formatPrice(offer.price, offer.currency, offer.purpose)}
-            </Text>
-          ) : null}
-          <Text style={text.caption} numberOfLines={2}>
-            {listing.title ?? t("listings.untitled")}
-          </Text>
-          {formatSpecs(listing) ? (
-            <Text
-              style={{ ...text.caption, color: colors.textMuted }}
-              numberOfLines={1}
-            >
-              {formatSpecs(listing)}
-            </Text>
-          ) : null}
-        </View>
-      </View>
+      <ChatListingCard listing={listing} />
       <Text style={{ ...text.caption, textAlign: "center" }}>
         {t("chat.draftHint")}
       </Text>

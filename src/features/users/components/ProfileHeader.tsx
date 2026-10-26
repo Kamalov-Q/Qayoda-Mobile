@@ -5,7 +5,8 @@ import { useTheme } from "@/src/theme/useTheme";
 import { Avatar } from "@/src/components/ui";
 import { useT } from "@/src/i18n";
 import { ActionIcons, type ActionIcon } from "./ActionIcons";
-import { VerifiedBadge } from "./VerifiedBadge";
+import { VerifiedBadge, VerifiedPill } from "./VerifiedBadge";
+import { MembershipBadge } from "./MembershipBadge";
 
 /**
  * The ring around the photo.
@@ -25,6 +26,14 @@ interface Props {
   subtitle?: ReactNode;
   /** A quieter line under that: member since, the number spelled out. */
   meta?: ReactNode;
+  /**
+   * Shows the membership pill under the name: true for a filled-in profile,
+   * false for one that is still just a name and a phone. Omit it entirely
+   * where the distinction is not worth drawing — a seller block on a
+   * listing is about the advert, not about how complete somebody's profile
+   * is.
+   */
+  member?: boolean;
   /** What you can do about them. Empty on your own profile. */
   actions?: ActionIcon[];
   /** Opens the photo full-size. Omitted when there is no photo to open. */
@@ -55,6 +64,7 @@ export const ProfileHeader = memo(function ProfileHeader({
   avatarUri,
   name,
   verified,
+  member,
   online,
   subtitle,
   meta,
@@ -138,6 +148,16 @@ export const ProfileHeader = memo(function ProfileHeader({
       ) : (
         heading
       )}
+
+      {/* Two different claims, ranked.
+          The seal says a person checked a passport; the membership pill says
+          a profile is filled in. Where both are true the seal is already
+          beside the name, so only its wordier form is skipped here — one
+          seal per header is enough. */}
+      {verified ? <VerifiedPill /> : null}
+      {member !== undefined && !verified ? (
+        <MembershipBadge member={member} />
+      ) : null}
 
       {subtitle}
       {meta}

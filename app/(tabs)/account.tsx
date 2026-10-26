@@ -16,6 +16,8 @@ import { spacing, radii, type } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT, useLanguage, type TranslationKey } from "../../src/i18n";
 import { usePreferences } from "../../src/lib/preferences";
+import { completeness } from "../../src/features/profile/lib/completeness";
+import { CompleteProfileBanner } from "../../src/features/profile/components/CompleteProfileBanner";
 import { confirm } from "../../src/lib/alerts";
 import { useAuthStore } from "../../src/features/auth/store/auth.store";
 import { useLogout } from "../../src/features/auth/hooks/useAuth";
@@ -34,7 +36,7 @@ const LINKS = [
     key: "mine",
     labelKey: "profile.linkMyListings" as TranslationKey,
     icon: "business-outline",
-    href: "/(tabs)/places" as Href,
+    href: "/listings/mine" as Href,
   },
   {
     key: "wallet",
@@ -188,6 +190,9 @@ export default function AccountScreen() {
           // The live profile first: the session copy was minted at sign-in
           // and still says no for somebody approved this morning.
           verified={profile?.isVerifiedRealtor ?? user?.isVerifiedRealtor}
+          // Your own profile is the one place the distinction is actionable:
+          // "Mehmon" here is a prompt, with the form one tap away below.
+          member={profile ? completeness(profile).complete : undefined}
           onPressPhoto={
             fullAvatarUri ? () => setViewingAvatar(true) : undefined
           }
@@ -240,6 +245,14 @@ export default function AccountScreen() {
           }
         />
 
+        {/* Standing invitation, where the one-time sheet is an interruption.
+            Shown until the profile is filled in and then gone for good — it
+            carries its own progress, so it answers "how much is left" rather
+            than just repeating the ask. */}
+        {profile && !completeness(profile).complete ? (
+          <CompleteProfileBanner state={completeness(profile)} />
+        ) : null}
+
         {/* The same two the public profile shows, so you can see what
             other people see. */}
         {profile?.bio ? (
@@ -263,13 +276,13 @@ export default function AccountScreen() {
           <StatCell
             label={t("profile.statListings")}
             value={counts?.mine}
-            onPress={() => router.push("/(tabs)/places")}
+            onPress={() => router.push("/listings/mine")}
           />
           <StatCell
             label={t("profile.statActive")}
             value={activeCount}
             divider
-            onPress={() => router.push("/(tabs)/places")}
+            onPress={() => router.push("/listings/mine?status=ACTIVE")}
           />
           <StatCell
             label={t("profile.statSaved")}

@@ -14,6 +14,7 @@ const THEME_KEY = "prefs.themeMode";
 const CURRENCY_KEY = "prefs.currency";
 const INTRO_KEY = "prefs.introSeen";
 const PUSH_KEY = "prefs.pushEnabled";
+const PROFILE_ASK_KEY = "prefs.profileAsked";
 
 function isLanguage(v: unknown): v is Language {
   return LANGUAGES.includes(v as Language);
@@ -61,11 +62,20 @@ interface PreferencesState {
    * the phone quiet, it does not make the app forget to tell you anything.
    */
   pushEnabled: boolean;
+  /**
+   * Whether the "fill in your profile" sheet has been offered.
+   *
+   * Asked ONCE, ever. It is a suggestion, not a gate, and a suggestion that
+   * returns every launch is a nag — the profile screen keeps the way in for
+   * anyone who changes their mind.
+   */
+  profileAsked: boolean;
   setLanguage: (language: Language) => void;
   setThemeMode: (mode: ThemeMode) => void;
   setCurrency: (currency: Currency) => void;
   setIntroSeen: () => void;
   setPushEnabled: (enabled: boolean) => void;
+  setProfileAsked: () => void;
 }
 
 export const usePreferences = create<PreferencesState>((set) => ({
@@ -77,6 +87,7 @@ export const usePreferences = create<PreferencesState>((set) => ({
   // On by default: someone who installed a marketplace app wants to hear
   // that their advert sold. The OS permission prompt is still the real gate.
   pushEnabled: true,
+  profileAsked: false,
 
   setLanguage: (language) => {
     set({ language });
@@ -91,6 +102,11 @@ export const usePreferences = create<PreferencesState>((set) => ({
   setCurrency: (currency) => {
     set({ currency });
     AsyncStorage.setItem(CURRENCY_KEY, currency).catch(() => {});
+  },
+
+  setProfileAsked: () => {
+    set({ profileAsked: true });
+    AsyncStorage.setItem(PROFILE_ASK_KEY, "1").catch(() => {});
   },
 
   setPushEnabled: (pushEnabled) => {
@@ -117,12 +133,14 @@ export async function hydratePreferences(): Promise<void> {
       [, storedCurrency],
       [, storedIntro],
       [, storedPush],
+      [, storedProfileAsk],
     ] = await AsyncStorage.multiGet([
       LANGUAGE_KEY,
       THEME_KEY,
       CURRENCY_KEY,
       INTRO_KEY,
       PUSH_KEY,
+      PROFILE_ASK_KEY,
     ]);
 
     usePreferences.setState({
@@ -134,6 +152,7 @@ export async function hydratePreferences(): Promise<void> {
       introSeen: storedIntro === "1",
       // Absent means never touched, which is the default: on.
       pushEnabled: storedPush !== "0",
+      profileAsked: storedProfileAsk === "1",
     });
   } catch {
     // Storage unavailable — the device-derived defaults already in the store

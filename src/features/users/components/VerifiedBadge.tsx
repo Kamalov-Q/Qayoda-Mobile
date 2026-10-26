@@ -1,5 +1,7 @@
 import { memo, useMemo } from "react";
+import { View, Text } from "react-native";
 import Svg, { Path } from "react-native-svg";
+import { radii, spacing, type, weight } from "@/src/theme/tokens";
 import { useTheme } from "@/src/theme/useTheme";
 import { useT } from "@/src/i18n";
 
@@ -86,3 +88,55 @@ function buildSeal(lobes: number, crest: number, valley: number): string {
 
   return `${parts.join(" ")} Z`;
 }
+
+/**
+ * The seal with its name beside it, as a pill.
+ *
+ * The bare seal is right in a list, where it sits against a name and has
+ * one line to work in. On a profile header there is room to say what it
+ * MEANS — a silhouette everybody half-recognises from other apps is weaker
+ * than three words, and this one was earned with a passport.
+ *
+ * The logic behind it is untouched: this renders where `isVerifiedRealtor`
+ * is true, exactly as the bare seal did.
+ */
+export const VerifiedPill = memo(function VerifiedPill({
+  size = 15,
+}: {
+  size?: number;
+}) {
+  const { colors } = useTheme();
+  const t = useT();
+
+  return (
+    <View
+      accessibilityRole="text"
+      accessibilityLabel={t("verify.badge")}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 5,
+        alignSelf: "center",
+        paddingLeft: 6,
+        paddingRight: spacing.sm,
+        paddingVertical: 4,
+        borderRadius: radii.pill,
+        backgroundColor: colors.primarySoft,
+        borderWidth: 1,
+        borderColor: colors.primaryBorder,
+      }}
+    >
+      <VerifiedBadge size={size + 3} />
+      <Text
+        style={{
+          ...type.caption,
+          ...weight("700"),
+          fontSize: size,
+          color: colors.primary,
+        }}
+      >
+        {t("verify.badge")}
+      </Text>
+    </View>
+  );
+});

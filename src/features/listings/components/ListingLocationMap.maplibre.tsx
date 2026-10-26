@@ -13,6 +13,8 @@ import {
   NativeUserLocation,
   type CameraRef,
 } from "@maplibre/maplibre-react-native";
+// Installs the log filter — see the file for what it silences and why.
+import "../../map/mapLogging";
 import {
   animateToRegion,
   regionToBounds,
