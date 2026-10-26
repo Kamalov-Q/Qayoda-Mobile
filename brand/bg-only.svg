@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Growen City">
+  <defs>
+    <linearGradient id="bg" x1="6" y1="2" x2="56" y2="62" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1D4247"/>
+      <stop offset=".5" stop-color="#112E33"/>
+      <stop offset="1" stop-color="#0A1C20"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" fill="url(#bg)"/>
+</svg>

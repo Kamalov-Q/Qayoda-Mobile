@@ -67,8 +67,9 @@ export const BrandGlyph = memo(function BrandGlyph({
       source={GLYPH}
       accessibilityLabel="Growen City"
       style={{ width: size, height: size }}
-      // contain, not cover: the glyph is wider than it is tall, and cropping
-      // it to a square takes the towers off the top.
+      // contain, not cover: the mark is taller than it is wide, sitting
+      // centred on a square canvas, and cropping it to fill takes the towers
+      // off the top.
       contentFit="contain"
     />
   );
