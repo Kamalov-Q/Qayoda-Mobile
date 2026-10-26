@@ -8,6 +8,7 @@
 import { useEffect, useRef } from "react";
 import { router } from "expo-router";
 import { useAuthStore } from "@/src/features/auth/store/auth.store";
+import { usePreferences } from "@/src/lib/preferences";
 import { PUSH_SUPPORTED } from "./pushSupport";
 import { queryClient } from "@/src/lib/query-client";
 import { notificationsApi } from "./api/notifications.api";
@@ -64,6 +65,10 @@ function routeFor(data: Record<string, unknown>): string | null {
 export function usePushRegistration(): void {
   const userId = useAuthStore((s) => s.user?.id);
   const authed = useAuthStore((s) => s.status === "authenticated");
+  // Switched off in the profile. Dropping the token is the whole mechanism:
+  // the server keeps sending to whoever is registered, so a device with no
+  // token registered is a device it cannot reach.
+  const pushEnabled = usePreferences((s) => s.pushEnabled);
   // Remembered so sign-out can unregister exactly the token it registered,
   // rather than asking the OS for one again while tearing the session down.
   const token = useRef<string | null>(null);
@@ -72,9 +77,10 @@ export function usePushRegistration(): void {
   useEffect(() => {
     let cancelled = false;
 
-    if (!authed || !userId) {
-      // Signing out: drop this device so the next person to use the phone
-      // does not receive the last person's messages.
+    if (!authed || !userId || !pushEnabled) {
+      // Signing out, or switched off: drop this device. On sign-out it stops
+      // the next person to use the phone receiving the last person's
+      // messages; on a switch-off it is what makes the phone go quiet.
       const previous = token.current;
       token.current = null;
       if (previous) {
@@ -98,7 +104,7 @@ export function usePushRegistration(): void {
     return () => {
       cancelled = true;
     };
-  }, [authed, userId]);
+  }, [authed, userId, pushEnabled]);
 
   // --- a push arriving while the app is open -----------------------------
   useEffect(() => {

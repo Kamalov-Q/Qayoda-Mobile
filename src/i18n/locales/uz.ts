@@ -921,6 +921,9 @@ export const uz = {
   },
 
   profile: {
+    pushTitle: "Bildirishnomalar",
+    pushOn: "Yangiliklar shu telefonga keladi",
+    pushOff: "Bu telefonga kelmaydi — ro'yxat ichida qoladi",
     statListings: "E'lonlarim",
     statActive: "Faol",
     statSaved: "Saqlangan",

@@ -1,19 +1,21 @@
 // app/(tabs)/account.tsx
 import { useState } from "react";
-import { Text, View, Pressable } from "react-native";
+import { Text, View, Pressable, Switch } from "react-native";
 import { router, type Href } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
-  Screen,
   Button,
   Card,
-  Section,
   ImageViewer,
+  LanguageSwitcher,
+  Screen,
+  Section,
   TAB_EDGES,
 } from "../../src/components/ui";
 import { spacing, radii, type } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT, useLanguage, type TranslationKey } from "../../src/i18n";
+import { usePreferences } from "../../src/lib/preferences";
 import { confirm } from "../../src/lib/alerts";
 import { useAuthStore } from "../../src/features/auth/store/auth.store";
 import { useLogout } from "../../src/features/auth/hooks/useAuth";
@@ -103,17 +105,31 @@ export default function AccountScreen() {
             }}
           >
             <Text style={text.display}>{t("tabs.profile")}</Text>
-            {/* App-shaped things (sign-in methods, location, theme, language,
-              about) live behind the gear, like the platform convention. */}
-            <Pressable
-              onPress={() => router.push("/settings")}
-              accessibilityRole="button"
-              accessibilityLabel={t("settings.title")}
-              hitSlop={8}
-              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            {/* Language sits out here rather than behind the gear: it is the
+                one app-level control somebody may need BEFORE they can read
+                the menu that would otherwise hold it. */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing.md,
+              }}
             >
-              <Ionicons name="settings-outline" size={24} color={colors.text} />
-            </Pressable>
+              <LanguageSwitcher />
+              <Pressable
+                onPress={() => router.push("/settings")}
+                accessibilityRole="button"
+                accessibilityLabel={t("settings.title")}
+                hitSlop={8}
+                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+              >
+                <Ionicons
+                  name="settings-outline"
+                  size={24}
+                  color={colors.text}
+                />
+              </Pressable>
+            </View>
           </View>
           <RedirectToSignIn />
         </View>
@@ -141,17 +157,26 @@ export default function AccountScreen() {
           }}
         >
           <Text style={text.display}>{t("tabs.profile")}</Text>
-          {/* App-shaped things (sign-in methods, location, theme, language,
-              about) live behind the gear, like the platform convention. */}
-          <Pressable
-            onPress={() => router.push("/settings")}
-            accessibilityRole="button"
-            accessibilityLabel={t("settings.title")}
-            hitSlop={8}
-            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+          {/* Language out here, the rest of the app-shaped things (sign-in
+              methods, location, theme, about) behind the gear. */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: spacing.md,
+            }}
           >
-            <Ionicons name="settings-outline" size={24} color={colors.text} />
-          </Pressable>
+            <LanguageSwitcher />
+            <Pressable
+              onPress={() => router.push("/settings")}
+              accessibilityRole="button"
+              accessibilityLabel={t("settings.title")}
+              hitSlop={8}
+              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            >
+              <Ionicons name="settings-outline" size={24} color={colors.text} />
+            </Pressable>
+          </View>
         </View>
 
         {/* The same component the public profile uses, so this tab and
@@ -293,6 +318,14 @@ export default function AccountScreen() {
           <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
         </Pressable>
 
+        {/* Push, on or off, for THIS phone.
+            Here rather than behind the gear because it is the one setting
+            people go looking for the moment an app becomes noisy — and the
+            moment they stop hearing from it. Switching it off unregisters
+            this device's token, so the server stops having anywhere to send;
+            the inbox below carries on either way. */}
+        <PushToggle />
+
         <Section title={t("profile.links")}>
           <Card flush>
             {LINKS.map((link, index) => (
@@ -382,5 +415,54 @@ function StatCell({
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+/**
+ * The push switch.
+ *
+ * A row, not a Settings entry: the state has to be readable at a glance, so
+ * the control says which way it is pointing without being opened.
+ */
+function PushToggle() {
+  const { colors, text } = useTheme();
+  const t = useT();
+  const enabled = usePreferences((s) => s.pushEnabled);
+  const setEnabled = usePreferences((s) => s.setPushEnabled);
+
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: spacing.md,
+        marginTop: -spacing.sm,
+        paddingVertical: spacing.sm + 2,
+        paddingHorizontal: spacing.md,
+        borderRadius: radii.lg,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.surface,
+      }}
+    >
+      <Ionicons
+        name={enabled ? "notifications" : "notifications-off-outline"}
+        size={20}
+        color={enabled ? colors.primary : colors.textMuted}
+      />
+      <View style={{ flex: 1 }}>
+        <Text style={text.bodyStrong}>{t("profile.pushTitle")}</Text>
+        <Text style={{ ...text.caption, color: colors.textMuted }}>
+          {t(enabled ? "profile.pushOn" : "profile.pushOff")}
+        </Text>
+      </View>
+      <Switch
+        value={enabled}
+        onValueChange={setEnabled}
+        accessibilityLabel={t("profile.pushTitle")}
+        trackColor={{ false: colors.border, true: colors.primary }}
+        thumbColor={colors.surface}
+      />
+    </View>
   );
 }

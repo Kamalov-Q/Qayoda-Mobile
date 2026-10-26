@@ -887,6 +887,9 @@ export const ru: Dictionary = {
   },
 
   profile: {
+    pushTitle: "Уведомления",
+    pushOn: "Приходят на этот телефон",
+    pushOff: "Не приходят на этот телефон — остаются в списке",
     statListings: "Объявления",
     statActive: "Активные",
     statSaved: "Избранное",

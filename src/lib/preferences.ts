@@ -13,6 +13,7 @@ const LANGUAGE_KEY = "prefs.language";
 const THEME_KEY = "prefs.themeMode";
 const CURRENCY_KEY = "prefs.currency";
 const INTRO_KEY = "prefs.introSeen";
+const PUSH_KEY = "prefs.pushEnabled";
 
 function isLanguage(v: unknown): v is Language {
   return LANGUAGES.includes(v as Language);
@@ -47,10 +48,24 @@ interface PreferencesState {
   currency: Currency;
   /** First-launch intro carousel: shown until finished, then never again. */
   introSeen: boolean;
+  /**
+   * Whether this device wants pushes.
+   *
+   * Local, not a column on the user: the thing being switched off is THIS
+   * handset's delivery, and the server already models that as whether the
+   * device's token is registered. Turning it off unregisters the token, so
+   * the server simply stops having anywhere to send — the same mechanism as
+   * signing out, without the sign-out.
+   *
+   * The inbox is unaffected either way; it polls. Switching push off makes
+   * the phone quiet, it does not make the app forget to tell you anything.
+   */
+  pushEnabled: boolean;
   setLanguage: (language: Language) => void;
   setThemeMode: (mode: ThemeMode) => void;
   setCurrency: (currency: Currency) => void;
   setIntroSeen: () => void;
+  setPushEnabled: (enabled: boolean) => void;
 }
 
 export const usePreferences = create<PreferencesState>((set) => ({
@@ -59,6 +74,9 @@ export const usePreferences = create<PreferencesState>((set) => ({
   // USD is how this market quotes real estate, whatever the wallet holds.
   currency: "USD",
   introSeen: false,
+  // On by default: someone who installed a marketplace app wants to hear
+  // that their advert sold. The OS permission prompt is still the real gate.
+  pushEnabled: true,
 
   setLanguage: (language) => {
     set({ language });
@@ -73,6 +91,11 @@ export const usePreferences = create<PreferencesState>((set) => ({
   setCurrency: (currency) => {
     set({ currency });
     AsyncStorage.setItem(CURRENCY_KEY, currency).catch(() => {});
+  },
+
+  setPushEnabled: (pushEnabled) => {
+    set({ pushEnabled });
+    AsyncStorage.setItem(PUSH_KEY, pushEnabled ? "1" : "0").catch(() => {});
   },
 
   setIntroSeen: () => {
@@ -93,11 +116,13 @@ export async function hydratePreferences(): Promise<void> {
       [, storedTheme],
       [, storedCurrency],
       [, storedIntro],
+      [, storedPush],
     ] = await AsyncStorage.multiGet([
       LANGUAGE_KEY,
       THEME_KEY,
       CURRENCY_KEY,
       INTRO_KEY,
+      PUSH_KEY,
     ]);
 
     usePreferences.setState({
@@ -107,6 +132,8 @@ export async function hydratePreferences(): Promise<void> {
       themeMode: isThemeMode(storedTheme) ? storedTheme : "system",
       currency: isCurrency(storedCurrency) ? storedCurrency : "USD",
       introSeen: storedIntro === "1",
+      // Absent means never touched, which is the default: on.
+      pushEnabled: storedPush !== "0",
     });
   } catch {
     // Storage unavailable — the device-derived defaults already in the store
