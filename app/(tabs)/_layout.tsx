@@ -1,6 +1,6 @@
 // app/(tabs)/_layout.tsx
 import { Tabs, router } from "expo-router";
-import { View } from "react-native";
+import { View, type ColorValue } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { radii, weight } from "../../src/theme/tokens";
@@ -29,6 +29,15 @@ const BAR_HEIGHT = 58;
 // Only scales the glyph inside that fixed 28pt wrapper; it has no effect on
 // whether the label fits. 28 fills the wrapper exactly — past that the glyph
 // overflows it (nothing clips, but it starts crowding the label 2pt below).
+/**
+ * React Navigation types a tab icon's colour as RN's ColorValue, which in
+ * 0.88 includes the processed-colour `number` form. The icon font takes a
+ * string or a native colour object, so the number is dropped — navigation
+ * only ever passes the theme string it was given.
+ */
+const iconColor = (color: ColorValue | undefined) =>
+  color == null || typeof color === "number" ? undefined : color;
+
 const ICON_SIZE = 28;
 
 export default function TabsLayout() {
@@ -80,7 +89,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={ICONS.home[focused ? 0 : 1]}
-              color={color}
+              color={iconColor(color)}
               size={ICON_SIZE}
             />
           ),
@@ -93,7 +102,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={ICONS.videos[focused ? 0 : 1]}
-              color={color}
+              color={iconColor(color)}
               size={ICON_SIZE}
             />
           ),
@@ -148,7 +157,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={ICONS.chat[focused ? 0 : 1]}
-              color={color}
+              color={iconColor(color)}
               size={ICON_SIZE}
             />
           ),
@@ -169,7 +178,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={ICONS.account[focused ? 0 : 1]}
-              color={color}
+              color={iconColor(color)}
               size={ICON_SIZE}
             />
           ),

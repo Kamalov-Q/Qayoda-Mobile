@@ -108,14 +108,17 @@ export function useMyLocation() {
 /**
  * Address → coordinates, for moving a map camera somewhere by name.
  *
- * Yandex's Geocoder HTTP API rather than the device's own geocoder, which is
- * what this used before. Three things came with the swap: the same answers on
- * both platforms (Android's Geocoder is a vendor service and simply absent on
- * some builds), no location permission in the path at all — Android gated its
+ * Nominatim over HTTP rather than the device's own geocoder, which is what
+ * this used before. Three things came with the swap: the same answers on both
+ * platforms (Android's Geocoder is a vendor service and simply absent on some
+ * builds), no location permission in the path at all — Android gated its
  * geocoder behind one and returned an empty list rather than an error when it
  * was not held, which cost a permission prompt in the middle of typing a
  * street name — and addresses in the language the app is set to rather than
  * the one the OS is set to.
+ *
+ * Same service the admin dashboard searches with, so both halves of the
+ * product agree about where a place is.
  *
  * Still native-and-web alike, unlike the old one: it is an HTTPS call, so the
  * polygon editor's stub on web is now a choice rather than a limitation.

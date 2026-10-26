@@ -1,11 +1,12 @@
 // app/add/index.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
+import { formatUzPhoneInput, isUzMobile, normalizePhone } from "@/src/lib/phone";
 import {
   ActivityIndicator,
   Text,
   View,
-  TextInput,
   Pressable,
+  type TextInputInstance,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeIn } from "react-native-reanimated";
@@ -277,8 +278,6 @@ const FLOOR_CHOICE_ICONS = {
 // Deliberately loose: numbers are written +998 90 123 45 67, 90-123-45-67 or
 // as a bare local number depending on who is filling the form. It only has to
 // catch a half-typed number, not enforce a format.
-const PHONE = /^\+?[\d\s()-]{7,20}$/;
-
 // Limits mirror the server's CreateListingDto where it has one (title 160,
 // address 500, floors up to 200), so a form that passes here is not bounced
 // by the API. The rest are sanity bounds: wide enough for any real listing,
@@ -322,12 +321,6 @@ const groupDigits = (n: number) =>
  * bare local number. A local Uzbek number is 9 digits, the full one 12 (998 +
  * 9), and anything else international falls in 10–15.
  */
-const phoneDigitsOk = (v: string) => {
-  const digits = v.replace(/\D/g, "");
-  if (digits.startsWith("998")) return digits.length === 12;
-  return digits.length >= 9 && digits.length <= 15;
-};
-
 // Rebuilt whenever the language changes: the messages are user-facing, and a
 // schema frozen at module load would keep showing the language the app started
 // in. Same pattern as the auth screens.
@@ -384,10 +377,7 @@ const makeSchema = (t: ReturnType<typeof useT>) => {
         phone: z
           .string()
           .trim()
-          .refine(
-            (v) => !v || (PHONE.test(v) && phoneDigitsOk(v)),
-            t("validation.phoneInvalid"),
-          )
+          .refine((v) => !v || isUzMobile(v), t("validation.phoneInvalid"))
           .optional(),
         description: z
           .string()
@@ -508,7 +498,7 @@ export default function AddListingScreen() {
 
   // Only the title chains: number-pad keyboards have no "next" key, so the
   // numeric fields can't hand focus on anyway.
-  const priceRef = useRef<TextInput>(null);
+  const priceRef = useRef<TextInputInstance>(null);
 
   const create = useCreateListing();
   // The price list and the balance, so the form can say what it will cost
@@ -930,7 +920,7 @@ export default function AddListingScreen() {
         sendFloors && d.totalFloors ? Number(d.totalFloors) : undefined,
       address: d.address?.trim() || undefined,
       ...(properties.length ? { properties } : {}),
-      contactPhone: d.phone?.trim() || undefined,
+      contactPhone: d.phone?.trim() ? normalizePhone(d.phone) : undefined,
       descriptionHtml: description ? textToHtml(description) : undefined,
       ...(locMode === "POLYGON"
         ? { coordinates: [closeRing(polygon)] }
@@ -1400,10 +1390,17 @@ export default function AddListingScreen() {
                       placeholder={t("add.phonePlaceholder")}
                       hint={t("add.phoneHint")}
                       icon="call-outline"
+                      // Same treatment as the sign-in field: a fixed +998, the
+                      // digits masked as they are typed and capped at nine. The
+                      // field used to take free text, so a buyer could be given
+                      // a twenty-three digit number nobody can ring.
+                      prefix="+998"
                       keyboardType="phone-pad"
                       autoComplete="tel"
+                      textContentType="telephoneNumber"
+                      maxLength={12}
                       value={value}
-                      onChangeText={onChange}
+                      onChangeText={(v) => onChange(formatUzPhoneInput(v))}
                       onBlur={onBlur}
                       error={errors.phone?.message}
                     />

@@ -15,8 +15,10 @@ import {
   ActivityIndicator,
   RefreshControl,
   StyleSheet,
-  type ViewToken,
 } from "react-native";
+// ViewToken left react-native's public types in 0.88; the list
+// implementation it belongs to is where it lives now.
+import type { ListViewToken as ViewToken } from "@react-native/virtualized-lists";
 import { router, useIsFocused } from "expo-router";
 import Animated, {
   Extrapolation,
@@ -1190,7 +1192,7 @@ export default function HomeScreen() {
               refreshControl={
                 <RefreshControl
                   refreshing={feed.isRefetching}
-                  onRefresh={() => feed.refetch()}
+                  onRefresh={() => void feed.refetch()}
                   tintColor={colors.primary}
                   // Or the spinner comes down behind the bar.
                   progressViewOffset={barHeight}
@@ -1208,7 +1210,7 @@ export default function HomeScreen() {
                     style={{ padding: spacing.md }}
                     color={colors.primary}
                   />
-                ) : null
+                ) : undefined
               }
               removeClippedSubviews
               initialNumToRender={8}

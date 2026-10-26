@@ -4,6 +4,7 @@ import {
   ViewStyle,
   ScrollView,
   KeyboardAvoidingView,
+  type ScrollViewInstance,
 } from "react-native";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 // From expo-router, not @react-navigation/elements: since SDK 56 the router
@@ -62,7 +63,7 @@ export function Screen({
 }: Props) {
   const { colors } = useTheme();
   const keyboardOffset = useKeyboardOffset();
-  const scroller = useRef<ScrollView>(null);
+  const scroller = useRef<ScrollViewInstance>(null);
 
   useEffect(() => {
     if (scrollResetKey === undefined) return;

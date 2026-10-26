@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { formatUzPhoneInput, isUzMobile, normalizePhone } from "@/src/lib/phone";
 import {
   Modal,
   View,
@@ -136,7 +137,6 @@ const FLOOR_CHOICE_ICONS = {
   no: "square-outline",
 } as const satisfies Record<FloorChoice, keyof typeof Ionicons.glyphMap>;
 
-const PHONE = /^\+?[\d\s()-]{7,20}$/;
 const TITLE_MAX = 160;
 const ADDRESS_MAX = 500;
 const DESCRIPTION_MAX = 2000;
@@ -162,12 +162,6 @@ const PRICE_PLACEHOLDERS: Record<OfferPurpose, Record<Currency, string>> = {
 
 const groupDigits = (n: number) =>
   String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-
-const phoneDigitsOk = (v: string) => {
-  const digits = v.replace(/\D/g, "");
-  if (digits.startsWith("998")) return digits.length === 12;
-  return digits.length >= 9 && digits.length <= 15;
-};
 
 const makeSchema = (t: ReturnType<typeof useT>) => {
   const digits = z.string().regex(/^\d*$/, t("validation.numbersOnly"));
@@ -216,10 +210,7 @@ const makeSchema = (t: ReturnType<typeof useT>) => {
       phone: z
         .string()
         .trim()
-        .refine(
-          (v) => !v || (PHONE.test(v) && phoneDigitsOk(v)),
-          t("validation.phoneInvalid"),
-        )
+        .refine((v) => !v || isUzMobile(v), t("validation.phoneInvalid"))
         .optional(),
       description: z
         .string()
@@ -388,7 +379,8 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
         listing.totalFloors != null ? String(listing.totalFloors) : "",
       address: listing.address ?? "",
       areaM2: listing.areaM2 ? String(listing.areaM2) : "",
-      phone: listing.contactPhone ?? "",
+      // Stored as +998XXXXXXXXX; the field owns the prefix and the spacing.
+      phone: formatUzPhoneInput(listing.contactPhone ?? ""),
       description: listing.descriptionText ?? "",
     },
   });
@@ -536,7 +528,7 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
         totalFloors: sendFloors && d.totalFloors ? Number(d.totalFloors) : null,
         address: d.address?.trim() || undefined,
         properties: properties.length ? properties : [],
-        contactPhone: d.phone?.trim() || undefined,
+        contactPhone: d.phone?.trim() ? normalizePhone(d.phone) : undefined,
         descriptionHtml: description ? textToHtml(description) : undefined,
         areaM2: d.areaM2 ? Number(d.areaM2) : undefined,
         coordinates,
@@ -1008,10 +1000,14 @@ function ListingEditContent({ listing, onClose }: ListingEditContentProps) {
               label={t("add.phone")}
               placeholder={t("add.phonePlaceholder")}
               icon="call-outline"
+              // Masked and prefixed, as on the add form and the sign-in screen.
+              prefix="+998"
               keyboardType="phone-pad"
               autoComplete="tel"
+              textContentType="telephoneNumber"
+              maxLength={12}
               value={value}
-              onChangeText={onChange}
+              onChangeText={(v) => onChange(formatUzPhoneInput(v))}
               onBlur={onBlur}
               error={errors.phone?.message}
             />

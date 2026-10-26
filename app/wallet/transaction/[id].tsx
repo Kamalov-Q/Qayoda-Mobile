@@ -203,7 +203,7 @@ export default function WalletTransactionScreen() {
         refreshControl={
           <RefreshControl
             refreshing={isFetching && !isPlaceholderData}
-            onRefresh={refetch}
+            onRefresh={() => void refetch()}
             tintColor={colors.primary}
             colors={[colors.primary]}
           />

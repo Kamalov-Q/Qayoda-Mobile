@@ -198,7 +198,7 @@ export default function ListingCommentsScreen() {
       refreshControl={
         <RefreshControl
           refreshing={comments.isRefetching}
-          onRefresh={comments.refetch}
+          onRefresh={() => void comments.refetch()}
           tintColor={colors.primary}
         />
       }
@@ -231,7 +231,7 @@ export default function ListingCommentsScreen() {
       ListFooterComponent={
         comments.isFetchingNextPage ? (
           <ActivityIndicator color={colors.primary} />
-        ) : null
+        ) : undefined
       }
     />
   );

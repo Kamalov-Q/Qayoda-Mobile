@@ -1,14 +1,11 @@
 // src/features/map/PinPicker.tsx
-// Loads the MapKit map only where the binary has it — see mapSupport.ts.
-// The implementation is PinPicker.yandex.tsx.
-import { loadMapImpl } from "./mapSupport";
+// Loads the MapLibre map only where the binary has it — see mapSupport.ts.
+// The implementation is PinPicker.maplibre.tsx.
+import { MAP_SUPPORTED } from "./mapSupport";
 import { MapUnavailable } from "./MapUnavailable";
-import type * as Impl from "./PinPicker.yandex";
+import type * as Impl from "./PinPicker.maplibre";
 
-const impl = loadMapImpl(
-  // eslint-disable-next-line @typescript-eslint/no-require-imports -- must stay lazy, see mapSupport.ts
-  () => require("./PinPicker.yandex").PinPicker,
-) as typeof Impl.PinPicker | null;
-
-export const PinPicker: typeof Impl.PinPicker =
-  impl ?? (({ onCancel }) => <MapUnavailable onCancel={onCancel} />);
+export const PinPicker: typeof Impl.PinPicker = MAP_SUPPORTED
+  ? // eslint-disable-next-line @typescript-eslint/no-require-imports -- must stay lazy, see mapSupport.ts
+    require("./PinPicker.maplibre").PinPicker
+  : ({ onCancel }) => <MapUnavailable onCancel={onCancel} />;

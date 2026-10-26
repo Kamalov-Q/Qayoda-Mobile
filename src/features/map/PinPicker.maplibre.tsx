@@ -1,4 +1,4 @@
-// src/features/map/PinPicker.yandex.tsx
+// src/features/map/PinPicker.maplibre.tsx
 // The pin sibling of PolygonPicker: tap the map, a marker lands, drag it to
 // fine-tune, save. For listings where an approximate spot is honest enough
 // (an apartment in a block) and drawing a boundary would be theatre.
@@ -9,22 +9,20 @@
 import { useRef, useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import {
-  Marker,
-  YandexMapView,
-  type YandexMapViewRef,
-} from "expo-yandex-mapkit";
-import {
-  animateToRegion,
-  toLatLng,
-  toPosition,
-  useInitialCamera,
-} from "./maps";
+  Camera,
+  Map as MapLibreMap,
+  NativeUserLocation,
+  ViewAnnotation,
+  type CameraRef,
+} from "@maplibre/maplibre-react-native";
+import { animateToRegion, regionToBounds } from "./maps";
+import { useMapStyle } from "./mapLayer";
 import { MapPin } from "./MapPin";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Button } from "../../components/ui";
 import { MapIconButton } from "./MapIconButton";
-import { MAP_TYPE } from "./mapLayer";
+import { MapLayerButton } from "./MapLayerButton";
 import { useMyLocation } from "../listings/hooks/useMyLocation";
 import { spacing, radii } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
@@ -47,30 +45,22 @@ interface Props {
 
 export function PinPicker({ initial, onCancel, onSave }: Props) {
   const [point, setPoint] = useState<[number, number] | null>(initial);
-  const mapRef = useRef<YandexMapViewRef>(null);
+  const cameraRef = useRef<CameraRef>(null);
   const { locate, loading: locating } = useMyLocation();
   const { colors, text } = useTheme();
+  const mapStyle = useMapStyle();
   // Header and footer pad themselves: the map runs edge to edge between them.
   const insets = useSafeAreaInsets();
   const t = useT();
 
-  /**
-   * The opening camera only, fixed for the life of the screen.
-   *
-   * `cameraPosition` is controlled: any value the native side has not
-   * already reached, it MOVES to. Re-deriving it would mean every dropped
-   * pin pulled the camera back to the opening frame.
-   */
-  const initialCamera = useInitialCamera(
-    initial
-      ? {
-          latitude: initial[1],
-          longitude: initial[0],
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }
-      : DEFAULT_REGION,
-  );
+  const region = initial
+    ? {
+        latitude: initial[1],
+        longitude: initial[0],
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      }
+    : DEFAULT_REGION;
 
   return (
     <View
@@ -115,36 +105,36 @@ export function PinPicker({ initial, onCancel, onSave }: Props) {
       </View>
 
       <View style={{ flex: 1 }}>
-        <YandexMapView
-          ref={mapRef}
+        <MapLibreMap
           style={{ flex: 1 }}
-          // The vector map draws Tashkent's building outlines, which is what
-          // a pin is aimed at here; satellite shows the actual roof.
-          mapType={MAP_TYPE}
-          cameraPosition={initialCamera}
-          showUserPosition
-          // Bottom-LEFT: the locate and layer controls stack up the bottom
-          // right. See MAP_LOGO_RULE in maps.ts — it cannot be hidden.
-          logoPosition={{ horizontal: "left", vertical: "bottom" }}
-          onMapPress={(e) => {
-            setPoint(toPosition(e.nativeEvent.point));
+          // OpenStreetMap's street map draws Tashkent's building outlines,
+          // which is what a pin is aimed at here.
+          mapStyle={mapStyle}
+          logo={false}
+          compass={false}
+          onPress={(e) => {
+            setPoint(e.nativeEvent.lngLat);
           }}
         >
+          <Camera
+            ref={cameraRef}
+            initialViewState={{ bounds: regionToBounds(region) }}
+          />
+          <NativeUserLocation />
           {point ? (
-            <Marker
-              point={toLatLng(point)}
-              // The teardrop's tip is the point it marks, so it hangs by its
-              // bottom edge rather than by its middle.
-              anchor={{ x: 0.5, y: 1 }}
+            <ViewAnnotation
+              id="pin"
+              lngLat={point}
+              anchor="bottom"
               draggable
               onDragEnd={(e) => {
-                setPoint(toPosition(e.nativeEvent.point));
+                setPoint(e.nativeEvent.lngLat);
               }}
             >
               <MapPin />
-            </Marker>
+            </ViewAnnotation>
           ) : null}
-        </YandexMapView>
+        </MapLibreMap>
 
         {/* One tap for the common case: the pin lands on where you stand. */}
         <MapIconButton
@@ -156,7 +146,7 @@ export function PinPicker({ initial, onCancel, onSave }: Props) {
             if (!pos) return;
             setPoint([pos.longitude, pos.latitude]);
             animateToRegion(
-              mapRef.current,
+              cameraRef.current,
               {
                 latitude: pos.latitude,
                 longitude: pos.longitude,
@@ -173,8 +163,11 @@ export function PinPicker({ initial, onCancel, onSave }: Props) {
           }}
         />
 
-        {/* Satellite shows the actual roof the pin is meant for. Stacked
-            above the locate control, clear of the hint at the top. */}
+        {/* Satellite shows the roof the pin is meant for, where the vector
+            map shows only the plot it sits on. */}
+        <MapLayerButton
+          style={{ position: "absolute", top: spacing.md, right: spacing.md }}
+        />
 
         {/* Instruction floats until a pin exists, then gets out of the way. */}
         {!point ? (

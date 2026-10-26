@@ -105,7 +105,7 @@ export default function ListingReviewsScreen() {
       <FlatList<Review>
         data={reviews.items}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={header}
+        ListHeaderComponent={header ?? undefined}
         contentContainerStyle={{
           padding: spacing.lg,
           gap: spacing.md,
@@ -114,7 +114,7 @@ export default function ListingReviewsScreen() {
         refreshControl={
           <RefreshControl
             refreshing={reviews.isRefetching}
-            onRefresh={reviews.refetch}
+            onRefresh={() => void reviews.refetch()}
             tintColor={colors.primary}
           />
         }
@@ -148,7 +148,7 @@ export default function ListingReviewsScreen() {
             <Text style={{ ...text.caption, textAlign: "center" }}>
               {t("reviews.allShown")}
             </Text>
-          ) : null
+          ) : undefined
         }
       />
 

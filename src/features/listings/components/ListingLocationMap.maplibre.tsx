@@ -1,35 +1,34 @@
-// src/features/listings/components/ListingLocationMap.yandex.tsx
+// src/features/listings/components/ListingLocationMap.maplibre.tsx
 // Where the listing actually is: a non-interactive map preview with the real
 // drawn boundary, expanding to a full-screen map on tap. The boundary is the
 // app's whole pitch — the detail page is exactly where it must show up.
 import { useMemo, useRef, useState } from "react";
 import { Modal, View, Text, Pressable } from "react-native";
 import {
+  Camera,
+  GeoJSONSource,
+  Layer,
+  Map as MapLibreMap,
   Marker,
-  Polygon,
-  YandexMapView,
-  type YandexMapViewRef,
-} from "expo-yandex-mapkit";
+  NativeUserLocation,
+  type CameraRef,
+} from "@maplibre/maplibre-react-native";
 import {
   animateToRegion,
-  isDrawableRing,
-  logoPadding,
-  ringToLatLngs,
-  TASHKENT_REGION,
-  useInitialCamera,
-  toLatLng,
-  visibleRegionToRegion,
-  withAlpha,
+  regionToBounds,
+  ringFeature,
+  viewStateToRegion,
   type Region,
 } from "../../map/maps";
+import { useMapStyle } from "../../map/mapLayer";
 import { MapPin } from "../../map/MapPin";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { spacing, radii, sizing, type } from "../../../theme/tokens";
+import { spacing, radii, type } from "../../../theme/tokens";
 import { useTheme } from "../../../theme/useTheme";
 import { useT } from "../../../i18n";
 import { MapIconButton } from "../../map/MapIconButton";
-import { MAP_TYPE } from "../../map/mapLayer";
+import { MapLayerButton } from "../../map/MapLayerButton";
 import { NavigateButton } from "../../map/NavigateButton";
 import { useMyLocation } from "../hooks/useMyLocation";
 
@@ -72,21 +71,20 @@ function regionFor(ring: [number, number][]): Region {
 export function ListingLocationMap({ coordinates, centroid, address }: Props) {
   const [fullOpen, setFullOpen] = useState(false);
   const { colors, text } = useTheme();
+  const mapStyle = useMapStyle();
   // Captured OUTSIDE the modal — inside a native Modal the safe-area context
   // can report zero insets (same fix as the location card's full map).
   const insets = useSafeAreaInsets();
   const t = useT();
 
   const ring = coordinates?.[0];
-  // isDrawableRing rather than a length check: rings come off the API, and a
-  // two-point "polygon" draws as nothing while still taking taps.
-  const hasRing = isDrawableRing(ring);
-  const boundary = useMemo(
-    () => (hasRing ? ringToLatLngs(ring) : null),
+  const hasRing = !!ring && ring.length >= 3;
+  const shape = useMemo(
+    () => (hasRing ? ringFeature(ring!) : null),
     [hasRing, ring],
   );
   const region = useMemo<Region | null>(() => {
-    if (hasRing) return regionFor(ring);
+    if (hasRing) return regionFor(ring!);
     if (centroid) {
       return {
         latitude: centroid[1],
@@ -98,35 +96,28 @@ export function ListingLocationMap({ coordinates, centroid, address }: Props) {
     return null;
   }, [hasRing, ring, centroid]);
 
-  // Computed before the early return below: a hook cannot be called
-  // conditionally, and `region` is null only when there is nothing to draw.
-  const previewCamera = useInitialCamera(region ?? TASHKENT_REGION);
-
   // No boundary AND no pin — nothing honest to draw.
   if (!region) return null;
 
   // Boundary when there is one; otherwise the pin. Same slot either way.
-  // Built as a function rather than an element so the two maps below each get
-  // their own: a native view cannot be mounted into two parents at once, and
-  // handing the same element to both left the preview empty once the modal
-  // had opened.
-  const overlay = () =>
-    boundary ? (
-      <Polygon
-        points={boundary}
-        fillColor={withAlpha(colors.primary, 0.2)}
-        strokeColor={colors.primary}
-        strokeWidth={2}
+  const overlay = shape ? (
+    <GeoJSONSource id="listing-boundary" data={shape}>
+      <Layer
+        id="listing-boundary-fill"
+        type="fill"
+        paint={{ "fill-color": colors.primary + "33" }}
       />
-    ) : (
-      <Marker
-        point={toLatLng(centroid!)}
-        anchor={{ x: 0.5, y: 1 }}
-        tracksViewChanges={false}
-      >
-        <MapPin />
-      </Marker>
-    );
+      <Layer
+        id="listing-boundary-line"
+        type="line"
+        paint={{ "line-color": colors.primary, "line-width": 2 }}
+      />
+    </GeoJSONSource>
+  ) : (
+    <Marker lngLat={[centroid![0], centroid![1]]} anchor="bottom">
+      <MapPin />
+    </Marker>
+  );
 
   return (
     <View
@@ -147,18 +138,23 @@ export function ListingLocationMap({ coordinates, centroid, address }: Props) {
         {/* Touches are blocked by THIS wrapper, never by a pointerEvents on
               the map itself. See MAP_STYLE_RULE in maps.ts. */}
         <View style={{ flex: 1, pointerEvents: "none" }}>
-          <YandexMapView
-            // A picture, not a widget: interactiveDisabled keeps it out of
-            // the gesture chain, and touches fall through (via the wrapper
+          <MapLibreMap
+            // A picture, not a widget: touches fall through (via the wrapper
             // above) to the Pressable that opens the real map.
             style={{ flex: 1 }}
-            mapType={MAP_TYPE}
-            cameraPosition={previewCamera}
-            interactiveDisabled
-            logoPosition={{ horizontal: "left", vertical: "bottom" }}
+            mapStyle={mapStyle}
+            logo={false}
+            compass={false}
+            dragPan={false}
+            touchZoom={false}
+            doubleTapZoom={false}
+            doubleTapHoldZoom={false}
+            touchRotate={false}
+            touchPitch={false}
           >
-            {overlay()}
-          </YandexMapView>
+            <Camera initialViewState={{ bounds: regionToBounds(region) }} />
+            {overlay}
+          </MapLibreMap>
         </View>
 
         <View
@@ -213,7 +209,7 @@ export function ListingLocationMap({ coordinates, centroid, address }: Props) {
       <FullListingMap
         visible={fullOpen}
         region={region}
-        renderOverlay={overlay}
+        polygon={overlay}
         title={address ?? t("location.title")}
         insets={insets}
         onClose={() => setFullOpen(false)}
@@ -225,29 +221,29 @@ export function ListingLocationMap({ coordinates, centroid, address }: Props) {
 function FullListingMap({
   visible,
   region,
-  renderOverlay,
+  polygon,
   title,
   insets,
   onClose,
 }: {
   visible: boolean;
   region: Region;
-  renderOverlay: () => React.ReactNode;
+  polygon: React.ReactNode;
   title: string;
   insets: { top: number; bottom: number };
   onClose: () => void;
 }) {
   const { colors, text } = useTheme();
   const t = useT();
-  const mapRef = useRef<YandexMapViewRef>(null);
+  const mapStyle = useMapStyle();
+  const cameraRef = useRef<CameraRef>(null);
   const regionRef = useRef<Region>(region);
-  const fullCamera = useInitialCamera(region);
   const { locate, loading: locating } = useMyLocation();
 
   const zoomBy = (factor: number) => {
     const r = regionRef.current;
     animateToRegion(
-      mapRef.current,
+      cameraRef.current,
       {
         ...r,
         latitudeDelta: clampDelta(r.latitudeDelta * factor),
@@ -310,34 +306,24 @@ function FullListingMap({
 
         <View style={{ flex: 1 }}>
           {visible ? (
-            <YandexMapView
-              ref={mapRef}
+            <MapLibreMap
               style={{ flex: 1 }}
-              mapType={MAP_TYPE}
-              cameraPosition={fullCamera}
-              // The blue dot + the boundary together answer "how far is it
-              // from me" — the whole reason to open the full map.
-              showUserPosition
-              // Lifted over the Navigate pill in the bottom-left corner.
-              logoPosition={{ horizontal: "left", vertical: "bottom" }}
-              // Lifted over the Navigate pill, which is sizing.control tall.
-              logoPadding={logoPadding(
-                spacing.md,
-                insets.bottom + spacing.xl + sizing.control,
-              )}
-              // Not onRegionChangeComplete — see visibleRegionToRegion.
-              onCameraPositionChanged={(e) => {
-                if (!e.nativeEvent.finished) return;
-                mapRef.current
-                  ?.getVisibleRegion()
-                  .then((visible) => {
-                    if (visible) regionRef.current = visibleRegionToRegion(visible);
-                  })
-                  .catch(() => {});
+              mapStyle={mapStyle}
+              logo={false}
+              compass={false}
+              onRegionDidChange={(e) => {
+                regionRef.current = viewStateToRegion(e.nativeEvent);
               }}
             >
-              {renderOverlay()}
-            </YandexMapView>
+              <Camera
+                ref={cameraRef}
+                initialViewState={{ bounds: regionToBounds(region) }}
+              />
+              {/* The blue dot + the boundary together answer "how far is it
+                  from me" — the whole reason to open the full map. */}
+              <NativeUserLocation />
+              {polygon}
+            </MapLibreMap>
           ) : null}
 
           <View
@@ -358,8 +344,7 @@ function FullListingMap({
               label={t("map.zoomOut")}
               onPress={() => zoomBy(2)}
             />
-            {/* Apart from the zoom pair: it changes what the map shows, not
-                where the camera is. */}
+            <MapLayerButton style={{ marginTop: spacing.sm }} />
           </View>
 
           {/* The one thing this map cannot do itself: hand the place to
@@ -386,22 +371,18 @@ function FullListingMap({
             onPress={async () => {
               const pos = await locate();
               if (!pos) return;
-              mapRef.current
-                ?.fitToCoordinates(
-                  [
-                    { latitude: pos.latitude, longitude: pos.longitude },
-                    { latitude: region.latitude, longitude: region.longitude },
-                  ],
-                  {
-                    edgePadding: {
-                      top: 80,
-                      right: 80,
-                      bottom: 80,
-                      left: 80,
-                    },
-                  },
-                )
-                .catch(() => {});
+              cameraRef.current?.fitBounds(
+                [
+                  Math.min(pos.longitude, region.longitude),
+                  Math.min(pos.latitude, region.latitude),
+                  Math.max(pos.longitude, region.longitude),
+                  Math.max(pos.latitude, region.latitude),
+                ],
+                {
+                  padding: { top: 80, right: 80, bottom: 80, left: 80 },
+                  duration: 500,
+                },
+              );
             }}
             style={{
               position: "absolute",

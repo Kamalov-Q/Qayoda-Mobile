@@ -1,5 +1,3 @@
-// src/features/map/ListingsMap.yandex.tsx
-// The browse map: parcels, price bubbles, clusters and the search circle.
 import {
   memo,
   useCallback,
@@ -9,27 +7,23 @@ import {
   forwardRef,
   useImperativeHandle,
 } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, View, type NativeSyntheticEvent } from "react-native";
 import {
-  Circle,
+  Camera,
+  GeoJSONSource,
+  Layer,
+  Map as MapLibreMap,
   Marker,
-  Polygon,
-  YandexMapView,
-  type CameraPositionChangeEvent,
-  type MapPressEvent,
-  type MarkerDragEvent,
-  type YandexMapViewRef,
-} from "expo-yandex-mapkit";
-// Aliased: react-native-svg and MapKit both export a Circle, and the two mean
-// very different things here — one is a shape in a marker's artwork, the
-// other is the search radius on the ground.
-import Svg, {
-  Circle as SvgCircle,
-  Polygon as SvgPolygon,
-  Rect,
-  Text as SvgText,
-} from "react-native-svg";
-import { fonts, sizing, spacing } from "../../theme/tokens";
+  NativeUserLocation,
+  ViewAnnotation,
+  type CameraRef,
+  type PressEvent,
+  type PressEventWithFeatures,
+  type ViewAnnotationEvent,
+  type ViewStateChangeEvent,
+} from "@maplibre/maplibre-react-native";
+import Svg, { Circle, Rect, Text as SvgText } from "react-native-svg";
+import { spacing } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 import { useT } from "../../i18n";
 import {
@@ -40,22 +34,22 @@ import {
 } from "../listings/api/listings.api";
 import {
   animateToRegion,
+  circleRing,
   isDrawableRing,
-  logoPadding,
-  regionToCamera,
-  ringToLatLngs,
-  visibleRegionToRegion,
+  regionToBounds,
+  ringFeature,
   toLatLng,
-  toPosition,
   radiusRegion,
   regionToViewport,
+  viewStateToRegion,
   withAlpha,
   TASHKENT_REGION,
   type Region,
 } from "./maps";
+import { useMapStyle } from "./mapLayer";
 import { usePriceFormatter, useSpecsFormatter } from "../listings/utils/format";
 import { MapIconButton } from "./MapIconButton";
-import { MAP_TYPE } from "./mapLayer";
+import { MapLayerButton } from "./MapLayerButton";
 import { ListingPreviewSheet } from "./ListingPreviewSheet";
 import { ListingStackSheet } from "./ListingStackSheet";
 import { MyLocationButton } from "./MyLocationButton";
@@ -88,17 +82,17 @@ interface Props {
    */
   bottomInset?: number;
   /**
-   * Room to leave at the TOP for the same reason — on the home tab the
-   * search box, the purpose chips and the category row all float over the
-   * map's own top-right controls, which would otherwise sit underneath them.
-   */
-  topInset?: number;
-  /**
    * Whether a listing's preview card is open. The screen floats its own
    * chrome over the same bottom strip (the "Topildi" count), which covered the
    * card's "view details" link — so it needs to know to step aside.
    */
   onSelectionChange?: (open: boolean) => void;
+  /**
+   * Room to leave at the TOP — on the home tab the search box, the purpose
+   * chips and the category row all float over the map's own top-right
+   * controls, which would otherwise sit underneath them.
+   */
+  topInset?: number;
   /** Drawn over the listings; null when no radius filter is being used. */
   circle?: RadiusCircle | null;
   /** The centre was dragged, or tapped onto a new spot. Editable circles only. */
@@ -109,15 +103,7 @@ interface Props {
   radiusActive?: boolean;
 }
 
-/**
- * Where the browse map opens. A module constant rather than a value built in
- * the render: `cameraPosition` is a controlled prop, so a fresh object on
- * every render is a camera that keeps being told where to go while the
- * reader is panning it somewhere else.
- */
-const OPENING_CAMERA = regionToCamera(TASHKENT_REGION);
-
-/** Hard ceiling on live map views: every feature is a native placemark (and
+/** Hard ceiling on live map views: every feature is a native marker (and
  *  often a polygon), and past a couple hundred iOS kills the app for memory
  *  long before the map becomes unusable for any other reason. */
 const MAX_RENDERED_FEATURES = 120;
@@ -126,13 +112,11 @@ const MAX_RENDERED_FEATURES = 120;
  * How long after tapping a polygon or its price bubble the map's own press —
  * and any camera settle — is treated as part of that same tap.
  *
- * Every provider this app has run on delivers the map press alongside the
- * overlay's, and selecting a listing then clearing the selection in the same
- * tap left the map looking dead exactly where it had something to show.
- * MapKit offers `handled` on a shape to stop the fall-through, but this
- * window also covers the camera nudge a marker press causes on Android,
- * which no `handled` flag reaches — so the window stays and is the one
- * mechanism, rather than two half-covering each other.
+ * Both providers deliver the map press alongside the overlay's. iOS is the
+ * blunt one: `handleMapTap` dispatches the polygon's `onPress` and then falls
+ * through to the map's with no early return, so selecting a listing and
+ * clearing the selection happened in the same tap and the map looked dead
+ * exactly where it had something to show.
  */
 const OVERLAY_PRESS_GRACE_MS = 400;
 
@@ -315,7 +299,7 @@ export const ListingsMap = memo(
     },
     ref,
   ) {
-    const mapRef = useRef<YandexMapViewRef>(null);
+    const cameraRef = useRef<CameraRef>(null);
     // The zoom buttons need the current camera, and the map has no synchronous
     // getter — so the last settled region is remembered here.
     const regionRef = useRef<Region>(TASHKENT_REGION);
@@ -327,6 +311,7 @@ export const ListingsMap = memo(
     const overlayPressedAt = useRef(0);
     const { locate, loading: locating } = useMyLocation();
     const { colors } = useTheme();
+    const mapStyle = useMapStyle();
     const t = useT();
     // Once for the whole map — see `bubbleViews`.
     const formatPrice = usePriceFormatter();
@@ -335,14 +320,14 @@ export const ListingsMap = memo(
     useImperativeHandle(ref, () => ({
       animateTo: (latitude, longitude) => {
         animateToRegion(
-          mapRef.current,
+          cameraRef.current,
           { latitude, longitude, latitudeDelta: 0.02, longitudeDelta: 0.02 },
           600,
         );
       },
       fitRadius: (center, radiusM) => {
         animateToRegion(
-          mapRef.current,
+          cameraRef.current,
           radiusRegion(toLatLng(center), radiusM),
           500,
         );
@@ -393,14 +378,16 @@ export const ListingsMap = memo(
      *  here", which is quicker than dragging across the screen. Otherwise it
      *  dismisses the preview card, as it always did. */
     const handleMapPress = useCallback(
-      (e: { nativeEvent: MapPressEvent }) => {
+      (
+        e: NativeSyntheticEvent<PressEvent | PressEventWithFeatures>,
+      ) => {
         if (circle?.editable && onCircleMove) {
-          // A marker press arrives as a map press too (the same fall-through
-          // the grace window exists for), and tapping a price bubble must not
-          // quietly move the centre somewhere else.
+          // iOS reports a marker press as a map press too (the same fall-
+          // through the grace window exists for), and tapping a price bubble
+          // must not quietly move the centre somewhere else.
           if (Date.now() - overlayPressedAt.current < OVERLAY_PRESS_GRACE_MS)
             return;
-          onCircleMove(toPosition(e.nativeEvent.point));
+          onCircleMove(e.nativeEvent.lngLat);
           return;
         }
         clearSelection();
@@ -409,8 +396,8 @@ export const ListingsMap = memo(
     );
 
     const handleCenterDragEnd = useCallback(
-      (e: { nativeEvent: MarkerDragEvent }) => {
-        onCircleMove?.(toPosition(e.nativeEvent.point));
+      (e: NativeSyntheticEvent<ViewAnnotationEvent>) => {
+        onCircleMove?.(e.nativeEvent.lngLat);
       },
       [onCircleMove],
     );
@@ -431,27 +418,15 @@ export const ListingsMap = memo(
     // The listings fetch is driven by the camera settling. Whether the first
     // settle is reported on load varies, so the loaded map reports its own
     // opening region if nothing has yet — never twice.
-    //
-    // Driven off onCameraPositionChanged rather than the library's
-    // onRegionChangeComplete alias — see visibleRegionToRegion in maps.ts for
-    // why that prop cannot be used. `finished` is read synchronously, before
-    // the promise, which is exactly the bug being avoided.
     const reportedRef = useRef(false);
-    const onCameraChanged = useCallback(
-      (e: { nativeEvent: CameraPositionChangeEvent }) => {
-        if (!e.nativeEvent.finished) return;
-        mapRef.current
-          ?.getVisibleRegion()
-          .then((visible) => {
-            if (!visible) return;
-            reportedRef.current = true;
-            handleRegionChangeComplete(visibleRegionToRegion(visible));
-          })
-          .catch(() => {});
+    const onRegionDidChange = useCallback(
+      (e: NativeSyntheticEvent<ViewStateChangeEvent>) => {
+        reportedRef.current = true;
+        handleRegionChangeComplete(viewStateToRegion(e.nativeEvent));
       },
       [handleRegionChangeComplete],
     );
-    const onMapLoaded = useCallback(() => {
+    const onDidFinishLoadingMap = useCallback(() => {
       if (!reportedRef.current) handleRegionChangeComplete(regionRef.current);
     }, [handleRegionChangeComplete]);
 
@@ -459,7 +434,7 @@ export const ListingsMap = memo(
     const zoomBy = useCallback((factor: number) => {
       const region = regionRef.current;
       animateToRegion(
-        mapRef.current,
+        cameraRef.current,
         {
           ...region,
           latitudeDelta: clampDelta(region.latitudeDelta * factor),
@@ -542,7 +517,7 @@ export const ListingsMap = memo(
 
     const zoomToCluster = useCallback((c: PointCluster) => {
       animateToRegion(
-        mapRef.current,
+        cameraRef.current,
         {
           latitude: c.latitude,
           longitude: c.longitude,
@@ -557,7 +532,7 @@ export const ListingsMap = memo(
       const pos = await locate();
       if (!pos) return;
       animateToRegion(
-        mapRef.current,
+        cameraRef.current,
         {
           latitude: pos.latitude,
           longitude: pos.longitude,
@@ -566,35 +541,26 @@ export const ListingsMap = memo(
         },
         600,
       );
-      // camera settle → onCameraChanged → nearby listings fetch automatically
+      // camera settle → onRegionChangeComplete → nearby listings fetch automatically
     }, [locate]);
 
     return (
       <View style={{ flex: 1 }}>
-        <YandexMapView
-          ref={mapRef}
+        <MapLibreMap
           style={StyleSheet.absoluteFill}
-          mapType={MAP_TYPE}
-          // The opening camera only — a module constant, so this object is
-          // built once and never fights the reader for the camera after.
-          cameraPosition={OPENING_CAMERA}
-          showUserPosition
-          // Bottom-LEFT: the zoom / layer / radius stack owns the top right,
-          // and the locate button the bottom right. See MAP_LOGO_RULE in
-          // maps.ts — MapKit always draws it and it may not be covered.
-          logoPosition={{ horizontal: "left", vertical: "bottom" }}
-          // bottomInset alone is not enough: it reserves the strip the
-          // screen floats its OWN chrome in (the "Topildi: N" count sits
-          // bottom-left, exactly where the logo lands), so the logo has to
-          // clear that pill too rather than share the corner with it.
-          logoPadding={logoPadding(
-            spacing.md,
-            bottomInset + sizing.controlMd + spacing.md,
-          )}
-          onCameraPositionChanged={onCameraChanged}
-          onMapLoaded={onMapLoaded}
-          onMapPress={handleMapPress}
+          mapStyle={mapStyle}
+          logo={false}
+          compass={false}
+          onRegionDidChange={onRegionDidChange}
+          onDidFinishLoadingMap={onDidFinishLoadingMap}
+          onPress={handleMapPress}
         >
+          <Camera
+            ref={cameraRef}
+            initialViewState={{ bounds: regionToBounds(TASHKENT_REGION) }}
+          />
+          <NativeUserLocation />
+
           {/* Every parcel draws its own outline; the bubbles are grouped, so
               two listings at one address cannot hide behind each other. */}
           {data?.mode === "polygons" ? (
@@ -655,23 +621,22 @@ export const ListingsMap = memo(
               Keyed on editable: the pin changes size when it gains its grab
               collar, and Android draws annotations from a bitmap taken once. */}
           {circle ? (
-            <Marker
-              // Keyed on editable: the pin changes size when it gains its
-              // grab collar, and MapKit snapshots a marker's children to a
-              // bitmap — a remount is what makes it take a fresh one.
+            <ViewAnnotation
               key={circle.editable ? "center-edit" : "center"}
-              point={toLatLng(circle.center)}
-              anchor={{ x: 0.5, y: 0.5 }}
+              id={circle.editable ? "radius-center-edit" : "radius-center"}
+              lngLat={circle.center}
+              anchor="center"
               draggable={!!circle.editable}
               onDragEnd={handleCenterDragEnd}
+              title={t("map.radiusCenter")}
             >
               <RadiusCenterPin
                 color={colors.primary}
                 editable={!!circle.editable}
               />
-            </Marker>
+            </ViewAnnotation>
           ) : null}
-        </YandexMapView>
+        </MapLibreMap>
 
         {/* Zoom pair, top-right. The locate button keeps the bottom corner —
             it pairs with the blue you-are-here dot rather than with the
@@ -694,8 +659,8 @@ export const ListingsMap = memo(
             label={t("map.zoomOut")}
             onPress={() => zoomBy(2)}
           />
-          {/* Separated from the zoom pair by their own gap — they change what
-              the map is showing, not where the camera is. */}
+          {/* Separated from the zoom pair by its own gap — it changes what the
+              map is showing, not where the camera is. */}
           {onToggleRadius ? (
             <MapIconButton
               icon="locate-outline"
@@ -705,6 +670,8 @@ export const ListingsMap = memo(
               style={{ marginTop: spacing.sm }}
             />
           ) : null}
+
+          <MapLayerButton style={{ marginTop: spacing.sm }} />
         </View>
 
         {/* Stood down while a listing's card is open. The card fills the
@@ -746,16 +713,16 @@ export const ListingsMap = memo(
 );
 
 /**
- * Every parcel's boundary.
+ * Every parcel's boundary, as one map source.
  *
  * Drawn per listing even where several share a spot — the outlines are what
  * distinguishes them, and two plots that overlap on screen still have
  * different edges. Only their PRICE BUBBLES merge (see BubbleGroup), because
  * two bubbles at one point are just one bubble with the other hidden behind.
  *
- * One <Polygon> each rather than a single GeoJSON source, which is what
- * MapKit offers — and it means a tap arrives already knowing which listing
- * it hit, instead of carrying an id to look back up.
+ * Dropped when a ring is unusable or absent (PIN listings carry no boundary at
+ * all) — the bubble still places the listing on the map, which beats it
+ * vanishing entirely.
  */
 const ParcelOutlines = memo(function ParcelOutlines({
   features,
@@ -765,52 +732,45 @@ const ParcelOutlines = memo(function ParcelOutlines({
   /** Takes the feature, so the parent can hand down one stable callback. */
   onSelect: (feature: MapPolygonFeature) => void;
 }) {
-  return (
-    <>
-      {features.map((feature) => (
-        <ParcelOutline key={feature.id} feature={feature} onSelect={onSelect} />
-      ))}
-    </>
-  );
-});
-
-/**
- * One parcel's outline.
- *
- * Its own component purely so the press handler is stable per parcel: built
- * inline in the map above, every outline would get a fresh closure on every
- * render of the screen and none of them could be skipped.
- *
- * Renders nothing when the ring is unusable or absent (PIN listings carry no
- * boundary at all) — the bubble still places the listing on the map, which
- * beats it vanishing entirely.
- */
-const ParcelOutline = memo(function ParcelOutline({
-  feature,
-  onSelect,
-}: {
-  feature: MapPolygonFeature;
-  onSelect: (feature: MapPolygonFeature) => void;
-}) {
   const { colors } = useTheme();
-  const ring = feature.geom?.coordinates[0];
 
-  const points = useMemo(
-    () => (isDrawableRing(ring) ? ringToLatLngs(ring) : null),
-    [ring],
+  const collection = useMemo<GeoJSON.FeatureCollection>(
+    () => ({
+      type: "FeatureCollection",
+      features: features.flatMap((f) => {
+        const ring = f.geom?.coordinates[0];
+        return ring && isDrawableRing(ring)
+          ? [ringFeature(ring, { listing: f.id })]
+          : [];
+      }),
+    }),
+    [features],
   );
-  const onPress = useCallback(() => onSelect(feature), [onSelect, feature]);
 
-  if (!points) return null;
+  // A tap on a parcel selects its listing — the same press the polygon used
+  // to report, found by the id the outline carries.
+  const onPress = useCallback(
+    (e: NativeSyntheticEvent<PressEventWithFeatures>) => {
+      const id = e.nativeEvent.features[0]?.properties?.listing;
+      const feature = features.find((f) => f.id === id);
+      if (feature) onSelect(feature);
+    },
+    [features, onSelect],
+  );
 
   return (
-    <Polygon
-      points={points}
-      fillColor={withAlpha(colors.primary, 0.35)}
-      strokeColor={colors.primary}
-      strokeWidth={2}
-      onPress={onPress}
-    />
+    <GeoJSONSource id="parcels" data={collection} onPress={onPress}>
+      <Layer
+        id="parcels-fill"
+        type="fill"
+        paint={{ "fill-color": withAlpha(colors.primary, 0.35) }}
+      />
+      <Layer
+        id="parcels-line"
+        type="line"
+        paint={{ "line-color": colors.primary, "line-width": 2 }}
+      />
+    </GeoJSONSource>
   );
 });
 
@@ -824,17 +784,23 @@ const RadiusRing = memo(function RadiusRing({
   radiusM: number;
   color: string;
 }) {
-  // A real circle in metres, not the 64-sided polygon the previous renderer
-  // needed: MapKit measures the radius on the ground, so it stays round at
-  // every zoom and stays the right size this far from the equator.
+  const shape = useMemo(
+    () => ringFeature(circleRing(center, radiusM)),
+    [center, radiusM],
+  );
   return (
-    <Circle
-      center={toLatLng(center)}
-      radius={radiusM}
-      fillColor={withAlpha(color, 0.14)}
-      strokeColor={color}
-      strokeWidth={2}
-    />
+    <GeoJSONSource id="radius" data={shape}>
+      <Layer
+        id="radius-fill"
+        type="fill"
+        paint={{ "fill-color": withAlpha(color, 0.14) }}
+      />
+      <Layer
+        id="radius-line"
+        type="line"
+        paint={{ "line-color": color, "line-width": 2 }}
+      />
+    </GeoJSONSource>
   );
 });
 
@@ -870,7 +836,6 @@ const ParcelBubble = memo(function ParcelBubble({
       // Polygons only exist zoomed in, where there is room on screen for more
       // than the price — zoomed-out point markers stay price-only.
       sublabel={sublabel}
-      hasVideo={feature.hasVideo}
       onPress={onPress}
     />
   );
@@ -919,31 +884,34 @@ const ClusterMarker = memo(function ClusterMarker({
   onZoom: (cluster: PointCluster) => void;
 }) {
   const { colors } = useTheme();
+  const t = useT();
   const onPress = useCallback(() => onZoom(cluster), [onZoom, cluster]);
   // Bigger circles for bigger neighbourhoods, gently.
   const size = Math.min(56, 38 + Math.floor(Math.log10(cluster.count) * 12));
 
   return (
+    // A live view on the map (no snapshot), so it draws exactly as laid out
+    // and takes its own taps. Clustering keeps the count of these low.
     <Marker
-      point={{ latitude: cluster.latitude, longitude: cluster.longitude }}
-      anchor={{ x: 0.5, y: 0.5 }}
+      lngLat={[cluster.longitude, cluster.latitude]}
+      anchor="center"
       onPress={onPress}
-      identifier={cluster.key}
-      // The circle is fixed once its count is known, so MapKit takes one
-      // bitmap of these children instead of re-snapshotting every render.
-      tracksViewChanges={false}
+      accessibilityLabel={t("map.clusterLabel", { count: cluster.count })}
     >
       {/* SVG, as before: one surface that draws its own pixels, crisp at any
           size and identical on both platforms. */}
-      <View collapsable={false} style={{ width: size + 6, height: size + 6 }}>
+      <View
+        collapsable={false}
+        style={{ width: size + 6, height: size + 6 }}
+      >
         <Svg width={size + 6} height={size + 6}>
-          <SvgCircle
+          <Circle
             cx={(size + 6) / 2}
             cy={(size + 6) / 2}
             r={(size + 6) / 2}
             fill={colors.onPrimary}
           />
-          <SvgCircle
+          <Circle
             cx={(size + 6) / 2}
             cy={(size + 6) / 2}
             r={size / 2}
@@ -954,7 +922,6 @@ const ClusterMarker = memo(function ClusterMarker({
             y={(size + 6) / 2}
             fill={colors.onPrimary}
             fontSize={cluster.count > 99 ? 13 : 15}
-            fontFamily={fonts["700"]}
             fontWeight="bold"
             textAnchor="middle"
             alignmentBaseline="central"
@@ -994,7 +961,6 @@ const PointMarker = memo(function PointMarker({
       latitude={feature.centroid.coordinates[1]}
       longitude={feature.centroid.coordinates[0]}
       label={label}
-      hasVideo={feature.hasVideo}
       onPress={handlePress}
     />
   );
@@ -1006,7 +972,6 @@ const PriceMarker = memo(function PriceMarker({
   label,
   sublabel,
   badge,
-  hasVideo,
   onPress,
 }: {
   // Two numbers rather than a LatLng: a fresh object here is a fresh prop,
@@ -1019,55 +984,34 @@ const PriceMarker = memo(function PriceMarker({
   sublabel?: string;
   /** How many listings this one bubble stands for, when it is more than one. */
   badge?: number;
-  /** Draws a camera at the head of the pill: this listing has a walkthrough. */
-  hasVideo?: boolean;
   onPress: () => void;
 }) {
   const { colors } = useTheme();
-  // A fresh object here is a fresh prop, and a fresh prop is a marker that
-  // re-renders whenever anything on the screen does — hence the two loose
-  // numbers above and this one memo.
-  const point = useMemo(() => ({ latitude, longitude }), [latitude, longitude]);
+  const lngLat = useMemo<[number, number]>(
+    () => [longitude, latitude],
+    [latitude, longitude],
+  );
 
   // EXPLICIT width, like the cluster circle (which never clipped): letting
   // the bubble size itself from its text is what cut bubbles to "$5" on
   // Android — the snapshot is measured narrower than the text renders,
   // especially with the OS font scale up. Fixed metrics make the bitmap
   // deterministic; allowFontScaling=false keeps the estimate honest.
-  //
-  // Still true under MapKit, and for the same reason: `tracksViewChanges`
-  // exists on <Marker> precisely because these children are snapshotted to a
-  // bitmap placemark icon, exactly as the previous renderer did it. Do not
-  // "simplify" any of this back to auto-sizing.
   // The count rides at the right end of the pill, in a disc of its own. Room
   // is reserved for it in the width rather than hung off the corner: the
   // marker is anchored by its centre, and a badge outside the canvas would
   // shift the whole bubble off the point it is marking.
   const badgeSpace = badge ? 26 : 0;
-  // The camera gets reserved width for the same reason the count does: the
-  // marker is anchored by its centre, so anything hung outside the canvas
-  // would shift the whole bubble off the point it marks.
-  const videoSpace = hasVideo ? 17 : 0;
   const width =
     Math.ceil(
       Math.max(label.length * 9.2, (sublabel?.length ?? 0) * 6.4) + 28,
-    ) +
-    badgeSpace +
-    videoSpace;
+    ) + badgeSpace;
   const height = sublabel ? 46 : 33;
   /** Text centres over the pill MINUS the badge, so it does not sit crooked. */
-  const textCenter = (width + 4 - badgeSpace + videoSpace) / 2;
+  const textCenter = (width + 4 - badgeSpace) / 2;
 
   return (
-    <Marker
-      point={point}
-      onPress={onPress}
-      anchor={{ x: 0.5, y: 0.5 }}
-      // The pill's artwork is fully determined by the props above, so one
-      // snapshot is all it will ever need. Left at its `true` default, every
-      // bubble on screen would re-snapshot on every render of the map.
-      tracksViewChanges={false}
-    >
+    <Marker lngLat={lngLat} onPress={onPress} anchor="center">
       {/* Same SVG rationale as the cluster. */}
       <View
         collapsable={false}
@@ -1093,9 +1037,8 @@ const PriceMarker = memo(function PriceMarker({
           <SvgText
             x={textCenter}
             y={sublabel ? (height + 4) / 2 - 7 : (height + 4) / 2}
-            fill={colors.onPrimary}
+            fill="#FFFFFF"
             fontSize={15}
-            fontFamily={fonts["700"]}
             fontWeight="bold"
             textAnchor="middle"
             alignmentBaseline="central"
@@ -1106,9 +1049,8 @@ const PriceMarker = memo(function PriceMarker({
             <SvgText
               x={textCenter}
               y={(height + 4) / 2 + 9}
-              fill={colors.onPrimary}
+              fill="#FFFFFF"
               fontSize={10.5}
-              fontFamily={fonts["600"]}
               fontWeight="600"
               opacity={0.92}
               textAnchor="middle"
@@ -1117,43 +1059,19 @@ const PriceMarker = memo(function PriceMarker({
               {sublabel}
             </SvgText>
           ) : null}
-          {/* A camera, drawn rather than set in a font: these children are
-              snapshotted to a bitmap placemark icon, and an icon font is the
-              one thing that does not reliably survive that on Android. Body
-              plus lens, which is all a video camera needs to be legible at
-              nine pixels. */}
-          {hasVideo ? (
-            <>
-              <Rect
-                x={12}
-                y={(height + 4) / 2 - 4.5}
-                width={10}
-                height={9}
-                rx={2.5}
-                fill={colors.onPrimary}
-              />
-              <SvgPolygon
-                points={`${23},${(height + 4) / 2 - 4} ${27.5},${
-                  (height + 4) / 2 - 6
-                } ${27.5},${(height + 4) / 2 + 6} ${23},${(height + 4) / 2 + 4}`}
-                fill={colors.onPrimary}
-              />
-            </>
-          ) : null}
           {badge ? (
             <>
-              <SvgCircle
+              <Circle
                 cx={width + 4 - badgeSpace / 2 - 3}
                 cy={(height + 4) / 2}
                 r={11}
-                fill={colors.surface}
+                fill="#FFFFFF"
               />
               <SvgText
                 x={width + 4 - badgeSpace / 2 - 3}
                 y={(height + 4) / 2}
                 fill={colors.primary}
                 fontSize={12}
-                fontFamily={fonts["700"]}
                 fontWeight="bold"
                 textAnchor="middle"
                 alignmentBaseline="central"

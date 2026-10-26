@@ -79,7 +79,7 @@ export default function SavedScreen() {
                 color={colors.primary}
                 style={{ paddingVertical: 16 }}
               />
-            ) : null
+            ) : undefined
           }
           contentContainerStyle={{
             padding: spacing.lg,
@@ -89,7 +89,7 @@ export default function SavedScreen() {
           refreshControl={
             <RefreshControl
               refreshing={isRefetching}
-              onRefresh={refetch}
+              onRefresh={() => void refetch()}
               tintColor={colors.primary}
             />
           }

@@ -510,7 +510,7 @@ export default function UserProfileScreen() {
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
-            onRefresh={refetch}
+            onRefresh={() => void refetch()}
             tintColor={colors.primary}
           />
         }
@@ -553,7 +553,7 @@ export default function UserProfileScreen() {
         ListFooterComponent={
           more.isFetchingNextPage ? (
             <ActivityIndicator color={colors.primary} />
-          ) : null
+          ) : undefined
         }
       />
 

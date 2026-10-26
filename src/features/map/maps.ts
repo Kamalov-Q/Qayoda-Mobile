@@ -5,13 +5,8 @@
 // rings — while the map components below reason in {latitude, longitude} and
 // in Regions (a centre plus spans). Convert only at the edge of a map
 // component; nothing outside src/features/map should ever hold a LatLng.
-import { useState } from "react";
-import { Dimensions, PixelRatio, Platform } from "react-native";
-import type {
-  CameraPosition,
-  VisibleRegion,
-  YandexMapViewRef,
-} from "expo-yandex-mapkit";
+import { Platform } from "react-native";
+import type { CameraRef, LngLatBounds, ViewState } from "@maplibre/maplibre-react-native";
 import { BBox } from "../listings/api/listings.api";
 import { DEFAULT_BBOX } from "../listings/utils/geo";
 
@@ -27,25 +22,25 @@ export interface Region extends LatLng {
 }
 
 /**
- * Yandex MapKit is a native module, so maps need a development build (Expo Go
- * does not ship it). Web has no native map at all — expo-yandex-mapkit renders
- * nothing there — so map screens keep their fallbacks.
+ * MapLibre is a native module, so maps need a development build (Expo Go does
+ * not ship it). Web has no native map at all, so map screens keep their
+ * fallbacks there.
  */
 export const isNativeMapAvailable = Platform.OS !== "web";
 
 /**
- * MAP_LOGO_RULE — MapKit draws the Yandex logo on every map and there is no
- * way to switch it off; the licence requires it to stay visible. So no map
- * here passes anything that would cover it, and floating controls are placed
- * clear of whichever corner `logoPosition` parks it in. Nothing replaces the
- * old ⓘ attribution button: Yandex's own logo carries the credit now.
+ * The street map every map in the app draws: OpenFreeMap's vector tiles of
+ * OpenStreetMap data — free, no key, the same stack 1Fit runs on. Its credits
+ * (OpenFreeMap, OpenMapTiles, OpenStreetMap) sit behind the map's ⓘ button,
+ * which the licences require to stay visible: never pass attribution={false}.
  */
+export const MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 
 /**
  * MAP_STYLE_RULE — never put view-level props (pointerEvents, opacity,
- * transform, …) on a <YandexMapView>; put them on a wrapping <View>. Native
- * map views keep state the React props diff does not see, and a wrapper is
- * the one place a value like pointerEvents is guaranteed to be undone.
+ * transform, …) on a <Map>; put them on a wrapping <View>. Native map views
+ * keep state the React props diff does not see, and a wrapper is the one
+ * place a value like pointerEvents is guaranteed to be undone.
  */
 
 
@@ -79,11 +74,12 @@ export const ringToLatLngs = (ring: [number, number][]): LatLng[] =>
   ring.map(toLatLng);
 
 /**
- * Whether a GeoJSON ring is safe to draw. A <Polygon> needs three points to
- * be a polygon at all, and rings come off the API rather than from anything
- * this app controls — so they are checked rather than trusted. Two points
- * reach the renderer as a degenerate shape that draws as nothing and takes
- * taps anyway.
+ * Whether a GeoJSON ring is safe to hand MapKit. AIRMapPolygon copies the ring
+ * straight into a stack array sized from its length and builds an MKPolygon
+ * with no validation, so a missing or under-length ring reaches the renderer
+ * and faults there — on the next draw, which is to say the next zoom, not at
+ * the point the bad data arrived. Rings come off the API, so they are checked
+ * rather than trusted.
  */
 export const isDrawableRing = (
   ring: [number, number][] | undefined,
@@ -159,105 +155,20 @@ export const TASHKENT_REGION: Region = {
   longitudeDelta: 0.01,
 };
 
-// ─── MapKit edge ─────────────────────────────────────────────
-// The components keep the Region vocabulary they were written in; this is
-// the only place it is translated into what MapKit takes.
-//
-// MapKit's `Point` is
-// {latitude, longitude}, which is LatLng — so toLatLng and ringToLatLngs,
-// written years ago for a different renderer, are already what a <Marker>
-// and a <Polygon> want.
+// ─── MapLibre edge ─────────────────────────────────────────────────────────
+// The components keep the Region vocabulary they were written in; these are
+// the only places it is translated to MapLibre's [west, south, east, north].
 
-/**
- * MapKit sizes the world at 256·2^zoom px — the Google convention, one whole
- * step from the 512 scale TILE_SIZE reports on.
- *
- * Keep the two apart. TILE_SIZE is what the BACKEND is told, and its
- * points-vs-polygons thresholds were tuned against those numbers; this is
- * what the CAMERA is told. Crossing them puts the map a zoom level away from
- * where it was asked to go, in opposite directions on the two paths.
- */
-const MAPKIT_TILE_SIZE = 256;
-
-/** Past these MapKit clamps anyway; stopping here keeps the arithmetic sane. */
-const MIN_CAMERA_ZOOM = 2;
-const MAX_CAMERA_ZOOM = 21;
-
-/**
- * A region as a camera position: same centre, and the zoom at which its
- * longitude span fills the screen.
- *
- * The window is measured on every call rather than once at module load — a
- * width captured at import is taken before the first rotation and stays
- * wrong for the rest of the session.
- */
-export function regionToCamera(region: Region): CameraPosition {
-  const { width } = Dimensions.get("window");
-  const zoom = Math.log2(
-    (360 * width) / (MAPKIT_TILE_SIZE * region.longitudeDelta),
-  );
-  return {
-    latitude: region.latitude,
-    longitude: region.longitude,
-    zoom: Math.min(MAX_CAMERA_ZOOM, Math.max(MIN_CAMERA_ZOOM, zoom)),
-  };
+export function regionToBounds(region: Region): LngLatBounds {
+  return [
+    region.longitude - region.longitudeDelta / 2,
+    region.latitude - region.latitudeDelta / 2,
+    region.longitude + region.longitudeDelta / 2,
+    region.latitude + region.latitudeDelta / 2,
+  ];
 }
 
-/**
- * Logo padding, in the units each platform actually wants.
- *
- * MapKit takes this as PIXELS on Android (com.yandex.mapkit.logo.Padding) but
- * as POINTS on iOS (YMKLogoPadding), while React Native's own spacing is in
- * points on both. Handing the same number to each leaves the Android logo at
- * roughly a third of the intended offset — which is to say still in the
- * corner, underneath whatever the screen floats there.
- *
- * Everything in the app passes spacing tokens, so the conversion lives here
- * rather than at five call sites that would each have to remember it.
- */
-export function logoPadding(
-  horizontal: number,
-  vertical: number,
-): { horizontal: number; vertical: number } {
-  const scale = Platform.OS === "android" ? PixelRatio.get() : 1;
-  return {
-    horizontal: Math.round(horizontal * scale),
-    vertical: Math.round(vertical * scale),
-  };
-}
-
-/**
- * What the map is actually showing, as a Region.
- *
- * Read from getVisibleRegion() rather than from the camera event, and NOT via
- * the library's `onRegionChangeComplete` prop, which looks like exactly this
- * and is unusable: it reads `event.nativeEvent.cameraPosition` inside the
- * promise callback of its own getVisibleRegion() call, by which point React
- * has recycled the synthetic event and nativeEvent is null. It throws
- * "Cannot read property 'cameraPosition' of null" on most settles and
- * reports the region on the rest, which is worse than never working.
- *
- * Four corners rather than two: the camera can be rotated, so the visible
- * region is a quadrilateral and its bounding box is what the viewport query
- * wants.
- */
-export function visibleRegionToRegion(v: VisibleRegion): Region {
-  const lats = [
-    v.topLeft.latitude,
-    v.topRight.latitude,
-    v.bottomLeft.latitude,
-    v.bottomRight.latitude,
-  ];
-  const lngs = [
-    v.topLeft.longitude,
-    v.topRight.longitude,
-    v.bottomLeft.longitude,
-    v.bottomRight.longitude,
-  ];
-  const south = Math.min(...lats);
-  const north = Math.max(...lats);
-  const west = Math.min(...lngs);
-  const east = Math.max(...lngs);
+export function boundsToRegion([west, south, east, north]: LngLatBounds): Region {
   return {
     latitude: (south + north) / 2,
     longitude: (west + east) / 2,
@@ -266,45 +177,59 @@ export function visibleRegionToRegion(v: VisibleRegion): Region {
   };
 }
 
-/**
- * A region as the camera a map OPENS on, computed once and never again.
- *
- * `cameraPosition` is a CONTROLLED prop, and that is the trap: the native
- * side records any new value as pending and, unless the camera already
- * happens to be there, moves to it. So a component that rebuilds this
- * object on render yanks the camera back to the opening frame every time
- * anything changes — a vertex added, a pin dropped, a card opened — and the
- * reader cannot pan anywhere and stay there.
- *
- * Returning the SAME object for the life of the component is what makes the
- * prop mean "where to start" instead of "where to be". Deliberately ignores
- * later changes to `region`: a map that must move after mount asks the ref,
- * through animateToRegion.
- */
-export function useInitialCamera(region: Region): CameraPosition {
-  // useState's lazy initialiser, not useMemo: useMemo is a performance hint
-  // that React is allowed to discard and recompute, which here would be a
-  // camera jump rather than a slow frame.
-  const [camera] = useState(() => regionToCamera(region));
-  return camera;
-}
+/** What the map reports when its camera settles, as the Region it used to be. */
+export const viewStateToRegion = (view: Pick<ViewState, "bounds">): Region =>
+  boundsToRegion(view.bounds);
 
 /**
  * The old animateToRegion: frame exactly this region, animated. A zero
  * duration is a jump.
- *
- * Fire-and-forget. setCenter resolves when the camera settles and rejects
- * when another move interrupts it — which is ordinary here (a locate tap
- * landing mid-zoom), not a failure anyone can act on.
  */
 export function animateToRegion(
-  map: YandexMapViewRef | null | undefined,
+  camera: CameraRef | null | undefined,
   region: Region,
   duration: number,
 ): void {
-  map
-    ?.setCenter(regionToCamera(region), { durationSeconds: duration / 1000 })
-    .catch(() => {});
+  camera?.fitBounds(regionToBounds(region), { duration });
+}
+
+/** A ring as a GeoJSON Feature — what a map source draws. */
+export function ringFeature(
+  ring: [number, number][],
+  properties: Record<string, unknown> = {},
+  id?: string,
+): GeoJSON.Feature<GeoJSON.Polygon> {
+  // GeoJSON wants the ring closed; the app keeps it open while drawing.
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  const closed =
+    first[0] === last[0] && first[1] === last[1] ? ring : [...ring, first];
+  return {
+    type: "Feature",
+    id,
+    properties,
+    geometry: { type: "Polygon", coordinates: [closed] },
+  };
+}
+
+/**
+ * A circle of `radiusM` metres as a ring — MapLibre has no circle overlay in
+ * metres, so it is drawn as a 64-sided polygon. Same latitude correction as
+ * radiusRegion below: a degree of longitude is shorter this far north.
+ */
+export function circleRing(
+  [lng, lat]: [number, number],
+  radiusM: number,
+  steps = 64,
+): [number, number][] {
+  const dLat = radiusM / M_PER_DEG_LAT;
+  const dLng = dLat / Math.max(Math.cos((lat * Math.PI) / 180), 0.01);
+  const ring: [number, number][] = [];
+  for (let i = 0; i < steps; i++) {
+    const a = (i / steps) * 2 * Math.PI;
+    ring.push([lng + dLng * Math.cos(a), lat + dLat * Math.sin(a)]);
+  }
+  return ring;
 }
 
 /** Palette colours are opaque hex; overlays need them translucent. */

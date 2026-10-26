@@ -7,6 +7,7 @@ import {
   TextStyle,
   Pressable,
   Platform,
+  type TextInputInstance,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { spacing, radii, sizing, type } from "../../theme/tokens";
@@ -48,7 +49,7 @@ interface Props extends TextInputProps {
   round?: boolean;
 }
 
-export const TextField = forwardRef<TextInput, Props>(
+export const TextField = forwardRef<TextInputInstance, Props>(
   (
     { label, error, icon, suffix, prefix, hint, required, round, secureTextEntry, onFocus, onBlur, ...inputProps },
     ref,

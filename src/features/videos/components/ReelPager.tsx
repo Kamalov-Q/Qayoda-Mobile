@@ -4,8 +4,10 @@ import {
   FlatList,
   type LayoutChangeEvent,
   type RefreshControlProps,
-  type ViewToken,
 } from "react-native";
+// ViewToken left react-native's public types in 0.88; the list
+// implementation it belongs to is where it lives now.
+import type { ListViewToken as ViewToken } from "@react-native/virtualized-lists";
 import { ReelPage } from "./ReelPage";
 import { ReportVideoSheet } from "./ReportVideoSheet";
 import { VideoCommentsSheet } from "./VideoCommentsSheet";
@@ -31,7 +33,7 @@ interface Props {
   /** Where to start — the share-link screen opens on a specific reel. */
   initialIndex?: number;
   onEndReached?: () => void;
-  ListFooterComponent?: React.ReactElement | null;
+  ListFooterComponent?: React.ReactElement;
   refreshControl?: React.ReactElement<RefreshControlProps>;
 }
 

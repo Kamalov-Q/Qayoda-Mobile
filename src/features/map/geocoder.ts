@@ -1,86 +1,80 @@
 // src/features/map/geocoder.ts
-// Address ⇄ coordinates, over Yandex's Geocoder HTTP API.
+// Address → coordinates, over OpenStreetMap's Nominatim.
 //
-// Not through MapKit. The SDK can geocode, but only in its "full" flavour,
-// which Yandex ties to the paid Advanced licence — and the HTTP Geocoder is a
-// separate product with its own free plan and its own key. So the app ships on
-// "lite" (see app.config.ts) and asks over HTTPS instead.
+// The same service and the same rules as the admin dashboard
+// (admin/src/lib/geosearch.ts), so the two halves of the product agree about
+// where a place is. No key, no quota meter, and — unlike the licence this
+// replaced — results may be stored and derived from.
 //
-// EXPO_PUBLIC_YANDEX_GEOCODER_API_KEY is a different key from the MapKit one.
-// They are not interchangeable and they do not share a quota.
+// The usage policy this file is built around:
+//   · at most one request a second, and never one per keystroke; every
+//     caller here is submit-driven (see MapSearchBar)
+//   · the credit below stays visible wherever results are shown
+//
+// The public instance is for light use. A self-hosted Nominatim or Photon on
+// the Uzbekistan extract is one ENDPOINT away, and nothing above this file
+// would change.
 import type { LatLng } from "./maps";
 
-const ENDPOINT = "https://geocode-maps.yandex.ru/v1/";
+const ENDPOINT = "https://nominatim.openstreetmap.org/search";
+const REVERSE_ENDPOINT = "https://nominatim.openstreetmap.org/reverse";
 
-const API_KEY = process.env.EXPO_PUBLIC_YANDEX_GEOCODER_API_KEY;
+/** Required by ODbL wherever a result is shown. */
+export const GEOCODER_CREDIT = "OpenStreetMap / Nominatim";
 
 /** Nothing on screen should wait longer than this for a place name. */
 const TIMEOUT_MS = 8000;
 
 /**
- * Yandex answers in the app's language when asked, and the geocoder only
- * accepts a handful of tags — so uz falls back to ru rather than being sent
- * through as something the API will reject.
+ * Nominatim takes a plain language tag and falls back on its own; `uz` is
+ * answered thinly for Uzbekistan, so Russian rides along behind it.
  */
-const GEOCODER_LANG: Record<string, string> = {
-  ru: "ru_RU",
-  en: "en_US",
-  uz: "ru_RU",
+const LANG: Record<string, string> = {
+  ru: "ru,uz",
+  en: "en,ru",
+  uz: "uz,ru",
 };
 
-interface GeoObject {
-  Point?: { pos?: string };
-  metaDataProperty?: {
-    GeocoderMetaData?: {
-      text?: string;
-      Address?: { formatted?: string };
-    };
-  };
-}
-
-interface GeocoderResponse {
-  response?: {
-    GeoObjectCollection?: {
-      featureMember?: { GeoObject?: GeoObject }[];
-    };
-  };
-}
-
 /**
- * `pos` is documented as "longitude latitude" — the GeoJSON order, not the
- * {latitude, longitude} order everything downstream of this file uses. One of
- * Yandex's own samples prints it the other way round, which is worth knowing
- * about the first time a search lands in the wrong hemisphere.
+ * Words that describe what a place IS rather than name it.
+ *
+ * Nominatim matches on names, so these actively hurt: "Bodomzor" finds the
+ * metro station, "Bodomzor metro" finds nothing at all.
  */
-function parsePos(pos: string | undefined): LatLng | null {
-  if (!pos) return null;
-  const [longitude, latitude] = pos.trim().split(/\s+/).map(Number);
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-  if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
-  return { latitude, longitude };
+const FILLER =
+  /^(metro|metrosi|bekat|bekati|stansiya|stansiyasi|станция|метро|ст)$/i;
+
+const clean = (query: string) =>
+  query
+    .split(/\s+/)
+    .filter((word) => word && !FILLER.test(word))
+    .join(" ")
+    .trim();
+
+interface NominatimResult {
+  display_name?: string;
+  name?: string;
+  lat?: string;
+  lon?: string;
 }
 
 /**
  * One request, or null.
  *
- * Never throws: a geocoder that is unreachable, rate-limited, unconfigured or
- * simply unsure is the same "no result" to every caller — all of them are
+ * Never throws: a geocoder that is unreachable, rate-limited or simply
+ * unsure is the same "no result" to every caller — all of them are
  * decorating a map, and none has anything better to show for an error.
  */
-async function request(
-  geocode: string,
+async function ask(
+  url: string,
+  params: Record<string, string>,
   lang: string,
-  extra?: Record<string, string>,
-): Promise<GeoObject | null> {
-  if (!API_KEY) return null;
-
-  const params = new URLSearchParams({
-    apikey: API_KEY,
-    geocode,
-    format: "json",
-    results: "1",
-    lang: GEOCODER_LANG[lang] ?? GEOCODER_LANG.ru,
-    ...extra,
+): Promise<NominatimResult | NominatimResult[] | null> {
+  const search = new URLSearchParams({
+    format: "jsonv2",
+    limit: "1",
+    "accept-language": LANG[lang] ?? LANG.ru,
+    ...params,
   });
 
   // RN's fetch has no timeout of its own, and a request left hanging holds a
@@ -89,12 +83,9 @@ async function request(
   const timer = setTimeout(() => abort.abort(), TIMEOUT_MS);
 
   try {
-    const res = await fetch(`${ENDPOINT}?${params}`, { signal: abort.signal });
+    const res = await fetch(`${url}?${search}`, { signal: abort.signal });
     if (!res.ok) return null;
-    const body = (await res.json()) as GeocoderResponse;
-    return (
-      body.response?.GeoObjectCollection?.featureMember?.[0]?.GeoObject ?? null
-    );
+    return (await res.json()) as NominatimResult | NominatimResult[];
   } catch {
     return null;
   } finally {
@@ -102,38 +93,54 @@ async function request(
   }
 }
 
+function toLatLng(hit: NominatimResult | undefined): LatLng | null {
+  if (!hit) return null;
+  const latitude = Number(hit.lat);
+  const longitude = Number(hit.lon);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
+  return { latitude, longitude };
+}
+
 /** Address → coordinates, for moving a camera somewhere by name. */
 export async function geocodeAddress(
   query: string,
   lang: string,
 ): Promise<LatLng | null> {
-  const q = query.trim();
+  const q = clean(query);
   if (!q) return null;
-  return parsePos((await request(q, lang))?.Point?.pos);
+  // Everything this app lists is in one country, and the filter removes a
+  // whole class of same-name matches abroad.
+  const body = await ask(ENDPOINT, { q, countrycodes: "uz" }, lang);
+  return toLatLng(Array.isArray(body) ? body[0] : undefined);
 }
 
 /**
  * Coordinates → a one-line address.
  *
- * `kind=house` asks for the building rather than the district: a dot on a map
- * wants "Navoiy ko'chasi 12", and answering it with "Toshkent" is a line that
- * tells the reader nothing they could not already see.
+ * `zoom=18` asks for the building rather than the district: a dot on a map
+ * wants "Navoiy ko'chasi 12", and answering it with "Toshkent" is a line
+ * that tells the reader nothing they could not already see.
  */
 export async function reverseGeocode(
   { latitude, longitude }: LatLng,
   lang: string,
 ): Promise<string | null> {
-  // [lng, lat], comma-separated — the one place this file writes a coordinate
-  // in the API's order rather than the app's.
-  const object = await request(`${longitude},${latitude}`, lang, {
-    kind: "house",
-  });
-  const meta = object?.metaDataProperty?.GeocoderMetaData;
-  // `formatted` leaves off the country, which is noise in an app that only
-  // operates in one; `text` is the fallback when it is missing.
-  return meta?.Address?.formatted ?? meta?.text ?? null;
+  const body = await ask(
+    REVERSE_ENDPOINT,
+    { lat: String(latitude), lon: String(longitude), zoom: "18" },
+    lang,
+  );
+  const hit = Array.isArray(body) ? body[0] : body;
+  return hit?.display_name ?? hit?.name ?? null;
 }
 
-/** Whether address lookup is configured at all — the key is optional at
- *  build time, so screens can hide a search box that could never answer. */
-export const isGeocoderConfigured = !!API_KEY;
+/**
+ * Whether address lookup is available at all.
+ *
+ * Always true now — Nominatim needs no key, where the service this replaced
+ * was switched off entirely without one. Kept so the screens that hide a
+ * search box they cannot answer keep compiling, and so there is one place to
+ * turn it off if a self-hosted instance is ever behind a flag.
+ */
+export const isGeocoderConfigured = true;

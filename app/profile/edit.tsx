@@ -3,9 +3,9 @@ import { useMemo, useRef, useState } from "react";
 import {
   Text,
   View,
-  TextInput,
   Pressable,
   ActivityIndicator,
+  type TextInputInstance,
 } from "react-native";
 import { router } from "expo-router";
 import { Image } from "expo-image";
@@ -137,7 +137,7 @@ function EditProfileForm({ profile }: { profile: Profile }) {
   const uploadAvatar = useUploadAvatar();
   const removeAvatar = useRemoveAvatar();
 
-  const surnameRef = useRef<TextInput>(null);
+  const surnameRef = useRef<TextInputInstance>(null);
   const { text, colors } = useTheme();
   const t = useT();
 
@@ -394,7 +394,7 @@ function EditProfileForm({ profile }: { profile: Profile }) {
                 placeholder={t("auth.surnamePlaceholder")}
                 autoComplete="family-name"
                 returnKeyType="done"
-                onSubmitEditing={onSubmit}
+                onSubmitEditing={() => void onSubmit()}
                 value={value}
                 onChangeText={onChange}
                 onBlur={onBlur}

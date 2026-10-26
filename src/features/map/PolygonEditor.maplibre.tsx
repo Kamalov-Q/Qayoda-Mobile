@@ -1,17 +1,20 @@
-// src/features/map/PolygonEditor.yandex.tsx
+// src/features/map/PolygonEditor.maplibre.tsx
 // Tap-to-add-vertex drawing — controlled component: value + onChange, GeoJSON
-// [lng, lat]. The ring is kept open while drawing; <Polygon> closes it
-// visually and closeRing() closes it for real on save.
-import { memo, useCallback, useRef } from "react";
-import { View, Text } from "react-native";
+// [lng, lat]. The ring is kept open while drawing; Polygon closes it visually
+// and closeRing() closes it for real on save.
+import { memo, useCallback, useMemo, useRef } from "react";
+import { View, Text, type NativeSyntheticEvent } from "react-native";
 import {
-  Marker,
-  Polygon,
-  Polyline,
-  YandexMapView,
-  type MarkerDragEvent,
-  type YandexMapViewRef,
-} from "expo-yandex-mapkit";
+  Camera,
+  GeoJSONSource,
+  Layer,
+  Map as MapLibreMap,
+  NativeUserLocation,
+  ViewAnnotation,
+  type CameraRef,
+  type PressEvent,
+  type ViewAnnotationEvent,
+} from "@maplibre/maplibre-react-native";
 import { Button } from "../../components/ui";
 import { toast } from "../../components/ui/Toast";
 import { spacing, radii, sizing, type } from "../../theme/tokens";
@@ -21,18 +24,16 @@ import { insertionIndexFor, ringSelfIntersects } from "../listings/utils/geo";
 import {
   DEFAULT_CENTER,
   animateToRegion,
-  logoPadding,
   parcelRegion,
-  ringToLatLngs,
-  useInitialCamera,
+  regionToBounds,
+  ringFeature,
   searchResultRegion,
-  toLatLng,
-  toPosition,
   withAlpha,
 } from "./maps";
+import { useMapStyle } from "./mapLayer";
 import { MapSearchBar } from "./MapSearchBar";
 import { MyLocationButton } from "./MyLocationButton";
-import { MAP_TYPE } from "./mapLayer";
+import { MapLayerButton } from "./MapLayerButton";
 import { useGeocode, useMyLocation } from "../listings/hooks/useMyLocation";
 
 interface Props {
@@ -42,64 +43,51 @@ interface Props {
   center?: [number, number];
 }
 
-/** Clears the undo/clear row — full-height Buttons at spacing.lg from the
- *  bottom — so the controls and the Yandex logo all sit above it. */
-const BOTTOM_ROW_CLEARANCE = spacing.lg + sizing.control + spacing.md;
-
 export const PolygonEditor = memo(function PolygonEditor({
   value,
   onChange,
   center,
 }: Props) {
   const { colors } = useTheme();
+  const mapStyle = useMapStyle();
   const t = useT();
-  const mapRef = useRef<YandexMapViewRef>(null);
+  const cameraRef = useRef<CameraRef>(null);
   const { locate, loading: locating } = useMyLocation();
   const { search, loading: searching } = useGeocode();
 
   const invalid = ringSelfIntersects(value);
 
-  // The map reports a tap on a vertex as a map press as well, so deleting a
-  // point immediately re-added it in the same spot and tapping one looked
-  // like it did nothing at all.
+  // Google Maps delivers the map press as well as the marker press when a
+  // vertex is tapped, so deleting one immediately re-added it in the same
+  // spot and tapping a point looked like it did nothing at all.
   const vertexPressedAt = useRef(0);
-
-  /**
-   * The opening camera, fixed for the life of the screen.
-   *
-   * This used to be a bare regionToCamera() call in the render body with a
-   * comment claiming it was "stable in practice". It was not: a new object
-   * on every render, and `cameraPosition` is controlled — so every vertex
-   * added snapped the camera back to the opening frame and the reader could
-   * not trace a boundary that ran off the first screenful.
-   */
-  const initialCamera = useInitialCamera(parcelRegion(center ?? DEFAULT_CENTER));
 
   // A tap is placed where it keeps the boundary simple rather than always at
   // the end of the ring. Tracing in order still just appends; a point that
   // would cross the shape goes into the edge it belongs to instead.
-  const addVertex = useCallback(
-    (point: [number, number]) => {
-      if (Date.now() - vertexPressedAt.current < 400) return;
+  const addVertex = (e: NativeSyntheticEvent<PressEvent>) => {
+    if (Date.now() - vertexPressedAt.current < 400) return;
 
-      const index = insertionIndexFor(value, point);
+    const point = e.nativeEvent.lngLat;
+    const index = insertionIndexFor(value, point);
 
-      if (index === null) {
-        toast.errorKey("map.pointBlocked");
-        return;
-      }
+    if (index === null) {
+      toast.errorKey("map.pointBlocked");
+      return;
+    }
 
-      const next = [...value];
-      next.splice(index, 0, point);
-      onChange(next);
-    },
-    [value, onChange],
-  );
+    const next = [...value];
+    next.splice(index, 0, point);
+    onChange(next);
+  };
 
   // Dropping a vertex across the shape is the other way to invalidate it, and
   // there is nothing sensible to do but put it back where it was.
-  const moveVertex = (index: number, point: [number, number]) => {
-    const next = value.map((p, i) => (i === index ? point : p));
+  const moveVertex = (
+    index: number,
+    e: NativeSyntheticEvent<ViewAnnotationEvent>,
+  ) => {
+    const next = value.map((p, i) => (i === index ? e.nativeEvent.lngLat : p));
 
     if (ringSelfIntersects(next)) {
       toast.errorKey("map.pointBlocked");
@@ -142,7 +130,7 @@ export const PolygonEditor = memo(function PolygonEditor({
       const pos = await search(query);
       if (!pos) return;
       animateToRegion(
-        mapRef.current,
+        cameraRef.current,
         searchResultRegion([pos.longitude, pos.latitude]),
         600,
       );
@@ -154,60 +142,90 @@ export const PolygonEditor = memo(function PolygonEditor({
     const pos = await locate();
     if (!pos) return;
     animateToRegion(
-      mapRef.current,
+      cameraRef.current,
       parcelRegion([pos.longitude, pos.latitude]),
       600,
     );
   }, [locate]);
+
+  // Drawn from `value` alone. Two vertices is a segment, not yet a shape;
+  // three or more close into the polygon here, while `value` itself stays
+  // open all the way to save.
+  const shape = useMemo<GeoJSON.Feature | null>(() => {
+    if (value.length === 2) {
+      return {
+        type: "Feature",
+        properties: {},
+        geometry: { type: "LineString", coordinates: value },
+      };
+    }
+    if (value.length >= 3) return ringFeature(value);
+    return null;
+  }, [value]);
 
   const fillColor = withAlpha(invalid ? colors.danger : colors.primary, 0.3);
   const strokeColor = invalid ? colors.danger : colors.primary;
 
   return (
     <View style={{ flex: 1 }}>
-      <YandexMapView
-        ref={mapRef}
+      <MapLibreMap
         style={{ flex: 1 }}
-        mapType={MAP_TYPE}
-        cameraPosition={initialCamera}
-        // The blue dot is the whole point of the locate control — without it
-        // the camera moves and nothing on screen says where "here" is.
-        showUserPosition
-        // Bottom-left, lifted over the undo/clear row. See MAP_LOGO_RULE in
-        // maps.ts: MapKit always draws it and it may not be covered.
-        logoPosition={{ horizontal: "left", vertical: "bottom" }}
-        logoPadding={logoPadding(spacing.md, BOTTOM_ROW_CLEARANCE)}
-        onMapPress={(e) => addVertex(toPosition(e.nativeEvent.point))}
+        mapStyle={mapStyle}
+        logo={false}
+        compass={false}
+        onPress={addVertex}
       >
-        {/* Two vertices is a segment, not yet a shape; three or more close
-            into the polygon here, while `value` itself stays open all the way
-            to save. Neither takes its own press — a tap inside the shape
-            still falls through to the map and adds a point, as before. */}
-        {value.length === 2 ? (
-          <Polyline
-            points={ringToLatLngs(value)}
-            strokeColor={strokeColor}
-            strokeWidth={2}
-          />
-        ) : null}
-        {value.length >= 3 ? (
-          <Polygon
-            points={ringToLatLngs(value)}
-            fillColor={fillColor}
-            strokeColor={strokeColor}
-            strokeWidth={2}
-          />
+        <Camera
+          ref={cameraRef}
+          initialViewState={{
+            bounds: regionToBounds(parcelRegion(center ?? DEFAULT_CENTER)),
+          }}
+        />
+        {/* The blue dot is the whole point of the locate control — without it
+            the camera moves and nothing on screen says where "here" is. */}
+        <NativeUserLocation />
+
+        {/* No onPress on the source: a tap inside the shape still lands on the
+            map and adds a point, as before. */}
+        {shape ? (
+          <GeoJSONSource id="editor-shape" data={shape}>
+            {/* Keyed, and they must stay keyed.
+
+                GeoJSONSource clones its children through
+                cloneReactChildrenWithProps, which drops the falsy ones — so
+                when the fill appears at the third vertex the array shifts
+                from [line] to [fill, line]. Without keys React matches by
+                position, sees Layer at index 0 both times, reuses that
+                instance and swaps `id` from editor-line to editor-fill —
+                and Layer freezes its id with useFrozenId, which throws
+                "`id` cannot be changed" and takes the screen down. */}
+            {value.length >= 3 ? (
+              <Layer
+                key="editor-fill"
+                id="editor-fill"
+                type="fill"
+                paint={{ "fill-color": fillColor }}
+              />
+            ) : null}
+            <Layer
+              key="editor-line"
+              id="editor-line"
+              type="line"
+              paint={{ "line-color": strokeColor, "line-width": 2 }}
+            />
+          </GeoJSONSource>
         ) : null}
 
         {value.map((point, index) => (
           <VertexMarker
             key={`v${index}`}
+            id={`v${index}`}
             point={point}
             onPress={() => removeVertex(index)}
-            onDragEnd={(e) => moveVertex(index, toPosition(e.point))}
+            onDragEnd={(e) => moveVertex(index, e)}
           />
         ))}
-      </YandexMapView>
+      </MapLibreMap>
 
       {/* box-none so the gap between the two bands stays part of the map —
           a transparent container over the top third would otherwise eat every
@@ -239,15 +257,19 @@ export const PolygonEditor = memo(function PolygonEditor({
         </View>
       </View>
 
+      {/* Clears the undo/clear row: those are full-height Buttons sitting at
+          spacing.lg from the bottom. */}
+      {/* Tracing a plot edge off a vector map is guesswork; off imagery it
+          is tracing. Left, clear of the search bar's own column. */}
+      <MapLayerButton
+        style={{ position: "absolute", top: spacing.md, left: spacing.md }}
+      />
+
       <MyLocationButton
         onPress={goToMyLocation}
         loading={locating}
-        bottomOffset={BOTTOM_ROW_CLEARANCE}
+        bottomOffset={spacing.lg + sizing.control + spacing.md}
       />
-
-      {/* Above the locate control. Satellite is what makes this screen
-          work: the fences and roofs a plot is traced along are visible
-          in the photo, not on the street map. */}
 
       <View
         style={{
@@ -279,26 +301,26 @@ export const PolygonEditor = memo(function PolygonEditor({
 });
 
 const VertexMarker = memo(function VertexMarker({
+  id,
   point,
   onPress,
   onDragEnd,
 }: {
+  id: string;
   point: [number, number];
   onPress: () => void;
-  onDragEnd: (e: MarkerDragEvent) => void;
+  onDragEnd: (e: NativeSyntheticEvent<ViewAnnotationEvent>) => void;
 }) {
   const { colors } = useTheme();
 
   return (
-    <Marker
-      point={toLatLng(point)}
-      anchor={{ x: 0.5, y: 0.5 }}
+    <ViewAnnotation
+      id={id}
+      lngLat={point}
+      anchor="center"
       draggable
       onPress={onPress}
-      onDragEnd={(e) => onDragEnd(e.nativeEvent)}
-      // The dot never changes once drawn, so the bitmap MapKit snapshots from
-      // these children is taken once instead of on every render.
-      tracksViewChanges={false}
+      onDragEnd={onDragEnd}
     >
       {/* The dot is drawn small but the touchable is the whole box — a 14pt
           target is unhittable. */}
@@ -322,7 +344,7 @@ const VertexMarker = memo(function VertexMarker({
           }}
         />
       </View>
-    </Marker>
+    </ViewAnnotation>
   );
 });
 

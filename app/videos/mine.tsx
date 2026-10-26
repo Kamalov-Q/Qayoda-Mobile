@@ -103,7 +103,7 @@ export default function MyVideosScreen() {
         refreshControl={
           <RefreshControl
             refreshing={videos.isRefetching}
-            onRefresh={videos.refetch}
+            onRefresh={() => void videos.refetch()}
             tintColor={colors.primary}
           />
         }
@@ -124,7 +124,7 @@ export default function MyVideosScreen() {
               variant="secondary"
               onPress={() => router.push("/videos/new")}
             />
-          ) : null
+          ) : undefined
         }
         renderItem={({ item }) => (
           <VideoRow

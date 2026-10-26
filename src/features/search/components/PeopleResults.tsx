@@ -65,7 +65,7 @@ export function PeopleResults({
             style={{ padding: spacing.md }}
             color={colors.primary}
           />
-        ) : null
+        ) : undefined
       }
       ListEmptyComponent={
         // "Nobody matched that" and "there are no sellers yet" are different

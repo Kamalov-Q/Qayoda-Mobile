@@ -1,28 +1,33 @@
-// src/features/map/mapLayer.ts — what every map draws.
+// src/features/map/mapLayer.ts — which of the two maps is showing.
 //
-// One constant, where this used to be a street/satellite toggle. Satellite
-// is OFF, and the reason is worth keeping because both ways back are shut:
+// One switch for every map in the app rather than one per screen: somebody
+// who turned satellite on to check a roof in the pin picker is still
+// checking roofs when they open the next listing, and a toggle that forgets
+// is a toggle they have to find again every time.
 //
-//   1. MapKit's own `satellite` / `hybrid` types 403 on the free licence —
-//        TileLoaderImpl::load: Couldn't load tile [sat, …] Forbidden.
-//        Body: Access denied.
-//      Yandex quotes imagery per customer on an Advanced licence, and their
-//      FAQ says satellite is excluded from paid tiers anyway because the
-//      pictures are licensed from third parties.
-//
-//   2. The fallback — Esri World Imagery through MapKit's <UrlTile>, which
-//      is what this app used under MapLibre — cannot render either.
-//      expo-yandex-mapkit hardcodes `TileFormat.PNG` in applyTileOverlay
-//      with no way to override it, and Esri serves image/jpeg. MapKit is
-//      handed JPEG bytes and told to decode PNG, so the layer draws nothing
-//      and the map shows its empty-tile grid.
-//
-// Re-enabling means fixing one of those: buy imagery from Yandex and set
-// "hybrid" here, or get a `format` option into the library (upstream, or
-// patch-package) and restore the Esri tile layer. Until then a toggle that
-// switches to a blank grid is worse than no toggle, so the button is gone
-// too — see git history for SatelliteTiles.tsx and MapLayerButton.tsx.
-import type { YandexMapViewProps } from "expo-yandex-mapkit";
+// Not persisted. The choice lasts the session, which is the span the
+// intention lasts; a satellite map restored on a cold start is a surprise.
+import { create } from "zustand";
+import { SATELLITE_STYLE, STREET_STYLE } from "./mapStyles";
 
-/** What every <YandexMapView mapType> passes. */
-export const MAP_TYPE: NonNullable<YandexMapViewProps["mapType"]> = "vector";
+export type MapLayer = "street" | "satellite";
+
+interface MapLayerState {
+  layer: MapLayer;
+  toggle: () => void;
+}
+
+export const useMapLayerStore = create<MapLayerState>((set) => ({
+  // Street by default. Satellite is the better answer to "which building is
+  // this" and the worse answer to "where is this" — and the browse map, the
+  // one most people open first, is asking the second question.
+  layer: "street",
+  toggle: () =>
+    set((s) => ({ layer: s.layer === "street" ? "satellite" : "street" })),
+}));
+
+/** What to hand <Map mapStyle>. A URL for street, a style object for satellite. */
+export function useMapStyle() {
+  const layer = useMapLayerStore((s) => s.layer);
+  return layer === "satellite" ? SATELLITE_STYLE : STREET_STYLE;
+}

@@ -567,7 +567,7 @@ export default function ChatThreadScreen() {
                   style={{ padding: spacing.md }}
                   color={colors.primary}
                 />
-              ) : null
+              ) : undefined
             }
             contentContainerStyle={{ paddingVertical: spacing.md }}
             removeClippedSubviews

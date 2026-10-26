@@ -244,7 +244,7 @@ export default function PlacesScreen() {
                 color={colors.primary}
                 style={{ paddingVertical: 16 }}
               />
-            ) : null
+            ) : undefined
           }
           contentContainerStyle={{
             padding: spacing.lg,
@@ -255,7 +255,7 @@ export default function PlacesScreen() {
           refreshControl={
             <RefreshControl
               refreshing={isRefetching}
-              onRefresh={refetch}
+              onRefresh={() => void refetch()}
               tintColor={colors.primary}
             />
           }

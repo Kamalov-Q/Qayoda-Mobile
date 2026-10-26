@@ -129,7 +129,7 @@ export default function WelcomeScreen() {
                 textContentType="telephoneNumber"
                 returnKeyType="go"
                 maxLength={12} // "90 123 45 67"
-                onSubmitEditing={handleSubmit(onContinue)}
+                onSubmitEditing={() => void handleSubmit(onContinue)()}
                 value={value}
                 onChangeText={(v) => onChange(formatUzPhoneInput(v))}
                 onBlur={onBlur}

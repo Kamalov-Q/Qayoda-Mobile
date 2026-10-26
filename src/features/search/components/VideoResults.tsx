@@ -83,7 +83,7 @@ export function VideoResults({
             style={{ padding: spacing.md }}
             color={colors.primary}
           />
-        ) : null
+        ) : undefined
       }
       ListEmptyComponent={
         <EmptyState

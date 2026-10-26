@@ -11,7 +11,7 @@
 // Reached only via router.replace from establishSession, so there is no back
 // stack to escape through, and no BackButton is offered.
 import { useMemo, useRef, useState } from "react";
-import { Text, TextInput, View, Pressable } from "react-native";
+import { Text, View, Pressable, type TextInputInstance } from "react-native";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -70,7 +70,7 @@ export default function OnboardingScreen() {
   const update = useUpdateProfile();
   const uploadAvatar = useUploadAvatar();
   const [localAvatar, setLocalAvatar] = useState<string | null>(null);
-  const surnameRef = useRef<TextInput>(null);
+  const surnameRef = useRef<TextInputInstance>(null);
   const { colors, text } = useTheme();
   const t = useT();
 
@@ -209,7 +209,7 @@ export default function OnboardingScreen() {
                 hint={t("auth.surnameOptional")}
                 autoComplete="family-name"
                 returnKeyType="done"
-                onSubmitEditing={onSubmit}
+                onSubmitEditing={() => void onSubmit()}
                 value={value}
                 onChangeText={onChange}
                 onBlur={onBlur}

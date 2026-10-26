@@ -828,6 +828,8 @@ export const ru: Dictionary = {
     stackTitle: "Объявления в этом месте",
     grid: "Сетка",
     clusterLabel: "{{count}} объявлений",
+    layerSatellite: "Спутник",
+    layerStreet: "Обычная карта",
     zoomIn: "Приблизить",
     zoomOut: "Отдалить",
     expand: "Развернуть карту на весь экран",

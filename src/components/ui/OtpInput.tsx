@@ -1,5 +1,5 @@
 import { memo, useRef, useState } from "react";
-import { View, Text, TextInput, Pressable } from "react-native";
+import { View, Text, TextInput, Pressable, type TextInputInstance } from "react-native";
 import { radii, spacing, weight } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 
@@ -16,7 +16,7 @@ export const OtpInput = memo(function OtpInput({
   length?: number;
   error?: boolean;
 }) {
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const [focused, setFocused] = useState(false);
   const { colors } = useTheme();
 

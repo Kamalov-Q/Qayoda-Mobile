@@ -1,6 +1,6 @@
 // src/features/map/MapUnavailable.tsx
-// Stands in for a map in a binary without Yandex MapKit (Expo Go). Says what
-// it is rather than leaving a blank frame — see mapSupport.ts.
+// Stands in for a map in a binary without MapLibre (Expo Go). Says what it is
+// rather than leaving a blank frame — see mapSupport.ts.
 import { View, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";

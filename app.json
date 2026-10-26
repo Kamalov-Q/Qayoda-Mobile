@@ -7,7 +7,6 @@
     "icon": "./assets/icon.png",
     "scheme": "growencity",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "uz.growencity.app",
@@ -16,12 +15,18 @@
           "yandexnavi",
           "yandexmaps",
           "comgooglemaps",
+          "maps",
+          "yandexnavi",
+          "yandexmaps",
+          "comgooglemaps",
           "maps"
-        ]
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "uz.growencity.app",
+      "versionCode": 6,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#0A2024",
@@ -37,6 +42,8 @@
     },
     "plugins": [
       "expo-router",
+      "@maplibre/maplibre-react-native",
+      "expo-asset",
       [
         "expo-splash-screen",
         {
@@ -81,6 +88,7 @@
           "defaultChannel": "default"
         }
       ],
+      "expo-audio",
       "expo-font",
       "expo-image",
       "expo-video",

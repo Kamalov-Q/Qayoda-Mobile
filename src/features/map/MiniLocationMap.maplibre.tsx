@@ -1,13 +1,16 @@
-// src/features/map/MiniLocationMap.yandex.tsx
+// src/features/map/MiniLocationMap.maplibre.tsx
 // "My location" card for the profile screen: a compact ask-first state, then a
 // tappable map preview that opens a full-screen interactive map.
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Modal, View, Text, Pressable } from "react-native";
 import {
+  Camera,
+  Map as MapLibreMap,
   Marker,
-  YandexMapView,
-  type YandexMapViewRef,
-} from "expo-yandex-mapkit";
+  NativeUserLocation,
+  type CameraRef,
+} from "@maplibre/maplibre-react-native";
+import * as Location from "expo-location";
 import {
   useSafeAreaInsets,
   type EdgeInsets,
@@ -15,20 +18,18 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { radii, spacing, type } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
-import { useLanguage, useT } from "../../i18n";
+import { useT } from "../../i18n";
 import { Button } from "../../components/ui/Button";
 import { useMyLocation, type Coords } from "../listings/hooks/useMyLocation";
 import { MapIconButton } from "./MapIconButton";
-import { MAP_TYPE } from "./mapLayer";
-import { reverseGeocode } from "./geocoder";
+import { MapLayerButton } from "./MapLayerButton";
 import {
   animateToRegion,
-  logoPadding,
-  regionToCamera,
-  useInitialCamera,
-  visibleRegionToRegion,
+  regionToBounds,
+  viewStateToRegion,
   type Region,
 } from "./maps";
+import { useMapStyle } from "./mapLayer";
 
 const PREVIEW_HEIGHT = 150;
 const PREVIEW_SPAN = 0.006;
@@ -44,8 +45,8 @@ export function MiniLocationMap() {
   const [fullOpen, setFullOpen] = useState(false);
   const { locate, loading } = useMyLocation();
   const { colors, text } = useTheme();
+  const mapStyle = useMapStyle();
   const t = useT();
-  const language = useLanguage();
   // Captured here, OUTSIDE the modal: inside a native Modal the safe-area
   // context can report zero insets, which put the full map's title bar under
   // the status bar clock and its close button out of reach.
@@ -60,28 +61,20 @@ export function MiniLocationMap() {
     setCoords(position);
 
     // Street/district text makes the frame informative rather than
-    // decorative. Best-effort by construction: reverseGeocode never throws,
-    // and a miss just leaves the line off. Yandex rather than the device
-    // geocoder, so the address comes back in the app's language instead of
-    // the OS's — see geocoder.ts.
-    setAddressLine(await reverseGeocode(position, language));
-  }, [locate, language]);
-
-  /** Controlled: re-locating moves the preview to the new spot. */
-  const previewCamera = useMemo(
-    () =>
-      coords
-        ? regionToCamera({
-            ...coords,
-            latitudeDelta: PREVIEW_SPAN,
-            longitudeDelta: PREVIEW_SPAN,
-          })
-        : null,
-    [coords],
-  );
+    // decorative. Best-effort: a geocoder miss just leaves the line off.
+    try {
+      const [place] = await Location.reverseGeocodeAsync(position);
+      const line = [place?.street ?? place?.name, place?.district, place?.city]
+        .filter(Boolean)
+        .join(", ");
+      setAddressLine(line || null);
+    } catch {
+      setAddressLine(null);
+    }
+  }, [locate]);
 
   // --- Ask-first state: a compact row, not a dead grey slab -----------------
-  if (!coords || !previewCamera) {
+  if (!coords) {
     return (
       <View
         style={{
@@ -131,19 +124,33 @@ export function MiniLocationMap() {
         {/* Touches are blocked by THIS wrapper, never by a pointerEvents on
               the map itself. See MAP_STYLE_RULE in maps.ts. */}
         <View style={{ flex: 1, pointerEvents: "none" }}>
-          <YandexMapView
-            // The preview is a picture: interactiveDisabled takes the map out
-            // of the gesture chain entirely, so the settings list keeps its
-            // scroll and every touch falls through to the Pressable that
-            // opens the real, fully interactive map.
+          <MapLibreMap
+            // The preview is a picture: the wrapper above turns touches off, so
+            // the settings list keeps its scroll and every touch falls through
+            // to the Pressable that opens the real, fully interactive map.
             style={{ flex: 1 }}
-            mapType={MAP_TYPE}
-            cameraPosition={previewCamera}
-            interactiveDisabled
-            logoPosition={{ horizontal: "left", vertical: "bottom" }}
+            mapStyle={mapStyle}
+            logo={false}
+            compass={false}
+            dragPan={false}
+            touchZoom={false}
+            doubleTapZoom={false}
+            doubleTapHoldZoom={false}
+            touchRotate={false}
+            touchPitch={false}
           >
+            {/* Controlled: re-locating moves the preview to the new spot. */}
+            <Camera
+              bounds={regionToBounds({
+                latitude: coords.latitude,
+                longitude: coords.longitude,
+                latitudeDelta: PREVIEW_SPAN,
+                longitudeDelta: PREVIEW_SPAN,
+              })}
+              duration={0}
+            />
             <LocationDot coords={coords} />
-          </YandexMapView>
+          </MapLibreMap>
         </View>
 
         {/* Expand affordance — says "this opens" without stealing the tap. */}
@@ -229,7 +236,8 @@ function FullMap({
 }) {
   const { colors, text } = useTheme();
   const t = useT();
-  const mapRef = useRef<YandexMapViewRef>(null);
+  const mapStyle = useMapStyle();
+  const cameraRef = useRef<CameraRef>(null);
   const initialRegion: Region = {
     latitude: coords.latitude,
     longitude: coords.longitude,
@@ -237,12 +245,11 @@ function FullMap({
     longitudeDelta: FULL_SPAN,
   };
   const regionRef = useRef<Region>(initialRegion);
-  const fullCamera = useInitialCamera(initialRegion);
 
   const zoomBy = (factor: number) => {
     const region = regionRef.current;
     animateToRegion(
-      mapRef.current,
+      cameraRef.current,
       {
         ...region,
         latitudeDelta: clampDelta(region.latitudeDelta * factor),
@@ -254,7 +261,7 @@ function FullMap({
 
   const recenter = () => {
     onRelocate();
-    animateToRegion(mapRef.current, { ...initialRegion, ...coords }, 400);
+    animateToRegion(cameraRef.current, { ...initialRegion, ...coords }, 400);
   };
 
   return (
@@ -318,30 +325,22 @@ function FullMap({
               kept rendering behind the settings screen and made its back
               button stutter after any location action. */}
           {visible ? (
-            <YandexMapView
-              ref={mapRef}
+            <MapLibreMap
               style={{ flex: 1 }}
-              mapType={MAP_TYPE}
-              cameraPosition={fullCamera}
-              showUserPosition
-              logoPosition={{ horizontal: "left", vertical: "bottom" }}
-              logoPadding={logoPadding(
-                spacing.md,
-                insets.bottom + spacing.md,
-              )}
-              // Not onRegionChangeComplete — see visibleRegionToRegion.
-              onCameraPositionChanged={(e) => {
-                if (!e.nativeEvent.finished) return;
-                mapRef.current
-                  ?.getVisibleRegion()
-                  .then((visible) => {
-                    if (visible) regionRef.current = visibleRegionToRegion(visible);
-                  })
-                  .catch(() => {});
+              mapStyle={mapStyle}
+              logo={false}
+              compass={false}
+              onRegionDidChange={(e) => {
+                regionRef.current = viewStateToRegion(e.nativeEvent);
               }}
             >
+              <Camera
+                ref={cameraRef}
+                initialViewState={{ bounds: regionToBounds(initialRegion) }}
+              />
+              <NativeUserLocation />
               <LocationDot coords={coords} />
-            </YandexMapView>
+            </MapLibreMap>
           ) : null}
 
           <View
@@ -362,8 +361,7 @@ function FullMap({
               label={t("map.zoomOut")}
               onPress={() => zoomBy(2)}
             />
-            {/* Apart from the zoom pair: it changes what the map shows, not
-                where the camera is. */}
+            <MapLayerButton style={{ marginTop: spacing.sm }} />
           </View>
 
           <MapIconButton
@@ -388,12 +386,7 @@ function LocationDot({ coords }: { coords: Coords }) {
   const { colors } = useTheme();
 
   return (
-    <Marker
-      point={coords}
-      anchor={{ x: 0.5, y: 0.5 }}
-      // Fixed artwork: snapshot it once rather than on every render.
-      tracksViewChanges={false}
-    >
+    <Marker lngLat={[coords.longitude, coords.latitude]} anchor="center">
       <View
         collapsable={false}
         style={{

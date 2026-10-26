@@ -348,7 +348,7 @@ export function VideoCommentsSheet({
                 ListFooterComponent={
                   comments.isFetchingNextPage ? (
                     <ActivityIndicator color={colors.primary} />
-                  ) : null
+                  ) : undefined
                 }
               />
             )}

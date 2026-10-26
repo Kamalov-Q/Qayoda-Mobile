@@ -95,7 +95,7 @@ export function ActivityList<T>({
       ListFooterComponent={
         query.isFetchingNextPage ? (
           <ActivityIndicator color={colors.primary} />
-        ) : null
+        ) : undefined
       }
     />
   );

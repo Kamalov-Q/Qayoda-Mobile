@@ -288,7 +288,7 @@ export default function VideosScreen() {
         refreshControl={
           <RefreshControl
             refreshing={feed.isRefetching && !feed.isFetchingNextPage}
-            onRefresh={feed.refetch}
+            onRefresh={() => void feed.refetch()}
             tintColor="#FFFFFF"
           />
         }

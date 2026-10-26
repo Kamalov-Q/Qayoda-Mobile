@@ -104,7 +104,11 @@ export async function uploadVideoToBunny({
       throwIfAborted(signal);
 
       handle.offset = offset;
-      const chunk = handle.readBytes(
+      // Async since SDK 58 (readBytesSync is the blocking one). Awaited
+      // rather than switched to the sync call: a 10 MB video is fifteen
+      // chunks, and blocking the JS thread for each would stall the progress
+      // bar that is reporting them.
+      const chunk = await handle.readBytes(
         Math.min(CHUNK_BYTES, totalBytes - offset),
       );
       if (!chunk.length) {

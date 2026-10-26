@@ -859,6 +859,8 @@ export const uz = {
     stackTitle: "Bu joydagi e'lonlar",
     grid: "Katak",
     clusterLabel: "{{count}} ta e'lon",
+    layerSatellite: "Sun'iy yo'ldosh",
+    layerStreet: "Oddiy xarita",
     zoomIn: "Yaqinlashtirish",
     zoomOut: "Uzoqlashtirish",
     expand: "Xaritani butun ekranga ochish",

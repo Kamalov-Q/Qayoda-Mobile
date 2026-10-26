@@ -90,7 +90,7 @@ export default function ChatInboxScreen() {
           refreshControl={
             <RefreshControl
               refreshing={isRefetching}
-              onRefresh={refetch}
+              onRefresh={() => void refetch()}
               tintColor={colors.primary}
             />
           }

@@ -7,6 +7,7 @@ import {
   ScrollView,
   Pressable,
   type LayoutChangeEvent,
+  type ScrollViewInstance,
 } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -79,7 +80,7 @@ export const ListingPhotoSlider = memo(function ListingPhotoSlider({
   swipeable = true,
 }: Props) {
   const { colors } = useTheme();
-  const scroller = useRef<ScrollView>(null);
+  const scroller = useRef<ScrollViewInstance>(null);
   const [width, setWidth] = useState(0);
   const [index, setIndex] = useState(0);
   const isFocused = useIsFocused();

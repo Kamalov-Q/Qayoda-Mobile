@@ -6,19 +6,21 @@
 // banking apps do it", which is a cost paid by exactly the people least
 // willing to pay it: someone who already knows what they came to do. Skip
 // marks the intro seen, so it is a choice made once, not a nag.
-import { useCallback, useRef, useState } from "react";
-import {
-  View,
-  Text,
-  FlatList,
-  useWindowDimensions,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-} from "react-native";
+import { memo, useRef, useState } from "react";
+import { View, Text, FlatList, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import Animated, { ZoomIn } from "react-native-reanimated";
+import Animated, {
+  Extrapolation,
+  interpolate,
+  interpolateColor,
+  runOnJS,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+  type SharedValue,
+} from "react-native-reanimated";
+import { IntroArt, type IntroArtKey } from "../src/features/intro/IntroArt";
 import {
   Screen,
   Button,
@@ -37,61 +39,69 @@ const HERO = require("../assets/images/intro-hero.jpg");
 type Slide = {
   titleKey: TranslationKey;
   textKey: TranslationKey;
-} & (
-  | { icon: keyof typeof Ionicons.glyphMap; hero?: never }
-  | { hero: number; icon?: never }
-);
+} & ({ art: IntroArtKey; hero?: never } | { hero: number; art?: never });
 
 const SLIDES: Slide[] = [
   { hero: HERO, titleKey: "intro.welcomeTitle", textKey: "intro.welcomeText" },
-  { icon: "map-outline", titleKey: "intro.s1Title", textKey: "intro.s1Text" },
-  {
-    icon: "create-outline",
-    titleKey: "intro.s2Title",
-    textKey: "intro.s2Text",
-  },
-  {
-    icon: "chatbubbles-outline",
-    titleKey: "intro.s3Title",
-    textKey: "intro.s3Text",
-  },
+  { art: "map", titleKey: "intro.s1Title", textKey: "intro.s1Text" },
+  { art: "post", titleKey: "intro.s2Title", textKey: "intro.s2Text" },
+  { art: "chat", titleKey: "intro.s3Title", textKey: "intro.s3Text" },
 ];
+
+/**
+ * The pager is a Reanimated scroll view so the whole story moves on the UI
+ * thread: the art parallaxes, the words settle and the dots stretch straight
+ * from the scroll offset, without a render per frame.
+ */
+const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<Slide>);
 
 export default function IntroScreen() {
   const [page, setPage] = useState(0);
-  const listRef = useRef<FlatList>(null);
+  // The worklet's own copy, so it can tell a page change from a stray frame
+  // without reading React state it is not allowed to see.
+  const pageRef = useSharedValue(0);
+  const listRef = useRef<FlatList<Slide>>(null);
   const { width, height } = useWindowDimensions();
   // Square poster, as large as fits: never wider than the slide's padded
   // width, and capped by height so the title and text still fit on a small
   // phone (iPhone SE) under the header and above the button.
   const heroSize = Math.min(width - spacing.xl * 2, height * 0.42);
-  const { colors, text } = useTheme();
   const setIntroSeen = usePreferences((s) => s.setIntroSeen);
   const t = useT();
 
   const last = page === SLIDES.length - 1;
 
   /**
-   * Which slide is showing, from the scroll offset rather than from
-   * onViewableItemsChanged.
+   * How far the pager has scrolled, in pixels, kept on the UI thread.
    *
-   * Viewability is driven by the cell measurements VirtualizedList collects
-   * from onLayout, and on react-native-web those are unreliable enough that
-   * the callback can simply never fire — leaving `page` pinned at 0, the
-   * dots frozen on the first slide, and the button below re-targeting slide
-   * 1 on every press. An offset divided by the viewport width is the same
-   * answer with nothing to measure.
-   *
-   * layoutMeasurement rather than the `width` from useWindowDimensions: it is
-   * the list's own width, so this stays correct if the list ever stops being
-   * full-bleed, and it keeps the callback free of render-scoped deps.
+   * Everything that moves with the swipe reads this directly, so the art,
+   * the words and the dots all travel with the finger rather than snapping
+   * when a JS state update lands a frame or two later.
    */
-  const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const viewport = e.nativeEvent.layoutMeasurement.width;
-    if (!viewport) return;
-    const next = Math.round(e.nativeEvent.contentOffset.x / viewport);
-    setPage((current) => (current === next ? current : next));
-  }, []);
+  const scrollX = useSharedValue(0);
+
+  /**
+   * `page` still exists, but only for the things that change ONCE per slide:
+   * the button's label and whether "skip" is offered. It is set from the
+   * worklet through runOnJS, and only when the rounded page actually
+   * changes — so a full swipe costs one JS call, not one per frame.
+   *
+   * Derived from the offset rather than from onViewableItemsChanged, which
+   * depends on cell measurements VirtualizedList does not reliably have on
+   * web — that left the dots frozen on slide one.
+   */
+  const onScroll = useAnimatedScrollHandler({
+    onScroll: (e) => {
+      scrollX.value = e.contentOffset.x;
+      const viewport = e.layoutMeasurement.width;
+      if (!viewport) return;
+      const next = Math.round(e.contentOffset.x / viewport);
+      if (next !== pageRef.value) {
+        pageRef.value = next;
+        runOnJS(setPage)(next);
+      }
+    },
+  });
 
   /** Mark the story told and go in. Shared by "skip" and the last slide. */
   const finish = () => {
@@ -145,7 +155,7 @@ export default function IntroScreen() {
         </View>
       </View>
 
-      <FlatList
+      <AnimatedFlatList
         ref={listRef}
         data={SLIDES}
         keyExtractor={(s) => s.titleKey}
@@ -153,7 +163,9 @@ export default function IntroScreen() {
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         onScroll={onScroll}
-        scrollEventThrottle={16}
+        // 16 was the old budget for a JS handler. The handler is a worklet
+        // now, so every frame is affordable and the motion is continuous.
+        scrollEventThrottle={1}
         // Fixed-width slides, so the list never has to measure a cell to know
         // where it starts — which is what made paging fragile on web.
         getItemLayout={(_, index) => ({
@@ -161,60 +173,15 @@ export default function IntroScreen() {
           offset: width * index,
           index,
         })}
-        renderItem={({ item }) => (
-          <View
-            style={{
-              width,
-              alignItems: "center",
-              justifyContent: "center",
-              padding: spacing.xl,
-              gap: spacing.lg,
-            }}
-          >
-            {item.hero ? (
-              // The first thing a new user sees — it settles in rather than
-              // snapping on.
-              <Animated.View entering={ZoomIn.duration(500)}>
-                <Image
-                  source={item.hero}
-                  accessibilityLabel="Growen City"
-                  style={{
-                    width: heroSize,
-                    height: heroSize,
-                    borderRadius: radii.xl,
-                  }}
-                  contentFit="cover"
-                />
-              </Animated.View>
-            ) : (
-              <View
-                style={{
-                  width: 112,
-                  height: 112,
-                  borderRadius: radii.pill,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: colors.primarySoft,
-                  borderWidth: 1,
-                  borderColor: colors.primaryBorder,
-                }}
-              >
-                <Ionicons name={item.icon} size={52} color={colors.primary} />
-              </View>
-            )}
-            <Text style={{ ...text.display, textAlign: "center" }}>
-              {t(item.titleKey)}
-            </Text>
-            <Text
-              style={{
-                ...text.body,
-                color: colors.textMuted,
-                textAlign: "center",
-              }}
-            >
-              {t(item.textKey)}
-            </Text>
-          </View>
+        renderItem={({ item, index }) => (
+          <IntroSlide
+            slide={item}
+            index={index}
+            width={width}
+            heroSize={heroSize}
+            scrollX={scrollX}
+            active={page === index}
+          />
         )}
       />
 
@@ -227,22 +194,12 @@ export default function IntroScreen() {
             gap: spacing.sm,
           }}
         >
-          {/* The active dot stretches and recolours as the page changes (a
-              CSS transition), so the indicator travels with the swipe
-              instead of jumping. */}
+          {/* The dot does not jump a slide late any more: its width and
+              colour are read straight off the scroll offset, so it stretches
+              as the finger moves and is already the right shape when the
+              page settles. */}
           {SLIDES.map((s, i) => (
-            <Animated.View
-              key={s.titleKey}
-              style={{
-                width: i === page ? 22 : 8,
-                height: 8,
-                borderRadius: radii.pill,
-                backgroundColor: i === page ? colors.primary : colors.border,
-                transitionProperty: ["width", "backgroundColor"],
-                transitionDuration: 250,
-                transitionTimingFunction: "ease-out",
-              }}
-            />
+            <Dot key={s.titleKey} index={i} width={width} scrollX={scrollX} />
           ))}
         </View>
 
@@ -254,3 +211,157 @@ export default function IntroScreen() {
     </Screen>
   );
 }
+
+/**
+ * One slide, moving against the swipe.
+ *
+ * The art travels further than the words and fades sooner, which reads as
+ * depth rather than as a sheet of content sliding by. Both are plain
+ * transforms and opacities, so the compositor does the work.
+ */
+const IntroSlide = memo(function IntroSlide({
+  slide,
+  index,
+  width,
+  heroSize,
+  scrollX,
+  active,
+}: {
+  slide: Slide;
+  index: number;
+  width: number;
+  heroSize: number;
+  scrollX: SharedValue<number>;
+  active: boolean;
+}) {
+  const { colors, text } = useTheme();
+  const t = useT();
+
+  /** -1 one slide to the left, 0 centred, 1 one slide to the right. */
+  const artStyle = useAnimatedStyle(() => {
+    const p = scrollX.value / width - index;
+    return {
+      opacity: interpolate(Math.abs(p), [0, 0.7], [1, 0], Extrapolation.CLAMP),
+      transform: [
+        // Lags the page by a third, so it drifts rather than rides along.
+        { translateX: p * width * 0.33 },
+        {
+          scale: interpolate(
+            Math.abs(p),
+            [0, 1],
+            [1, 0.82],
+            Extrapolation.CLAMP,
+          ),
+        },
+      ],
+    };
+  });
+
+  const copyStyle = useAnimatedStyle(() => {
+    const p = scrollX.value / width - index;
+    return {
+      opacity: interpolate(Math.abs(p), [0, 0.5], [1, 0], Extrapolation.CLAMP),
+      transform: [
+        // Closer to the page than the art is — the near layer.
+        { translateX: p * width * 0.12 },
+        {
+          translateY: interpolate(
+            Math.abs(p),
+            [0, 1],
+            [0, 26],
+            Extrapolation.CLAMP,
+          ),
+        },
+      ],
+    };
+  });
+
+  return (
+    <View
+      style={{
+        width,
+        alignItems: "center",
+        justifyContent: "center",
+        padding: spacing.xl,
+        gap: spacing.lg,
+      }}
+    >
+      <Animated.View style={artStyle}>
+        {/* Narrowed on `art` rather than `hero`: the union is discriminated
+            by which one is present, and TypeScript only follows that in the
+            direction that proves `art` is there. */}
+        {slide.art === undefined ? (
+          <Image
+            source={slide.hero}
+            accessibilityLabel="Growen City"
+            style={{
+              width: heroSize,
+              height: heroSize,
+              borderRadius: radii.xl,
+            }}
+            contentFit="cover"
+          />
+        ) : (
+          <View
+            style={{
+              width: 148,
+              height: 148,
+              borderRadius: radii.pill,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: colors.primarySoft,
+              borderWidth: 1,
+              borderColor: colors.primaryBorder,
+            }}
+          >
+            <IntroArt
+              art={slide.art}
+              size={92}
+              color={colors.primary}
+              drawKey={index}
+              active={active}
+            />
+          </View>
+        )}
+      </Animated.View>
+
+      <Animated.View style={[{ gap: spacing.lg }, copyStyle]}>
+        <Text style={{ ...text.display, textAlign: "center" }}>
+          {t(slide.titleKey)}
+        </Text>
+        <Text
+          style={{ ...text.body, color: colors.textMuted, textAlign: "center" }}
+        >
+          {t(slide.textKey)}
+        </Text>
+      </Animated.View>
+    </View>
+  );
+});
+
+/** One position marker, stretching into a pill as its slide arrives. */
+const Dot = memo(function Dot({
+  index,
+  width,
+  scrollX,
+}: {
+  index: number;
+  width: number;
+  scrollX: SharedValue<number>;
+}) {
+  const { colors } = useTheme();
+
+  const style = useAnimatedStyle(() => {
+    const d = Math.abs(scrollX.value / width - index);
+    return {
+      width: interpolate(d, [0, 1], [22, 8], Extrapolation.CLAMP),
+      backgroundColor: interpolateColor(
+        Math.min(d, 1),
+        [0, 1],
+        [colors.primary, colors.border],
+      ),
+    };
+  });
+
+  return <Animated.View style={[{ height: 8, borderRadius: radii.pill }, style]} />;
+});
