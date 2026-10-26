@@ -29,6 +29,13 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6827230283",
+        "ascApiKeyPath": "/home/kamal/Documents/AuthKey_9RH89AQWP5.p8",
+        "ascApiKeyId": "9RH89AQWP5",
+        "ascApiKeyIssuerId": "827836d8-964e-4d00-a57b-866d745690ce"
+      }
+    }
   }
 }
