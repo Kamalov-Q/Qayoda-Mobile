@@ -64,6 +64,14 @@ export const TextField = forwardRef<TextInputInstance, Props>(
     // and its content has to start at the top rather than being centred.
     const isMultiline = !!inputProps.multiline;
 
+    // TextInput's own placeholder is clipped at the field's edge with no
+    // ellipsis and no way to shrink it, so a search box sharing its row with
+    // a back button and a funnel showed half a sentence. On one line we draw
+    // the placeholder ourselves and let it scale down to fit; the field keeps
+    // TextInput's placeholder when it is multiline, where there is room.
+    const { placeholder } = inputProps;
+    const ownPlaceholder = !isMultiline && !!placeholder && !inputProps.value;
+
     const borderColor = error
       ? colors.danger
       : focused
@@ -111,33 +119,67 @@ export const TextField = forwardRef<TextInputInstance, Props>(
             <Text style={{ ...type.body, color: colors.textMuted }}>{prefix}</Text>
           ) : null}
 
-          <TextInput
-            ref={ref}
-            {...inputProps}
-            placeholderTextColor={colors.textFaint}
-            secureTextEntry={isPassword && !revealed}
-            onFocus={(e) => {
-              setFocused(true);
-              onFocus?.(e);
+          {/* Wrapper so the drawn placeholder can be positioned over the
+              input; it is transparent to layout and to touches. */}
+          <View
+            style={{
+              flex: 1,
+              alignSelf: "stretch",
+              justifyContent: isMultiline ? "flex-start" : "center",
             }}
-            onBlur={(e) => {
-              setFocused(false);
-              onBlur?.(e);
-            }}
-            style={[
-              {
-                flex: 1,
-                height: isMultiline ? undefined : "100%",
-                minHeight: isMultiline ? MULTILINE_HEIGHT - spacing.md * 2 : undefined,
-                textAlignVertical: isMultiline ? "top" : "center",
-                fontSize: 16,
-                color: colors.text,
-              },
-              // react-native-web renders a browser focus ring on top of the
-              // themed border. Not in RN's style types, hence the cast.
-              WEB_RESET,
-            ]}
-          />
+          >
+            <TextInput
+              ref={ref}
+              {...inputProps}
+              placeholder={ownPlaceholder ? undefined : placeholder}
+              placeholderTextColor={colors.textFaint}
+              secureTextEntry={isPassword && !revealed}
+              onFocus={(e) => {
+                setFocused(true);
+                onFocus?.(e);
+              }}
+              onBlur={(e) => {
+                setFocused(false);
+                onBlur?.(e);
+              }}
+              style={[
+                {
+                  flex: 1,
+                  height: isMultiline ? undefined : "100%",
+                  minHeight: isMultiline ? MULTILINE_HEIGHT - spacing.md * 2 : undefined,
+                  textAlignVertical: isMultiline ? "top" : "center",
+                  fontSize: 16,
+                  color: colors.text,
+                },
+                // react-native-web renders a browser focus ring on top of the
+                // themed border. Not in RN's style types, hence the cast.
+                WEB_RESET,
+              ]}
+            />
+
+            {ownPlaceholder ? (
+              <View
+                pointerEvents="none"
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  justifyContent: "center",
+                }}
+              >
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.75}
+                  style={{ fontSize: 16, color: colors.textFaint }}
+                >
+                  {placeholder}
+                </Text>
+              </View>
+            ) : null}
+          </View>
 
           {suffix && !isPassword ? (
             <Text style={{ ...type.body, color: colors.textMuted }}>{suffix}</Text>

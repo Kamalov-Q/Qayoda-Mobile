@@ -1,6 +1,7 @@
 import { memo, useState } from "react";
 import {
   View,
+  Text,
   TextInput,
   Pressable,
   ActivityIndicator,
@@ -55,28 +56,54 @@ export const MapSearchBar = memo(function MapSearchBar({
     >
       <Ionicons name="search" size={18} color={colors.textMuted} />
 
-      <TextInput
-        value={query}
-        onChangeText={setQuery}
-        onSubmitEditing={() => onSubmit(query)}
-        placeholder={t("map.searchPlaceholder")}
-        placeholderTextColor={colors.textFaint}
-        accessibilityLabel={t("map.search")}
-        returnKeyType="search"
-        autoCorrect={false}
-        autoCapitalize="none"
-        // Submitting keeps the keyboard up on Android otherwise, hiding the
-        // half of the map the camera just moved to.
-        blurOnSubmit
-        style={{
-          flex: 1,
-          ...type.body,
-          color: colors.text,
-          // Android's TextInput carries built-in padding that makes it taller
-          // than the pill it sits in.
-          padding: 0,
-        }}
-      />
+      {/* The placeholder is drawn rather than handed to TextInput, which
+          clips its own at the field's edge: in this pill, between the glyph
+          and the clear button, the hint ran out of room and lost its end. */}
+      <View style={{ flex: 1, alignSelf: "stretch", justifyContent: "center" }}>
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          onSubmitEditing={() => onSubmit(query)}
+          accessibilityLabel={t("map.search")}
+          returnKeyType="search"
+          autoCorrect={false}
+          autoCapitalize="none"
+          // Submitting keeps the keyboard up on Android otherwise, hiding the
+          // half of the map the camera just moved to.
+          blurOnSubmit
+          style={{
+            flex: 1,
+            ...type.body,
+            color: colors.text,
+            // Android's TextInput carries built-in padding that makes it
+            // taller than the pill it sits in.
+            padding: 0,
+          }}
+        />
+
+        {query ? null : (
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              top: 0,
+              bottom: 0,
+              justifyContent: "center",
+            }}
+          >
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.75}
+              style={{ ...type.body, color: colors.textFaint }}
+            >
+              {t("map.searchPlaceholder")}
+            </Text>
+          </View>
+        )}
+      </View>
 
       {loading ? (
         <ActivityIndicator size="small" color={colors.primary} />

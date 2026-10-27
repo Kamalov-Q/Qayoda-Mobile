@@ -158,11 +158,15 @@ function DialogButton({
       onPress={onPress}
       accessibilityRole="button"
       style={({ pressed }) => ({
+        // minHeight, not height: a label that needs two lines makes the
+        // button taller rather than being cut off. Row children stretch, so
+        // the other button follows it and the pair stays level.
         flex: 1,
-        height: 48,
+        minHeight: 48,
         alignItems: "center",
         justifyContent: "center",
-        paddingHorizontal: spacing.md,
+        paddingHorizontal: spacing.sm,
+        paddingVertical: spacing.sm,
         borderRadius: radii.md,
         backgroundColor: background,
         borderWidth: 1,
@@ -170,7 +174,15 @@ function DialogButton({
         opacity: pressed ? 0.75 : 1,
       })}
     >
-      <Text style={{ ...type.bodyStrong, fontSize: 16, color }} numberOfLines={1}>
+      {/* Two lines and shrink-to-fit before any truncation: these labels are
+          verbs the reader is about to act on, and "Akkauntni o…" does not
+          say which action. Uzbek and Russian both run long here. */}
+      <Text
+        style={{ ...type.bodyStrong, fontSize: 16, color, textAlign: "center" }}
+        numberOfLines={2}
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
+      >
         {label}
       </Text>
     </Pressable>

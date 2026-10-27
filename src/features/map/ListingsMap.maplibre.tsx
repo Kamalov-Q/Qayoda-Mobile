@@ -25,7 +25,7 @@ import {
 // Installs the log filter — see the file for what it silences and why.
 import "./mapLogging";
 import Svg, { Circle, Rect, Text as SvgText } from "react-native-svg";
-import { spacing } from "../../theme/tokens";
+import { spacing, palettes } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 import { useT } from "../../i18n";
 import {
@@ -876,6 +876,19 @@ const StackBubble = memo(function StackBubble({
   );
 });
 
+/**
+ * Marker colours, fixed to the light palette under both schemes.
+ *
+ * A marker sits on map tiles, never on one of the app's surfaces, so there is
+ * nothing for it to match — and following the scheme is what put a near-black
+ * ring (`onPrimary` is a dark ink in the dark palette) around every cluster.
+ * The light palette's deeper teal under a white ring reads the same on street
+ * tiles and on satellite, in either scheme, and carries a white label at
+ * 5.6:1 where the dark scheme's brighter teal managed 2.3:1.
+ */
+const MARKER_FILL = palettes.light.primary;
+const MARKER_INK = palettes.light.onPrimary;
+
 /** The numbered circle a zoomed-out map collapses nearby listings into.
  *  Tapping it dives into that neighbourhood. */
 const ClusterMarker = memo(function ClusterMarker({
@@ -885,7 +898,6 @@ const ClusterMarker = memo(function ClusterMarker({
   cluster: PointCluster;
   onZoom: (cluster: PointCluster) => void;
 }) {
-  const { colors } = useTheme();
   const t = useT();
   const onPress = useCallback(() => onZoom(cluster), [onZoom, cluster]);
   // Bigger circles for bigger neighbourhoods, gently.
@@ -911,18 +923,18 @@ const ClusterMarker = memo(function ClusterMarker({
             cx={(size + 6) / 2}
             cy={(size + 6) / 2}
             r={(size + 6) / 2}
-            fill={colors.onPrimary}
+            fill={MARKER_INK}
           />
           <Circle
             cx={(size + 6) / 2}
             cy={(size + 6) / 2}
             r={size / 2}
-            fill={colors.primary}
+            fill={MARKER_FILL}
           />
           <SvgText
             x={(size + 6) / 2}
             y={(size + 6) / 2}
-            fill={colors.onPrimary}
+            fill={MARKER_INK}
             fontSize={cluster.count > 99 ? 13 : 15}
             fontWeight="bold"
             textAnchor="middle"
@@ -988,7 +1000,6 @@ const PriceMarker = memo(function PriceMarker({
   badge?: number;
   onPress: () => void;
 }) {
-  const { colors } = useTheme();
   const lngLat = useMemo<[number, number]>(
     () => [longitude, latitude],
     [latitude, longitude],
@@ -1026,7 +1037,7 @@ const PriceMarker = memo(function PriceMarker({
             width={width + 4}
             height={height + 4}
             rx={(height + 4) / 2}
-            fill="#FFFFFF"
+            fill={MARKER_INK}
           />
           <Rect
             x={2}
@@ -1034,12 +1045,12 @@ const PriceMarker = memo(function PriceMarker({
             width={width}
             height={height}
             rx={height / 2}
-            fill={colors.primary}
+            fill={MARKER_FILL}
           />
           <SvgText
             x={textCenter}
             y={sublabel ? (height + 4) / 2 - 7 : (height + 4) / 2}
-            fill="#FFFFFF"
+            fill={MARKER_INK}
             fontSize={15}
             fontWeight="bold"
             textAnchor="middle"
@@ -1051,7 +1062,7 @@ const PriceMarker = memo(function PriceMarker({
             <SvgText
               x={textCenter}
               y={(height + 4) / 2 + 9}
-              fill="#FFFFFF"
+              fill={MARKER_INK}
               fontSize={10.5}
               fontWeight="600"
               opacity={0.92}
@@ -1067,12 +1078,12 @@ const PriceMarker = memo(function PriceMarker({
                 cx={width + 4 - badgeSpace / 2 - 3}
                 cy={(height + 4) / 2}
                 r={11}
-                fill="#FFFFFF"
+                fill={MARKER_INK}
               />
               <SvgText
                 x={width + 4 - badgeSpace / 2 - 3}
                 y={(height + 4) / 2}
-                fill={colors.primary}
+                fill={MARKER_FILL}
                 fontSize={12}
                 fontWeight="bold"
                 textAnchor="middle"

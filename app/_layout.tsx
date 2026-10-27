@@ -29,6 +29,7 @@ import { ToastHost } from "../src/components/ui/Toast";
 import { DialogHost } from "../src/components/ui/Dialog";
 import { BootScreen } from "../src/components/ui/BrandLoader";
 import { useT } from "../src/i18n";
+import { useAppUpdate } from "../src/features/updates/useAppUpdate";
 
 // NOTE: enableFreeze(true) was tried here and reverted — react-freeze hard-
 // froze the map screen on state updates. The lag it targeted is handled by
@@ -106,6 +107,11 @@ export default function RootLayout() {
   useEffect(() => {
     if (typefaceReady) SplashScreen.hideAsync();
   }, [typefaceReady]);
+
+  // Offers a published JS update once the app is actually on screen —
+  // gated on `booted` because the dialog would otherwise open over the boot
+  // emblem, where there is nothing yet to go back to if they decline.
+  useAppUpdate(booted);
 
   // The support socket, for as long as someone is signed in: an answer from
   // the desk has to reach the badge whatever screen they are on.

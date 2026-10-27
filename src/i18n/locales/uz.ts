@@ -1212,4 +1212,11 @@ export const uz = {
     txLoadError: "To'lov ma'lumotlarini yuklab bo'lmadi",
     pleaseLogin: "Iltimos, avval tizimga kiring",
   },
+  appUpdate: {
+    title: "Yangilanish tayyor",
+    message:
+      "Ilovaning yangi versiyasi yuklab olindi. Uni qo'llash uchun ilovani qayta ishga tushirish kerak.",
+    restart: "Qayta ishga tushirish",
+    later: "Keyinroq",
+  },
 } as const;

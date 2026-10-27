@@ -8,6 +8,7 @@
 // to live, which is the one consequence money can be lost to.
 import { useState } from "react";
 import { Text, View } from "react-native";
+import { Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Screen,
@@ -72,6 +73,10 @@ export default function DeleteAccountScreen() {
 
   return (
     <Screen style={{ paddingTop: spacing.md }} edges={HEADER_EDGES}>
+      {/* Not registered in the root Stack, so without this the header shows
+          the route segment — "delete-account" — instead of a title. */}
+      <Stack.Screen options={{ title: t("deleteAccount.title") }} />
+
       <View style={{ gap: spacing.xl }}>
         <View style={{ gap: spacing.xs }}>
           <Text style={text.display}>{t("deleteAccount.title")}</Text>
