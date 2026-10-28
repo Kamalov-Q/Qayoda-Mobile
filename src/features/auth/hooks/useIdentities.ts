@@ -6,7 +6,6 @@ import { authApi, AuthProvider } from "../api/auth.api";
 import { queryClient } from "../../../lib/query-client";
 import { toast } from "../../../components/ui/Toast";
 import { errorMessage } from "../../../lib/api-error";
-import { t } from "../../../i18n";
 
 export const IDENTITIES_KEY = ["auth", "identities"] as const;
 

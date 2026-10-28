@@ -196,10 +196,6 @@ export default function RootLayout() {
               name="listing/[id]/index"
               options={{ title: t("listings.detailsTitle") }}
             />
-            <Stack.Screen
-              name="listing/[id]/edit-images"
-              options={{ title: t("listings.editImages") }}
-            />
             {/* Both set their own title once the counts land; this is what
                 shows while the first page is in flight. */}
             <Stack.Screen
@@ -232,6 +228,10 @@ export default function RootLayout() {
               options={{ title: t("activity.comments") }}
             />
             <Stack.Screen
+              name="activity/bids"
+              options={{ title: t("bids.myTitle") }}
+            />
+            <Stack.Screen
               name="activity/likes"
               options={{ title: t("activity.likes") }}
             />
@@ -256,6 +256,20 @@ export default function RootLayout() {
             <Stack.Screen
               name="profile/edit"
               options={{ title: t("profile.edit") }}
+            />
+            {/* Registered here rather than inline, which is the difference
+                between a title and a title ON EVERY BRANCH. A screen that
+                sets its own inside the loaded return still shows the raw
+                route segment while it is loading, or when it bounces a
+                guest — "profile/complete" in a header, which is what both
+                of these used to do. */}
+            <Stack.Screen
+              name="profile/complete"
+              options={{ title: t("completeProfile.title") }}
+            />
+            <Stack.Screen
+              name="delete-account"
+              options={{ title: t("deleteAccount.title") }}
             />
             {/* Static "edit" wins over the dynamic segment, so /profile/edit
                 still reaches the form. This one swaps in the person's name

@@ -172,6 +172,8 @@ export const ListingPreviewSheet = memo(function ListingPreviewSheet({
           opacity: pressed ? 0.7 : 1,
         })}
       >
+        {/* No sold badge here: the map no longer publishes sold listings, so
+            this sheet can only ever be opened from a live one. */}
         <Text style={{ ...type.heading, fontSize: 19, color: colors.text }}>
           {formatPrice(feature.price, feature.currency)}
         </Text>

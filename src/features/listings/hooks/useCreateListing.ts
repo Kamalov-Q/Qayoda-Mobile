@@ -1,6 +1,10 @@
 import { useMutation } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { CreateListingInput, listingApi } from "../api/listings.api";
+import {
+  type CreateListingInput,
+  type MarkSoldInput,
+  listingApi,
+} from "../api/listings.api";
 import { queryClient } from "@/src/lib/query-client";
 import { errorMessage } from "@/src/lib/api-error";
 import { toast } from "@/src/components/ui/Toast";
@@ -38,6 +42,30 @@ export function useArchiveListing() {
     },
     // Nothing was showing archive failures: mutate() swallows the rejection,
     // so the row simply stayed put with no explanation.
+    onError: (error) => toast.error(errorMessage(error)),
+  });
+}
+
+/**
+ * Marking a listing sold.
+ *
+ * Shaped like useRestoreListing rather than useArchiveListing: the response
+ * is the updated listing, so the detail screen flips to its sold state
+ * immediately instead of waiting out the refetch.
+ */
+export function useMarkSoldListing() {
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: MarkSoldInput }) =>
+      listingApi.markSold(id, input),
+    onSuccess: (listing) => {
+      queryClient.setQueryData(["listings", "detail", listing.id], listing);
+      queryClient.invalidateQueries({ queryKey: ["listings"] });
+      // The sale closed every open offer on it, so the bid caches and the
+      // threads those closures wrote into are both stale.
+      queryClient.invalidateQueries({ queryKey: ["price-bids"] });
+      queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
+      toast.successKey("listings.soldToast");
+    },
     onError: (error) => toast.error(errorMessage(error)),
   });
 }

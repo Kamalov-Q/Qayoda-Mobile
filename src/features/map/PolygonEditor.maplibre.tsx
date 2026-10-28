@@ -257,15 +257,19 @@ export const PolygonEditor = memo(function PolygonEditor({
             {t("map.hint")}
           </Text>
         </View>
-      </View>
 
-      {/* Clears the undo/clear row: those are full-height Buttons sitting at
-          spacing.lg from the bottom. */}
-      {/* Tracing a plot edge off a vector map is guesswork; off imagery it
-          is tracing. Left, clear of the search bar's own column. */}
-      <MapLayerButton
-        style={{ position: "absolute", top: spacing.md, left: spacing.md }}
-      />
+        {/* Tracing a plot edge off a vector map is guesswork; off imagery it
+            is tracing — so this belongs on the drawing screen.
+
+            Laid out IN the column rather than absolutely positioned: it used
+            to be pinned to top/left, which is exactly where the search bar
+            starts, so the two drew on top of each other. The search bar spans
+            the full width, so there is no free corner up there to move it to
+            — under the hint is the first place nothing else claims, and
+            flowing it means a taller hint in another language pushes it down
+            instead of landing on it. */}
+        <MapLayerButton style={{ alignSelf: "flex-start" }} />
+      </View>
 
       <MyLocationButton
         onPress={goToMyLocation}

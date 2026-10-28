@@ -9,7 +9,6 @@ import { useState } from "react";
 import {
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -112,7 +111,10 @@ export function ReportSheet<R extends string>({
         }}
         // Android resizes the window for the keyboard on its own; adding
         // padding on top of that pushes the sheet off the screen.
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        // "padding" on Android as well. Leaving it undefined there relies
+        // on the window resizing for the keyboard, which it stopped doing
+        // under edge-to-edge — the same bug Screen.tsx documents.
+        behavior="padding"
       >
         <Pressable
           style={{ position: "absolute", inset: 0 }}

@@ -1,6 +1,7 @@
 import { memo, type ReactNode } from "react";
 import { View, Text, type ViewStyle } from "react-native";
-import { spacing, radii } from "../../theme/tokens";
+import { Ionicons } from "@expo/vector-icons";
+import { spacing, radii, type } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 
 interface Props {
@@ -50,16 +51,52 @@ export const Card = memo(function Card({ children, title, flush, style }: Props)
  *  with the vertical rhythm set in one place instead of per screen. */
 export const Section = memo(function Section({
   title,
+  required,
+  error,
   children,
 }: {
   title: string;
+  /**
+   * Red asterisk on the heading, exactly as TextField marks its own label.
+   *
+   * Not every required answer on a form is typed into a field. A tile grid
+   * or a picker sheet has a Section heading and nothing else, so without
+   * this the required ones looked optional.
+   */
+  required?: boolean;
+  /**
+   * Validation message under the group.
+   *
+   * Same reason: a SelectGrid has no label, no border and no error line of
+   * its own, so a rule it failed had nowhere to say so and the form simply
+   * refused to continue without explaining why.
+   */
+  error?: string;
   children: ReactNode;
 }) {
-  const { text } = useTheme();
+  const { text, colors } = useTheme();
   return (
     <View style={{ gap: spacing.sm }}>
-      <Text style={{ ...text.label, marginLeft: spacing.xs }}>{title}</Text>
+      <Text style={{ ...text.label, marginLeft: spacing.xs }}>
+        {title}
+        {required ? <Text style={{ color: colors.danger }}> *</Text> : null}
+      </Text>
       {children}
+      {error ? (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: spacing.xs,
+            marginLeft: spacing.xs,
+          }}
+        >
+          <Ionicons name="alert-circle" size={14} color={colors.danger} />
+          <Text style={{ ...type.caption, color: colors.danger, flex: 1 }}>
+            {error}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 });

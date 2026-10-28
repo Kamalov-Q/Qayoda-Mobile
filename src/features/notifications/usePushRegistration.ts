@@ -12,7 +12,12 @@ import { usePreferences } from "@/src/lib/preferences";
 import { PUSH_SUPPORTED } from "./pushSupport";
 import { queryClient } from "@/src/lib/query-client";
 import { notificationsApi } from "./api/notifications.api";
+import { markNotificationsRead } from "./hooks/useNotifications";
 import { devicePlatform, getPushToken } from "./push";
+import {
+  notificationRoute,
+  targetFromPushData,
+} from "./notificationTarget";
 
 /**
  * expo-notifications, or null without its native module — see pushSupport.
@@ -23,44 +28,6 @@ const Notifications: typeof import("expo-notifications") | null =
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   PUSH_SUPPORTED ? require("expo-notifications") : null;
 
-
-/**
- * Where a notification's payload says to go.
- *
- * The server puts the same references on the push `data` as it puts on the
- * inbox row, so this mirrors NotificationRow's `open()` — deliberately, and
- * in the same order. A tap from the lock screen and a tap in the inbox must
- * land in the same place or the app has two answers to one question.
- */
-function routeFor(data: Record<string, unknown>): string | null {
-  const str = (k: string) =>
-    typeof data[k] === "string" ? (data[k] as string) : null;
-
-  const kind = str("kind");
-  if (
-    kind === "TOPUP_SUCCEEDED" ||
-    kind === "TOPUP_FAILED" ||
-    kind === "TARIFF_PAID" ||
-    kind === "TARIFF_EXPIRING"
-  ) {
-    return "/wallet";
-  }
-  if (kind === "VIDEO_AWAITING_PAYMENT" || kind === "VIDEO_FAILED") {
-    return "/videos/mine";
-  }
-
-  const conversationId = str("conversationId");
-  if (conversationId) return `/chat/${conversationId}`;
-  const videoId = str("videoId");
-  if (videoId) return `/videos/${videoId}`;
-  const listingId = str("listingId");
-  if (listingId) return `/listing/${listingId}`;
-  const actorId = str("actorId");
-  if (actorId) return `/profile/${actorId}`;
-
-  // Nothing specific to open: the inbox is always a correct answer.
-  return "/activity/notifications";
-}
 
 export function usePushRegistration(): void {
   const userId = useAuthStore((s) => s.user?.id);
@@ -124,8 +91,24 @@ export function usePushRegistration(): void {
     let handled = false;
 
     const go = (data: unknown) => {
-      const route = routeFor((data ?? {}) as Record<string, unknown>);
-      if (route) router.push(route as never);
+      const target = targetFromPushData(
+        (data ?? {}) as Record<string, unknown>,
+      );
+
+      // The row is read the moment its banner is tapped. Without this the
+      // bell kept claiming one unread after the user had read exactly that
+      // thing, and the inbox — reached some other way later — still showed
+      // it washed as new. Best-effort, and deliberately not awaited: the
+      // navigation below must not wait on a request, and a failed mark just
+      // leaves the row unread until the inbox is opened.
+      //
+      // Optimistic too, through the same mutation the inbox uses, so the
+      // bell drops immediately rather than at the end of its poll.
+      if (target.notificationId) {
+        markNotificationsRead([target.notificationId]);
+      }
+
+      router.push(notificationRoute(target) as never);
     };
 
     const sub = Notifications.addNotificationResponseReceivedListener((r) => {

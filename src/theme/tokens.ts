@@ -1,4 +1,5 @@
 // Design tokens. Nothing here reads the current scheme — use useTheme() for that.
+import { Platform } from "react-native";
 import type { TextStyle } from "react-native";
 
 export interface Palette {
@@ -40,6 +41,21 @@ export interface Palette {
   /** Tinted fill behind a gold mark. */
   goldSoft: string;
   goldBorder: string;
+  /**
+   * Sold: the badge on the card and the pin on the map.
+   *
+   * A true amber, NOT `gold` — gold already means promoted, and a sold pin
+   * wearing the paid-placement colour is two different claims in one swatch.
+   * Yellow is also the only warm tone left that is neither the success green
+   * (this is not a success for the person browsing) nor the danger red (it is
+   * not a failure either): it reads as "gone", which is what it is.
+   */
+  sold: string;
+  /** Tinted fill behind a sold mark. */
+  soldSoft: string;
+  soldBorder: string;
+  /** What sits ON a filled sold badge. */
+  onSold: string;
   overlay: string;
   /** Scrim over photography, so white text stays legible on any image. */
   imageScrim: string;
@@ -94,6 +110,13 @@ const dark: Palette = {
   gold: "#DCC083",
   goldSoft: "#2A2416",
   goldBorder: "#5B4A24",
+  // Sold. Light in this scheme like the other accents, so the page colour
+  // sits on it (9.4:1). Clearly separate in hue from the desaturated brand
+  // gold above, which is the point.
+  sold: "#F5C84B",
+  soldSoft: "#2E2309",
+  soldBorder: "#634D12",
+  onSold: "#07191D",
   // Fixed
   overlay: "rgba(0, 0, 0, 0.7)",
   imageScrim: "rgba(3,12,14,0.55)",
@@ -135,6 +158,14 @@ const light: Palette = {
   gold: "#806224",
   goldSoft: "#FBF4E4",
   goldBorder: "#E4D3A6",
+  // A bright amber is a 1.8:1 blur on white, so light mode carries the same
+  // hue taken down until it reads as text (5.2:1). The MAP pin uses the
+  // bright value in both schemes — it sits on a photographic tile with white
+  // text on it, not on the page, so it needs to be seen rather than read.
+  sold: "#8A5A06",
+  soldSoft: "#FEF6E3",
+  soldBorder: "#F2D79B",
+  onSold: "#FFFFFF",
   overlay: "rgba(0, 0, 0, 0.4)",
   imageScrim: "rgba(3,12,14,0.45)",
 };
@@ -208,6 +239,28 @@ export type FontWeightKey = keyof typeof fonts;
  */
 export const weight = (w: FontWeightKey) =>
   ({ fontFamily: fonts[w], fontWeight: w }) as const;
+
+/**
+ * Positive letter-spacing that survives Android.
+ *
+ * Android lays the tracking out after the LAST glyph as well, but measures
+ * the line without it, so the final letter falls outside the text's own
+ * bounds and is clipped: a tracked-out "GROWEN CITY" renders "GROWEN CIT".
+ * Padding the end by exactly the tracking gives that letter somewhere to
+ * land.
+ *
+ * iOS measures the trailing space itself and needs no padding — and must not
+ * get it, or the extra width pushes a centred lockup off centre. Hence the
+ * platform check rather than padding on both.
+ *
+ * Only for POSITIVE tracking. The negative values in `type` below pull the
+ * line in and can never clip.
+ */
+export const tracked = (letterSpacing: number) =>
+  ({
+    letterSpacing,
+    paddingEnd: Platform.OS === "android" ? letterSpacing : 0,
+  }) as const;
 
 /**
  * Colour-free type scale. useTheme() pairs these with palette colours.

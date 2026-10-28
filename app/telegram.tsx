@@ -13,7 +13,7 @@ import {
   BackButton,
   LanguageSwitcher,
 } from "../src/components/ui";
-import { spacing, radii, type } from "../src/theme/tokens";
+import { spacing, radii, tracked, type } from "../src/theme/tokens";
 import { useTheme } from "../src/theme/useTheme";
 import { useT } from "../src/i18n";
 import { errorMessage } from "../src/lib/api-error";
@@ -64,7 +64,7 @@ export default function TelegramScreen() {
             style={{
               ...type.display,
               fontSize: 32,
-              letterSpacing: 6,
+              ...tracked(6),
               color: colors.primary,
               fontVariant: ["tabular-nums"],
             }}

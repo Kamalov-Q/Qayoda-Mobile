@@ -889,6 +889,7 @@ const StackBubble = memo(function StackBubble({
 const MARKER_FILL = palettes.light.primary;
 const MARKER_INK = palettes.light.onPrimary;
 
+
 /** The numbered circle a zoomed-out map collapses nearby listings into.
  *  Tapping it dives into that neighbourhood. */
 const ClusterMarker = memo(function ClusterMarker({

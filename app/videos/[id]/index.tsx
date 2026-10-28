@@ -23,6 +23,12 @@ export default function VideoScreen() {
   if (isLoading) {
     return (
       <Screen style={{ padding: 0 }} scroll={false} edges={[]}>
+        {/* Hidden here as well as in the loaded return, not just there: the
+            two states have to agree or the header appears for as long as the
+            clip takes to arrive and then vanishes under the reader. It was
+            showing "videos/[id]/index" while it did. The chevron below is
+            the way out in both. */}
+        <Stack.Screen options={{ headerShown: false }} />
         <LoadingView label={null} />
         <BackButton />
       </Screen>

@@ -9,6 +9,8 @@ import { useT } from "../../src/i18n";
 import { useChatSocket } from "@/src/features/chat/hooks/useChatSocket";
 import { useUnreadTotal } from "@/src/features/chat/hooks/useConversations";
 import { useImmersiveStore } from "@/src/features/videos/store/immersive.store";
+import { useIsAuthed } from "@/src/features/auth/guest";
+import { toast } from "@/src/components/ui/Toast";
 
 // Filled when selected, outline when not — the icon carries the active state
 // alongside the tint, so it still reads for colour-blind users.
@@ -45,6 +47,7 @@ export default function TabsLayout() {
   const unread = useUnreadTotal();
   const { colors, shadow } = useTheme();
   const insets = useSafeAreaInsets();
+  const authed = useIsAuthed();
   const t = useT();
   // A reel held down clears the screen to the footage, and the bar is part
   // of what is in the way. Faded, never unmounted: taking 58pt out of the
@@ -145,6 +148,15 @@ export default function TabsLayout() {
         listeners={{
           tabPress: (e) => {
             e.preventDefault();
+            // Gate BEFORE the push. Sending a guest to /add mounted the post
+            // form just so it could render a redirect back out — which is a
+            // blank screen with a header for as long as that takes, and a
+            // toast for every mount. Nothing to draw means nothing to push.
+            if (!authed) {
+              toast.successKey("auth.guestAddSubtitle");
+              router.push("/(auth)/welcome");
+              return;
+            }
             router.push("/add");
           },
         }}

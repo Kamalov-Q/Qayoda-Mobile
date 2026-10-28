@@ -13,11 +13,11 @@ import {
   Modal,
   FlatList,
   KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
   ScrollView,
   useWindowDimensions,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   EmptyState,
@@ -25,7 +25,7 @@ import {
   LoadingView,
   toast,
 } from "@/src/components/ui";
-import { radii, spacing, type } from "@/src/theme/tokens";
+import { radii, spacing } from "@/src/theme/tokens";
 import { useTheme } from "@/src/theme/useTheme";
 import { useT } from "@/src/i18n";
 import { errorMessage } from "@/src/lib/api-error";
@@ -103,6 +103,12 @@ export function VideoCommentsSheet({
   const [editing, setEditing] = useState<Comment | null>(null);
   /** Which comment is being flagged. The sheet below is the video's own. */
   const [reporting, setReporting] = useState<Comment | null>(null);
+  /**
+   * The measured width of the quick-reaction strip, used as a minWidth on its
+   * content so the eight emoji have something to centre inside. See the row
+   * itself for why `flexGrow: 1` alone does not get there.
+   */
+  const [reactionsW, setReactionsW] = useState(0);
 
   const nameOf = useCallback(
     (c: Comment) =>
@@ -245,9 +251,13 @@ export function VideoCommentsSheet({
           justifyContent: "flex-end",
           backgroundColor: colors.overlay,
         }}
-        // Android resizes the window for the keyboard on its own; adding
-        // padding on top of that pushes the sheet off the screen.
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        // "padding" on both. Leaving it undefined on Android relies on the
+        // window resizing for the keyboard, which it stopped doing under
+        // edge-to-edge (see Screen.tsx). The older worry here — that padding
+        // pushes the sheet off the screen — was real, and is answered by the
+        // sheet clamping its own height below rather than by letting the
+        // keyboard go unhandled.
+        behavior="padding"
       >
         {/* The reel is still playing up there; tapping it closes the sheet. */}
         <Pressable
@@ -260,7 +270,20 @@ export function VideoCommentsSheet({
         <View
           accessibilityViewIsModal
           style={{
+            /**
+             * 74% of the window, but never more than there is room for.
+             *
+             * A FIXED height here is what hid the handle and the title. The
+             * KeyboardAvoidingView above shrinks the space to roughly 55% of
+             * the screen once the keyboard is up, and a 74% sheet does not
+             * fit in it — so with justifyContent "flex-end" the overflow
+             * went off the TOP, taking the only way out of the sheet with
+             * it. flexShrink lets it give up the height; maxHeight stops it
+             * ever exceeding what is left.
+             */
             height: Math.round(windowHeight * SHEET_RATIO),
+            maxHeight: "100%",
+            flexShrink: 1,
             backgroundColor: colors.surface,
             borderTopLeftRadius: radii.xxl,
             borderTopRightRadius: radii.xxl,
@@ -286,11 +309,40 @@ export function VideoCommentsSheet({
                 marginBottom: spacing.sm,
               }}
             />
-            <Text style={text.bodyStrong}>
-              {comments.total
-                ? t("comments.titleCount", { count: comments.total })
-                : t("comments.title")}
-            </Text>
+            {/* Title centred, with an explicit way out on the right.
+                There was none before: closing meant dragging the handle or
+                hitting the scrim, and with the keyboard up the scrim is
+                covered and the handle was off-screen. A sheet whose only
+                exits can all be obscured at once is a sheet people get
+                stuck in. */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                alignSelf: "stretch",
+                paddingHorizontal: spacing.md,
+              }}
+            >
+              <View style={{ width: 28 }} />
+              <Text style={{ ...text.bodyStrong, flex: 1, textAlign: "center" }}>
+                {comments.total
+                  ? t("comments.titleCount", { count: comments.total })
+                  : t("comments.title")}
+              </Text>
+              <Pressable
+                onPress={close}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel={t("common.close")}
+                style={({ pressed }) => ({
+                  width: 28,
+                  alignItems: "flex-end",
+                  opacity: pressed ? 0.5 : 1,
+                })}
+              >
+                <Ionicons name="close" size={22} color={colors.textMuted} />
+              </Pressable>
+            </View>
           </View>
 
           <View style={{ flex: 1 }}>
@@ -368,6 +420,7 @@ export function VideoCommentsSheet({
               horizontal
               showsHorizontalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
+              onLayout={(e) => setReactionsW(e.nativeEvent.layout.width)}
               style={{
                 flexGrow: 0,
                 flexShrink: 0,
@@ -375,6 +428,29 @@ export function VideoCommentsSheet({
                 borderTopColor: colors.border,
               }}
               contentContainerStyle={{
+                /*
+                 * Centring a horizontal ScrollView's content: the content box
+                 * hugs the glyphs, and a horizontal ScrollView pins that box
+                 * to the left — so eight emoji that fit comfortably still sat
+                 * against the left edge with the row ending in dead space.
+                 *
+                 * `flexGrow: 1` is the usual answer and is kept, but it is
+                 * not reliable here: on the new architecture a horizontal
+                 * ScrollView measures its content container against an
+                 * unbounded main axis, so there is no definite width for the
+                 * grow factor to resolve against and the box goes on hugging.
+                 * `minWidth` is measured and absolute — the box cannot be
+                 * narrower than the strip it sits in, whatever the measuring
+                 * pass decides — and justifyContent then has real slack to
+                 * centre within.
+                 *
+                 * Neither one caps the width, so a row too wide to fit (a
+                 * narrow phone, a larger text scale) still overflows and
+                 * scrolls exactly as before.
+                 */
+                minWidth: reactionsW,
+                flexGrow: 1,
+                justifyContent: "center",
                 alignItems: "center",
                 paddingHorizontal: spacing.md,
                 paddingVertical: spacing.sm,
@@ -393,7 +469,14 @@ export function VideoCommentsSheet({
                     transform: [{ scale: pressed ? 0.9 : 1 }],
                   })}
                 >
-                  <Text style={{ ...type.heading, fontSize: 24 }}>{emoji}</Text>
+                  {/* Not type.heading: that token carries lineHeight 24 for
+                      its own fontSize of 18, and overriding the size to 24
+                      left a 24pt emoji in a 24pt line box. Emoji ascend and
+                      descend past the em square, so they were cut off top
+                      and bottom. Plain metrics, sized to fit the glyph —
+                      and no letterSpacing, which the token's -0.2 was
+                      shaving off the right edge of each one. */}
+                  <Text style={{ fontSize: 24, lineHeight: 30 }}>{emoji}</Text>
                 </Pressable>
               ))}
             </ScrollView>

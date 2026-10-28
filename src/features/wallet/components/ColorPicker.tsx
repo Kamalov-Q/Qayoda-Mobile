@@ -5,12 +5,13 @@
 //   • SV square — drag to choose saturation & brightness
 //   • Live preview swatch
 //
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   PanResponder,
   StyleSheet,
   LayoutRectangle,
+  type GestureResponderEvent,
 } from "react-native";
 import Svg, {
   Defs,
@@ -63,6 +64,83 @@ export function hexToHsv(hex: string): [number, number, number] {
   return [h, s, v];
 }
 
+// ─── Dragging ────────────────────────────────────────────────────────────────
+
+/**
+ * A view you can drag on, with its measured box available while rendering.
+ *
+ * Both controls below need the same two things and both got them wrong in
+ * the same two ways:
+ *
+ *  - The box was kept in a REF and read during render to place the thumb.
+ *    Writing a ref does not re-render, so on first paint it was still null
+ *    and `layout.current && <Thumb/>` drew nothing — the picker opened with
+ *    no thumb on either control, and one appeared only once something else
+ *    happened to re-render it, which in practice meant after the first drag.
+ *    The box is state here, which is what it always was: something rendering
+ *    depends on.
+ *
+ *  - The PanResponder was created once (correctly — recreating it mid-drag
+ *    drops the gesture) but with the handler from the FIRST render, so it
+ *    closed over that render's props permanently. `onChange` here is a fresh
+ *    arrow on every parent render, and the hue handler reads `sat`/`bri`, so
+ *    dragging the hue bar after moving the SV square emitted the saturation
+ *    and brightness from before the square was touched. The responder now
+ *    calls through refs that an effect keeps pointing at the latest values.
+ *
+ * Reading `.current` inside a gesture callback is not reading it during
+ * render, which is the distinction the lint rule is drawing.
+ */
+function useDragArea(
+  onDrag: (pageX: number, pageY: number, box: LayoutRectangle) => void,
+) {
+  const [layout, setLayout] = useState<LayoutRectangle | null>(null);
+
+  const handler = useRef(onDrag);
+  useEffect(() => {
+    handler.current = onDrag;
+  }, [onDrag]);
+
+  const box = useRef<LayoutRectangle | null>(null);
+  useEffect(() => {
+    box.current = layout;
+  }, [layout]);
+
+  // Lazy useState rather than useRef: it is created exactly once either way,
+  // and this does not have to read `.current` while rendering to get at it.
+  //
+  // The rule below cannot see that `fire` is only ever reached from a gesture
+  // callback, so it warns that passing a ref into a function "may" read it
+  // during render. Here it provably does not: the initialiser only builds the
+  // responder, and PanResponder invokes these handlers from touch events.
+  // Suppressed on this line alone, deliberately — the other fourteen reports
+  // this file used to carry were all genuine and are fixed above.
+  // eslint-disable-next-line react-hooks/refs
+  const [pan] = useState(() => {
+    const fire = (e: GestureResponderEvent) => {
+      const measured = box.current;
+      if (!measured) return;
+      handler.current(e.nativeEvent.pageX, e.nativeEvent.pageY, measured);
+    };
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: fire,
+      onPanResponderMove: fire,
+    });
+  });
+
+  return {
+    layout,
+    onLayout: useCallback(
+      (e: { nativeEvent: { layout: LayoutRectangle } }) =>
+        setLayout(e.nativeEvent.layout),
+      [],
+    ),
+    panHandlers: pan.panHandlers,
+  };
+}
+
 // ─── Hue rail (horizontal rainbow strip) ─────────────────────────────────────
 
 const HUE_STOPS = [0, 60, 120, 180, 240, 300, 360].map((h) => {
@@ -70,44 +148,30 @@ const HUE_STOPS = [0, 60, 120, 180, 240, 300, 360].map((h) => {
   return `rgb(${r},${g},${b})`;
 });
 
+// `width`/`height` used to be declared here and on SvSquare and read by
+// neither — both size themselves from the stylesheet. A prop that is
+// accepted and ignored is worse than one that does not exist.
 interface HueBarProps {
   hue: number;
   onChange: (h: number) => void;
-  width?: number;
-  height?: number;
 }
 
-function HueBar({ hue, onChange, width, height }: HueBarProps) {
-  const layout = useRef<LayoutRectangle | null>(null);
-
-  const clampHue = useCallback(
-    (pageX: number) => {
-      const rect = layout.current;
-      if (!rect) return;
-      const x = Math.max(0, Math.min(pageX - rect.x, rect.width));
-      onChange((x / rect.width) * 360);
+function HueBar({ hue, onChange }: HueBarProps) {
+  const onDrag = useCallback(
+    (pageX: number, _pageY: number, box: LayoutRectangle) => {
+      const x = Math.max(0, Math.min(pageX - box.x, box.width));
+      onChange((x / box.width) * 360);
     },
     [onChange]
   );
 
-  const pan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (e) => clampHue(e.nativeEvent.pageX),
-      onPanResponderMove: (e) => clampHue(e.nativeEvent.pageX),
-    })
-  ).current;
+  const { layout, onLayout, panHandlers } = useDragArea(onDrag);
 
-  const thumbX = layout.current ? (hue / 360) * layout.current.width : 0;
+  const thumbX = layout ? (hue / 360) * layout.width : 0;
   const thumbColor = rgbToHex(...hsvToRgb(hue, 1, 1));
 
   return (
-    <View
-      onLayout={(e) => (layout.current = e.nativeEvent.layout)}
-      {...pan.panHandlers}
-      style={styles.hueBar}
-    >
+    <View onLayout={onLayout} {...panHandlers} style={styles.hueBar}>
       <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
         <Defs>
           <LinearGradient id="hue" x1="0" x2="1" y1="0" y2="0">
@@ -123,7 +187,7 @@ function HueBar({ hue, onChange, width, height }: HueBarProps) {
         <Rect width="100%" height="100%" fill="url(#hue)" rx={10} />
       </Svg>
 
-      {layout.current && (
+      {layout && (
         <View
           style={[
             styles.hueThumb,
@@ -145,45 +209,27 @@ interface SvSquareProps {
   s: number;
   v: number;
   onChange: (s: number, v: number) => void;
-  width?: number;
-  height?: number;
 }
 
-function SvSquare({ hue, s, v, onChange, width, height }: SvSquareProps) {
-  const layout = useRef<LayoutRectangle | null>(null);
+function SvSquare({ hue, s, v, onChange }: SvSquareProps) {
   const hueColor = rgbToHex(...hsvToRgb(hue, 1, 1));
 
-  const clamp = useCallback(
-    (pageX: number, pageY: number) => {
-      const rect = layout.current;
-      if (!rect) return;
-      const nx = Math.max(0, Math.min((pageX - rect.x) / rect.width, 1));
-      const ny = Math.max(0, Math.min((pageY - rect.y) / rect.height, 1));
+  const onDrag = useCallback(
+    (pageX: number, pageY: number, box: LayoutRectangle) => {
+      const nx = Math.max(0, Math.min((pageX - box.x) / box.width, 1));
+      const ny = Math.max(0, Math.min((pageY - box.y) / box.height, 1));
       onChange(nx, 1 - ny);
     },
     [onChange]
   );
 
-  const pan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (e) =>
-        clamp(e.nativeEvent.pageX, e.nativeEvent.pageY),
-      onPanResponderMove: (e) =>
-        clamp(e.nativeEvent.pageX, e.nativeEvent.pageY),
-    })
-  ).current;
+  const { layout, onLayout, panHandlers } = useDragArea(onDrag);
 
-  const thumbLeft = layout.current ? s * layout.current.width - 10 : 0;
-  const thumbTop = layout.current ? (1 - v) * layout.current.height - 10 : 0;
+  const thumbLeft = layout ? s * layout.width - 10 : 0;
+  const thumbTop = layout ? (1 - v) * layout.height - 10 : 0;
 
   return (
-    <View
-      onLayout={(e) => (layout.current = e.nativeEvent.layout)}
-      {...pan.panHandlers}
-      style={styles.svSquare}
-    >
+    <View onLayout={onLayout} {...panHandlers} style={styles.svSquare}>
       <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
         <Defs>
           {/* White → hue (left-to-right saturation) */}
@@ -201,7 +247,7 @@ function SvSquare({ hue, s, v, onChange, width, height }: SvSquareProps) {
         <Rect width="100%" height="100%" fill="url(#val)" rx={12} />
       </Svg>
 
-      {layout.current && (
+      {layout && (
         <View
           style={[
             styles.svThumb,

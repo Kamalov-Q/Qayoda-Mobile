@@ -58,6 +58,67 @@ function ProviderBrand({ provider }: { provider: TopupProvider }) {
   return <PaynetBrand size="sm" />;
 }
 
+/**
+ * One label/value line of a receipt, tappable to copy when there is
+ * something worth copying.
+ *
+ * At module scope, and not inside the screen where it used to live. A
+ * component declared in a render body is a NEW component type on every
+ * render: React cannot match it to the one it drew last time, so it unmounts
+ * the old subtree and mounts a fresh one. Here that meant every row in the
+ * receipt being torn down and rebuilt on each refetch and each pull to
+ * refresh — eighteen of them, which is what the eighteen lint errors on this
+ * file were counting.
+ *
+ * It reads the theme and the copy label from hooks of its own rather than
+ * taking them as props, so hoisting it cost no prop threading at all.
+ */
+function Row({
+  label,
+  value,
+  copyValue,
+  last,
+}: {
+  label: string;
+  value: ReactNode;
+  copyValue?: string | null;
+  last?: boolean;
+}) {
+  const { colors } = useTheme();
+  const t = useT();
+
+  const copy = async () => {
+    if (!copyValue) return;
+    await Clipboard.setStringAsync(copyValue);
+    toast.success(t("wallet.copied"));
+  };
+
+  return (
+    <Pressable
+      disabled={!copyValue}
+      onPress={() => void copy()}
+      accessibilityRole={copyValue ? "button" : undefined}
+      style={({ pressed }) => [
+        styles.row,
+        !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+        { opacity: pressed ? 0.6 : 1 },
+      ]}
+    >
+      <Text style={[styles.rowLabel, { color: colors.textMuted }]}>{label}</Text>
+      <View style={styles.rowValueWrap}>
+        {typeof value === "string" || typeof value === "number" ? (
+          <Text style={[styles.rowValue, { color: colors.text }]} numberOfLines={1} ellipsizeMode="middle">
+            {value}
+          </Text>
+        ) : (
+          value
+        )}
+        {copyValue ? <Ionicons name="copy-outline" size={14} color={colors.textFaint} /> : null}
+      </View>
+    </Pressable>
+  );
+}
+
 const formatDateTime = (iso: string | null | undefined) => {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -98,11 +159,6 @@ export default function WalletTransactionScreen() {
   const { isError, isFetching, isPlaceholderData, refetch } = query;
   // If the detail request fails, still show what the list already knows.
   const data = query.data ?? fallback;
-
-  const copy = async (value: string) => {
-    await Clipboard.setStringAsync(value);
-    toast.success(t("wallet.copied"));
-  };
 
   const header = (
     <View style={styles.header}>
@@ -157,41 +213,6 @@ export default function WalletTransactionScreen() {
   const statusColor = status ? colors[status.tone] : colors.success;
   const isPositive = amountNum > 0;
   const bonusNum = payment ? Number(payment.bonusAmount) : 0;
-
-  const Row = ({
-    label,
-    value,
-    copyValue,
-    last,
-  }: {
-    label: string;
-    value: ReactNode;
-    copyValue?: string | null;
-    last?: boolean;
-  }) => (
-    <Pressable
-      disabled={!copyValue}
-      onPress={() => copyValue && copy(copyValue)}
-      accessibilityRole={copyValue ? "button" : undefined}
-      style={({ pressed }) => [
-        styles.row,
-        !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-        { opacity: pressed ? 0.6 : 1 },
-      ]}
-    >
-      <Text style={[styles.rowLabel, { color: colors.textMuted }]}>{label}</Text>
-      <View style={styles.rowValueWrap}>
-        {typeof value === "string" || typeof value === "number" ? (
-          <Text style={[styles.rowValue, { color: colors.text }]} numberOfLines={1} ellipsizeMode="middle">
-            {value}
-          </Text>
-        ) : (
-          value
-        )}
-        {copyValue ? <Ionicons name="copy-outline" size={14} color={colors.textFaint} /> : null}
-      </View>
-    </Pressable>
-  );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.bg, paddingTop: insets.top }]}>

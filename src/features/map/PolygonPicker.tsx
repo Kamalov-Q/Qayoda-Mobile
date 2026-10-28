@@ -58,7 +58,7 @@ export function PolygonPicker({ initial, onCancel, onSave }: Props) {
         style={{
           flexDirection: "row",
           alignItems: "center",
-          gap: spacing.md,
+          gap: spacing.sm,
           paddingHorizontal: spacing.md,
           // Taller than a stock header: iOS parks its "back to app" pill in
           // the status bar, and the controls were sitting right under it.
@@ -90,8 +90,18 @@ export function PolygonPicker({ initial, onCancel, onSave }: Props) {
           <Ionicons name="close" size={24} color={colors.text} />
         </Pressable>
 
+        {/* The title sits between a fixed-width close disc and the save
+            button, so what is left for it is narrow — and "Отметьте границы"
+            did not fit, which is how the header came to read "Отметьте
+            гра...". It shrinks rather than truncates now, and the save
+            button no longer claims width it does not use. */}
         <View style={{ flex: 1, alignItems: "center" }}>
-          <Text style={text.bodyStrong} numberOfLines={1}>
+          <Text
+            style={text.bodyStrong}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+          >
             {t("map.drawTitle")}
           </Text>
           <Text style={text.caption} numberOfLines={1}>
@@ -108,7 +118,7 @@ export function PolygonPicker({ initial, onCancel, onSave }: Props) {
           size="sm"
           disabled={!canSave}
           onPress={() => onSave(ring)}
-          style={{ minWidth: 116, ...(canSave ? shadow.control : null) }}
+          style={{ minWidth: 96, ...(canSave ? shadow.control : null) }}
         />
       </View>
 

@@ -5,7 +5,6 @@ import { useState } from "react";
 import {
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   Text,
   TextInput,
@@ -62,7 +61,10 @@ export function ReviewSheet({ listingId, visible, onClose, existing }: Props) {
           justifyContent: "flex-end",
           backgroundColor: colors.overlay,
         }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        // "padding" on Android as well. Leaving it undefined there relies
+        // on the window resizing for the keyboard, which it stopped doing
+        // under edge-to-edge — the same bug Screen.tsx documents.
+        behavior="padding"
       >
         <Pressable
           style={{ position: "absolute", inset: 0 }}

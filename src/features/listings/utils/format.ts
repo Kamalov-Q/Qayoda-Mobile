@@ -50,8 +50,13 @@ export function htmlToText(html: string | null | undefined): string {
 
 /**
  * `(price, currency, purpose) => "$1,200/oy"` — in the VIEWER's currency:
- * the stored price converts through the CBU rate whenever the seller quoted
- * in the other one. No rate yet (first boot, offline) → shown as stored.
+ * the stored price converts through the server's USD/UZS rate whenever the
+ * seller quoted in the other one. No rate yet (first boot, offline) → shown
+ * as stored.
+ *
+ * Not necessarily the CENTRAL BANK's rate, which this used to claim: the
+ * server falls back to a market aggregate when cbu.uz is unreachable, and on
+ * the production host it always is. Settings names the source.
  */
 export function usePriceFormatter() {
   const t = useT();

@@ -324,7 +324,20 @@ const groupDigits = (n: number) =>
 // Rebuilt whenever the language changes: the messages are user-facing, and a
 // schema frozen at module load would keep showing the language the app started
 // in. Same pattern as the auth screens.
-const makeSchema = (t: ReturnType<typeof useT>) => {
+const makeSchema = (
+  t: ReturnType<typeof useT>,
+  /**
+   * Which of the two per-category questions this category actually asks.
+   *
+   * The schema cannot work this out for itself — the category is not a form
+   * field — and these two were therefore the only questions on the form a
+   * seller could skip in silence. A plain `.min(1)` was not an option
+   * either: it would demand an answer to a question the category never put
+   * on screen (land has no "new build or resale"), and the server refuses
+   * one for exactly the same reason.
+   */
+  asks: { buildingType: boolean; repairType: boolean },
+) => {
   const digits = z.string().regex(/^\d*$/, t("validation.numbersOnly"));
   // An optional whole number within [min, max]; blank means "not given".
   const intInRange = (min: number, max: number) =>
@@ -390,6 +403,51 @@ const makeSchema = (t: ReturnType<typeof useT>) => {
       })
       // Cross-field rules, so they hang off the object rather than a field.
       .superRefine((v, ctx) => {
+        /**
+         * Every question on the form has to be answered.
+         *
+         * Done here rather than by dropping `.optional()` from each field so
+         * that the field-level rules — digits only, two decimal places, in
+         * range — still get to report their own, more useful message first;
+         * an empty field is only "required" once there is nothing else wrong
+         * with it. It also keeps the conditional questions below conditional,
+         * which a schema-level `.min(1)` could not.
+         */
+        const ALWAYS_REQUIRED = [
+          "sellerType",
+          "rooms",
+          "areaM2",
+          "address",
+          "phone",
+          "description",
+        ] as const;
+        for (const key of ALWAYS_REQUIRED) {
+          if (!v[key]?.trim()) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: [key],
+              message: t("validation.required"),
+            });
+          }
+        }
+
+        // The two the category decides. Same shape as the list above, but
+        // conditional on the question having been asked at all.
+        if (asks.buildingType && !v.buildingType) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["buildingType"],
+            message: t("validation.required"),
+          });
+        }
+        if (asks.repairType && !v.repairType) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["repairType"],
+            message: t("validation.required"),
+          });
+        }
+
         // Price is only judged once it is a number at all — the field-level
         // regex already reports "enter a price" for anything else.
         if (/^\d+$/.test(v.price)) {
@@ -412,12 +470,28 @@ const makeSchema = (t: ReturnType<typeof useT>) => {
         // `hasFloors` back to "no", which switches every rule below off.
         if (v.hasFloors !== "yes") return;
 
-        // Which floor you live on is always known; how tall the block is often
-        // is not, so only the first is required once floors are declared.
+        /**
+         * Both of them, once floors are declared.
+         *
+         * `totalFloors` used to be allowed through blank, on the grounds
+         * that somebody might not know how tall the block is. That stands
+         * for a tenant and not for anyone who can reach this form: the only
+         * two answers to "who is selling" are OWNER and REALTOR, and both
+         * of them can see the building. It also matters more than the floor
+         * does — "4" means nothing without "of 9", and the pair is read
+         * back as one phrase on the listing page.
+         */
         if (!v.floor) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ["floor"],
+            message: t("validation.required"),
+          });
+        }
+        if (!v.totalFloors) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["totalFloors"],
             message: t("validation.required"),
           });
         }
@@ -517,7 +591,32 @@ export default function AddListingScreen() {
   const { text, colors } = useTheme();
   const t = useT();
 
-  const schema = useMemo(() => makeSchema(t), [t]);
+  const showFloors = selectedCategory ? canHaveFloors(selectedCategory) : false;
+  // Which of the per-category questions this category asks at all. Admins set
+  // these per category (the same switch as the floor rule), and the server
+  // refuses a value for a question the category does not ask — so hiding the
+  // field and clearing it are the same decision.
+  //
+  // Declared here, above the schema, because the schema needs them: see
+  // makeSchema's `asks`.
+  const showBuildingType = selectedCategory
+    ? canHaveBuildingType(selectedCategory)
+    : false;
+  const showRepairType = selectedCategory
+    ? canHaveRepairType(selectedCategory)
+    : false;
+
+  // Rebuilt on a category change as well as a language change. useForm
+  // re-reads `resolver` from its props on every render, so a schema swapped
+  // mid-form is in force for the next validation — no reset needed.
+  const schema = useMemo(
+    () =>
+      makeSchema(t, {
+        buildingType: showBuildingType,
+        repairType: showRepairType,
+      }),
+    [t, showBuildingType, showRepairType],
+  );
 
   const categoryOptions = useMemo<SelectGridOption<PropertyCategory>[]>(
     () =>
@@ -584,6 +683,21 @@ export default function AddListingScreen() {
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
+    /**
+     * Without this the errors never go away.
+     *
+     * react-hook-form defaults to mode "onSubmit", and its reValidateMode
+     * only takes effect once handleSubmit has actually run. This form never
+     * submits between steps — it calls trigger() on the step's fields — and
+     * trigger sets errors without marking the form submitted. So nothing
+     * re-validated until "Continue" was pressed again, and a field showing
+     * "minimum 3 characters" kept showing it over a perfectly valid word.
+     *
+     * "onChange" re-runs the rule for a field as its value changes, so the
+     * message clears the moment the value is good, whoever put it there.
+     */
+    mode: "onChange",
+    reValidateMode: "onChange",
     defaultValues: {
       purpose: "SALE",
       currency: "USD",
@@ -597,8 +711,8 @@ export default function AddListingScreen() {
       price: "",
       // A flat in a block is the common case here — so when the starting
       // category has floors, the two fields start open rather than behind a
-      // tap, and only the one nobody has to look up is required. (For a
-      // category without floors the whole section is hidden anyway.)
+      // tap. (For a category without floors the whole section is hidden
+      // anyway, and every rule on the pair switches off with it.)
       hasFloors: "yes",
       floor: "",
       totalFloors: "",
@@ -638,17 +752,6 @@ export default function AddListingScreen() {
         ? ` / ${t("add.perDay")}`
         : "";
 
-  const showFloors = selectedCategory ? canHaveFloors(selectedCategory) : false;
-  // Which of the optional questions this category asks at all. Admins set
-  // these per category (the same switch as the floor rule), and the server
-  // refuses a value for a question the category does not ask — so hiding the
-  // field and clearing it are the same decision.
-  const showBuildingType = selectedCategory
-    ? canHaveBuildingType(selectedCategory)
-    : false;
-  const showRepairType = selectedCategory
-    ? canHaveRepairType(selectedCategory)
-    : false;
   const floorsDeclared = useWatch({ control, name: "hasFloors" }) === "yes";
 
   const [stepIndex, setStepIndex] = useState(0);
@@ -1019,7 +1122,11 @@ export default function AddListingScreen() {
             {/* Right after the category, because both answers change what the
                 rest of the form means — and a buyer scanning results filters on
                 them before they look at anything else. */}
-            <Section title={t("add.sellerTypeTitle")}>
+            <Section
+              title={t("add.sellerTypeTitle")}
+              required
+              error={errors.sellerType?.message}
+            >
               <Controller
                 control={control}
                 name="sellerType"
@@ -1038,7 +1145,11 @@ export default function AddListingScreen() {
                 a seller listing a plot was offered "new build or resale" about a
                 field. Admins decide per category now. */}
             {showBuildingType ? (
-              <Section title={t("add.buildingTypeTitle")}>
+              <Section
+                title={t("add.buildingTypeTitle")}
+                required
+                error={errors.buildingType?.message}
+              >
                 <Controller
                   control={control}
                   name="buildingType"
@@ -1057,7 +1168,11 @@ export default function AddListingScreen() {
                 everything from fresh paint to a designer fit-out, and the gap
                 between them is most of the price. Land has none of them. */}
             {showRepairType ? (
-              <Section title={t("add.repairTitle")}>
+              <Section
+                title={t("add.repairTitle")}
+                required
+                error={errors.repairType?.message}
+              >
                 <Controller
                   control={control}
                   name="repairType"
@@ -1156,6 +1271,7 @@ export default function AddListingScreen() {
                           render={({ field: { value, onChange, onBlur } }) => (
                             <TextField
                               label={t("add.floor")}
+                              required
                               placeholder={t("add.floorPlaceholder")}
                               keyboardType="number-pad"
                               value={value}
@@ -1173,6 +1289,7 @@ export default function AddListingScreen() {
                           render={({ field: { value, onChange, onBlur } }) => (
                             <TextField
                               label={t("add.totalFloors")}
+                              required
                               placeholder={t("add.totalFloorsPlaceholder")}
                               keyboardType="number-pad"
                               value={value}
@@ -1206,6 +1323,7 @@ export default function AddListingScreen() {
                   render={({ field: { value, onChange, onBlur } }) => (
                     <TextField
                       label={t("add.listingTitle")}
+                      required
                       placeholder={t("add.listingTitlePlaceholder")}
                       hint={t("add.listingTitleHint")}
                       returnKeyType="next"
@@ -1235,6 +1353,7 @@ export default function AddListingScreen() {
                     <TextField
                       ref={priceRef}
                       label={t(`add.priceLabels.${purpose}`)}
+                      required
                       placeholder={PRICE_PLACEHOLDERS[purpose][offerCurrency]}
                       keyboardType="number-pad"
                       maxLength={PRICE_MAX_DIGITS}
@@ -1255,6 +1374,7 @@ export default function AddListingScreen() {
                   render={({ field: { value, onChange, onBlur } }) => (
                     <TextField
                       label={t("add.rooms")}
+                      required
                       placeholder={t("add.roomsPlaceholder")}
                       keyboardType="number-pad"
                       value={value}
@@ -1275,6 +1395,7 @@ export default function AddListingScreen() {
                   render={({ field: { value, onChange, onBlur } }) => (
                     <TextField
                       label={t("add.area")}
+                      required
                       placeholder={t("add.areaPlaceholder")}
                       suffix="m²"
                       keyboardType="decimal-pad"
@@ -1370,6 +1491,7 @@ export default function AddListingScreen() {
                   render={({ field: { value, onChange, onBlur } }) => (
                     <TextField
                       label={t("add.address")}
+                      required
                       placeholder={t("add.addressPlaceholder")}
                       icon="location-outline"
                       maxLength={ADDRESS_MAX}
@@ -1387,6 +1509,7 @@ export default function AddListingScreen() {
                   render={({ field: { value, onChange, onBlur } }) => (
                     <TextField
                       label={t("add.phone")}
+                      required
                       placeholder={t("add.phonePlaceholder")}
                       hint={t("add.phoneHint")}
                       icon="call-outline"
@@ -1412,6 +1535,7 @@ export default function AddListingScreen() {
                   render={({ field: { value, onChange, onBlur } }) => (
                     <TextField
                       label={t("add.description")}
+                      required
                       placeholder={t("add.descriptionPlaceholder")}
                       multiline
                       maxLength={DESCRIPTION_MAX}

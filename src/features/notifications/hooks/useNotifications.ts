@@ -78,34 +78,68 @@ export function useNotifications() {
 export function useMarkNotificationsRead() {
   return useMutation({
     mutationFn: (ids?: string[]) => notificationsApi.markRead(ids),
-    onMutate: (ids) => {
-      queryClient.setQueryData(UNREAD_KEY, { count: 0 });
-
-      // `undefined` means "everything", which is what opening the screen
-      // sends; a list of ids marks only those.
-      const target = ids?.length ? new Set(ids) : null;
-      queryClient.setQueryData<{
-        pages: { total: number; items: AppNotification[] }[];
-        pageParams: unknown[];
-      }>(LIST_KEY, (cached) =>
-        cached
-          ? {
-              ...cached,
-              pages: cached.pages.map((page) => ({
-                ...page,
-                items: page.items.map((item) =>
-                  !item.read && (!target || target.has(item.id))
-                    ? { ...item, read: true }
-                    : item,
-                ),
-              })),
-            }
-          : cached,
-      );
-    },
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: UNREAD_KEY });
-      void queryClient.invalidateQueries({ queryKey: LIST_KEY });
-    },
+    onMutate: applyReadToCache,
+    onSettled: settleRead,
   });
+}
+
+/**
+ * Mark rows read from outside React.
+ *
+ * The one caller is the push tap handler, which runs in an expo-notifications
+ * listener rather than a component and so has no hook to reach for. Same two
+ * steps as the mutation above, in the same order, against the same caches —
+ * which is why they share the helpers rather than describing the cache shape
+ * twice.
+ *
+ * Best-effort: a failed request leaves the row unread until the inbox is
+ * opened, which marks everything anyway.
+ */
+export function markNotificationsRead(ids: string[]): void {
+  if (!ids.length) return;
+  applyReadToCache(ids);
+  notificationsApi
+    .markRead(ids)
+    .catch(() => {})
+    .finally(settleRead);
+}
+
+/**
+ * Flip the rows in place and zero the bell, before the server has answered.
+ *
+ * `undefined` means "everything", which is what opening the screen sends; a
+ * list of ids marks only those.
+ *
+ * The bell goes to 0 either way, and that is a deliberate over-reach for the
+ * single-id case: it is one request behind at worst, the invalidation on
+ * settle corrects it within the round trip, and a count that twitches
+ * downward and back is less wrong than one that ignores a tap.
+ */
+function applyReadToCache(ids?: string[]): void {
+  queryClient.setQueryData(UNREAD_KEY, { count: 0 });
+
+  const target = ids?.length ? new Set(ids) : null;
+  queryClient.setQueryData<{
+    pages: { total: number; items: AppNotification[] }[];
+    pageParams: unknown[];
+  }>(LIST_KEY, (cached) =>
+    cached
+      ? {
+          ...cached,
+          pages: cached.pages.map((page) => ({
+            ...page,
+            items: page.items.map((item) =>
+              !item.read && (!target || target.has(item.id))
+                ? { ...item, read: true }
+                : item,
+            ),
+          })),
+        }
+      : cached,
+  );
+}
+
+function settleRead(): void {
+  void queryClient.invalidateQueries({ queryKey: UNREAD_KEY });
+  void queryClient.invalidateQueries({ queryKey: LIST_KEY });
 }

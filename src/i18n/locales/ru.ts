@@ -92,6 +92,52 @@ export const ru: Dictionary = {
       "Вопросы: +998 95 555 52 29 или agromind5229@gmail.com",
   },
 
+  bids: {
+    sheetTitle: "Предложить цену",
+    cta: "Предложить цену",
+    asking: "Запрашиваемая цена — {{price}}",
+    amountPlaceholder: "Сумма",
+    ttlHint: "Предложение действует {{days}} дн.",
+    send: "Отправить предложение",
+    notAContract:
+      "Принятие предложения не является договором — дальнейшее решается в переписке.",
+    // Short units for the preset chips — a so'm price does not fit
+    // a chip spelled out in full.
+    unitMln: "млн",
+    unitMlrd: "млрд",
+    cardTitle: "Предложение цены",
+    counterTitle: "Встречное предложение",
+    offBy: "на −{{percent}}% от запрашиваемой",
+    aboveBy: "на +{{percent}}% от запрашиваемой",
+    daysLeft: "Осталось {{days}} дн.",
+    lastDay: "Истекает сегодня",
+    accept: "Принять",
+    decline: "Отклонить",
+    counter: "Встречное",
+    withdraw: "Отозвать предложение",
+    youSent: "Вы отправили",
+    waiting: "Ожидает ответа",
+    confirmAcceptTitle: "Принять предложение?",
+    confirmAcceptMessage:
+      "Вы соглашаетесь с ценой {{price}}. Это не договор — дальнейшее решается в переписке.",
+    confirmDeclineTitle: "Отклонить предложение?",
+    statusAccepted: "Принято",
+    statusDeclined: "Отклонено",
+    statusCountered: "Отправлено встречное",
+    statusWithdrawn: "Отозвано",
+    statusExpired: "Срок истёк",
+    // The index of every negotiation, at /activity/bids.
+    myTitle: "Предложения цены",
+    myHint: "Ваши предложения и предложения вам",
+    myEmpty: "Предложений пока нет",
+    myEmptyHint: "Откройте объявление и нажмите «Предложить цену», чтобы начать торг.",
+    rowYouOffered: "Вы предложили",
+    rowTheyOffered: "Предложили вам",
+    rowNeedsYou: "Ждёт ответа",
+    rowListingGone: "объявление в архиве",
+    rowListingSold: "объявление продано",
+  },
+
   about: {
     title: "О приложении",
     version: "Версия {{version}}",
@@ -410,11 +456,20 @@ export const ru: Dictionary = {
     listingComment: "оставил комментарий к вашему объявлению",
     listingCommentReply: "ответил на ваш комментарий",
     listingReview: "оценил ваше объявление",
+    priceBidReceived: "предложил цену за ваше объявление",
+    priceBidCountered: "отправил встречное предложение",
+    priceBidAccepted: "принял ваше предложение цены",
+    priceBidDeclined: "отклонил ваше предложение цены",
+    priceBidExpired: "Срок вашего предложения цены истёк",
     chatMessage: "отправил вам сообщение",
     topupSucceeded: "Баланс пополнен",
     topupFailed: "Платёж не прошёл",
     tariffPaid: "Оплата тарифа принята",
     tariffExpiring: "Срок тарифа заканчивается",
+    // Без существительного после числа: «и ещё 1 человек / 2 человека /
+    // 5 человек» — три формы, а движок перевода не умеет склонять по
+    // количеству. «и ещё N» верно при любом N.
+    andOthers: "и ещё {{count}}",
   },
 
   // Global search: one entry, three kinds of answer.
@@ -586,8 +641,6 @@ export const ru: Dictionary = {
     viewDetails: "Подробнее →",
     detailsTitle: "Объявление",
     description: "Описание",
-    editImages: "Изменить фотографии",
-    imagesUpdated: "Фотографии обновлены",
     edit: "Редактировать",
     editListing: "Редактировать объявление",
     updatedSuccess: "Объявление успешно обновлено",
@@ -615,6 +668,20 @@ export const ru: Dictionary = {
 
     perMonth: "/мес",
     perDay: "/сут",
+    markSold: "Отметить проданным",
+    markSoldConfirmTitle: "Отметить объявление проданным?",
+    markSoldConfirmMessage: "Открытые предложения будут закрыты. Фотографии, текст и метка на карте сохранятся — метка станет жёлтой.",
+    soldPriceHint: "За сколько продали?",
+    soldPricePlaceholder: "Фактическая цена",
+    // Это нужно сказать вслух: продавец, считающий цену публичной, округлит
+    // её вверх, а набор приукрашенных цифр — это не данные, а то, что на них
+    // похоже.
+    soldPricePrivate: "Цену видите только вы и сервис",
+    soldBelowAsking: "На {{percent}}% ниже запрашиваемой",
+    soldAboveAsking: "На {{percent}}% выше запрашиваемой",
+    soldFor: "Продано за {{price}}",
+    soldToast: "Объявление отмечено как проданное",
+    relist: "Разместить снова",
   },
 
   purposes: {
@@ -708,7 +775,7 @@ export const ru: Dictionary = {
     address: "Адрес",
     addressPlaceholder: "Ташкент, Чиланзарский район, 12-квартал",
     phone: "Контактный телефон",
-    phonePlaceholder: "+998 90 123 45 67",
+    phonePlaceholder: "90 123 45 67",
     phoneHint: "Покупатели будут звонить на этот номер.",
     description: "Описание",
     descriptionPlaceholder:
@@ -790,6 +857,16 @@ export const ru: Dictionary = {
     ACTIVE: "Активно",
     DRAFT: "Черновик",
     ARCHIVED: "В архиве",
+    SOLD: "Продано",
+  },
+
+  // Не состояние одного объявления, а ГРУППА объявлений — множественное
+  // число для разделов на экране «мои объявления».
+  statusTabs: {
+    ACTIVE: "Активные",
+    DRAFT: "Черновики",
+    ARCHIVED: "В архиве",
+    SOLD: "Проданные",
   },
 
   images: {
@@ -952,6 +1029,10 @@ export const ru: Dictionary = {
     title: "Настройки",
     currency: "Валюта",
     currencyUsd: "Доллар США (USD)",
+    rateLine: "1 USD = {{rate}} сум",
+    rateSourceCBU: "Центральный банк Узбекистана",
+    rateSourceMARKET: "рыночный курс (cbu.uz недоступен)",
+    rateSourceCONSTANT: "примерный курс — источники недоступны",
     currencyUzs: "Узбекский сум (UZS)",
     appearance: "Внешний вид",
     theme: "Тема",
@@ -1072,6 +1153,9 @@ export const ru: Dictionary = {
     topBody: "TOP-объявление выделяется значком в списке.",
     topBadge: "TOP",
     topActive: "TOP до {{date}}",
+    // Пока объявление снято, дни TOP не расходуются — они сохраняются и
+    // продолжатся с того же места, когда объявление вернут.
+    topPaused: "{{days}} дн. TOP сохранено — продолжится, когда вы вернёте объявление",
     topLeft: "TOP · осталось {{count}} дн.",
     topLastDay: "TOP · заканчивается сегодня",
     topBuy: "Поднять в TOP",

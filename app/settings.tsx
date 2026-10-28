@@ -21,12 +21,18 @@ import {
   type Currency,
   type ThemeMode,
 } from "../src/lib/preferences";
-import { useT, type Language } from "../src/i18n";
+import {
+  useT,
+  useLanguage,
+  type Language,
+  type TranslationKey,
+} from "../src/i18n";
 import { useIsAuthed } from "../src/features/auth/guest";
 import { SignInMethods } from "../src/features/auth/components/SignInMethods";
 import { useSupportUnread } from "../src/features/support/hooks/useSupport";
 import { useVerification } from "../src/features/verification/hooks/useVerification";
 import { MiniLocationMap } from "../src/features/map/MiniLocationMap";
+import { useRates } from "../src/features/listings/hooks/useRates";
 
 export default function SettingsScreen() {
   const supportUnread = useSupportUnread();
@@ -273,6 +279,7 @@ export default function SettingsScreen() {
               onChange={setCurrency}
             />
           </Card>
+          <RateNote />
         </Section>
 
         <Section title={t("about.title")}>
@@ -354,5 +361,63 @@ export default function SettingsScreen() {
         </Text>
       </View>
     </Screen>
+  );
+}
+
+/**
+ * The rate every converted price on screen is computed from, and where it
+ * came from.
+ *
+ * Shown because the app silently rewrites prices: a listing quoted in so'm
+ * is displayed in dollars to anybody whose currency is set to USD, and until
+ * now nothing said what it was divided by. When the server cannot reach the
+ * Central Bank it falls back to a market aggregate — close, but not the
+ * figure a seller will check their own price against — and if both fail it
+ * uses a hardcoded constant that can be several percent out. A converted
+ * price with no provenance is a number the reader cannot argue with.
+ *
+ * Silent when the viewer's currency is the one the rate does not affect?
+ * No — both directions convert, so it is shown either way.
+ */
+function RateNote() {
+  const { colors, text } = useTheme();
+  const t = useT();
+  const language = useLanguage();
+  const { data } = useRates();
+
+  if (!data?.usdToUzs) return null;
+
+  // `source` is absent from an API that predates it. Saying nothing beats
+  // guessing: the rate itself is still worth printing.
+  const source = data.source;
+
+  // Severity follows the source, because the error does. A market aggregate
+  // sits about 1% from the Central Bank's figure — a caveat, stated in words
+  // and not worth shouting. The hardcoded constant is whatever the som has
+  // done since somebody typed it, which was about 7% when this was written,
+  // and that IS worth a colour: every price on screen is wrong by it.
+  const alarming = source === "CONSTANT";
+
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: spacing.xs,
+        marginLeft: spacing.xs,
+      }}
+    >
+      <Ionicons
+        name={alarming ? "alert-circle-outline" : "swap-horizontal-outline"}
+        size={13}
+        color={alarming ? colors.danger : colors.textFaint}
+      />
+      <Text style={{ ...text.caption, flex: 1 }} numberOfLines={2}>
+        {t("settings.rateLine", {
+          rate: Math.round(data.usdToUzs).toLocaleString(language),
+        })}
+        {source ? ` · ${t(`settings.rateSource${source}` as TranslationKey)}` : ""}
+      </Text>
+    </View>
   );
 }

@@ -2,7 +2,7 @@ import { memo } from "react";
 import { Text, View, type ViewStyle } from "react-native";
 import { Image } from "expo-image";
 import Animated, { useReducedMotion } from "react-native-reanimated";
-import { radii, spacing, weight } from "../../theme/tokens";
+import { radii, spacing, tracked, weight } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 import { useT } from "../../i18n";
 import { BrandMark } from "./BrandMark";
@@ -319,13 +319,19 @@ export const BootScreen = memo(function BootScreen() {
     >
       <BrandLoader size={140} />
 
-      <View style={{ alignItems: "center", gap: spacing.sm }}>
+      {/* Stretched, with the lockup centred inside it, rather than two
+          content-sized boxes: a tracked-out line that Android measures short
+          then has the whole screen to draw into instead of a box cut to the
+          glyphs it got wrong. `tracked` covers the trailing advance; this
+          covers being wrong about the width for any other reason. */}
+      <View style={{ alignSelf: "stretch", alignItems: "stretch", gap: spacing.sm }}>
         <Text
           style={{
             ...weight("800"),
             fontSize: 21,
-            letterSpacing: 6,
+            ...tracked(6),
             color: BOOT_GOLD,
+            textAlign: "center",
           }}
         >
           GROWEN CITY
@@ -334,8 +340,9 @@ export const BootScreen = memo(function BootScreen() {
           style={{
             ...weight("500"),
             fontSize: 10,
-            letterSpacing: 4.5,
+            ...tracked(4.5),
             color: "rgba(220,192,131,0.62)",
+            textAlign: "center",
           }}
         >
           REAL ESTATE

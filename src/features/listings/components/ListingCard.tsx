@@ -4,7 +4,7 @@ import { Text, View } from "react-native";
 import { spacing, radii, type } from "../../../theme/tokens";
 import { useTheme } from "../../../theme/useTheme";
 import { useT } from "../../../i18n";
-import { Listing, OfferPurpose } from "../api/listings.api";
+import type { Listing, ListingSale, OfferPurpose } from "../api/listings.api";
 import { usePriceFormatter, useSpecsFormatter } from "../utils/format";
 import { primaryOffer } from "../utils/offers";
 import { ListingCardBase } from "./ListingCardBase";
@@ -31,6 +31,17 @@ interface Props {
    * knows the context the reader is in; the listing does not.
    */
   preferPurpose?: OfferPurpose;
+  /**
+   * What it sold for, on the owner's own list.
+   *
+   * Passed in rather than read off `listing`, because it is not on `listing`
+   * and must not be: the public detail endpoint spreads the whole entity, so
+   * the server keeps this figure in its own owner-guarded row. Only
+   * /listings/mine carries it, so only that screen can hand it over — which
+   * makes it structurally impossible for this line to appear on a card a
+   * buyer is looking at.
+   */
+  sale?: ListingSale | null;
   onPress: (id: string) => void;
 }
 
@@ -48,6 +59,7 @@ export const ListingCard = memo(function ListingCard({
   variant = "list",
   meta,
   preferPurpose,
+  sale,
   onPress,
 }: Props) {
   const formatSpecs = useSpecsFormatter();
@@ -63,6 +75,17 @@ export const ListingCard = memo(function ListingCard({
   );
   const offer = primaryOffer(listing, preferPurpose);
   const specs = formatSpecs(listing);
+  const t = useT();
+
+  // The sold figure replaces the META line rather than being added beside
+  // the price. The asking price stays where it is — the comparison between
+  // the two is the thing worth seeing, and moving the actual price into the
+  // price slot would hide what was asked.
+  const soldMeta = sale
+    ? t("listings.soldFor", {
+        price: formatPrice(sale.price, sale.currency, sale.purpose),
+      })
+    : null;
 
   const props = {
     thumbUrl: primary?.thumbUrl ?? null,
@@ -74,7 +97,7 @@ export const ListingCard = memo(function ListingCard({
       : null,
     title: listing.title,
     specs: specs || null,
-    meta,
+    meta: soldMeta ?? meta,
     rating: { average: listing.ratingAvg, count: listing.ratingCount },
     actions: {
       listingId: listing.id,
@@ -113,16 +136,23 @@ const StatusBadge = memo(function StatusBadge({
   const { colors } = useTheme();
   const t = useT();
 
+  // Sold is the one status a BUYER sees, so it is the one that has to read at
+  // a glance rather than merely be present. Draft and archived only ever
+  // appear on the owner's own list, where a scrim is enough; a sold advert
+  // turns up in a thread, a notification or a shared link, and amber is the
+  // same signal the map pin gives.
+  const sold = status === "SOLD";
+
   return (
     <View
       style={{
         paddingHorizontal: spacing.sm,
         paddingVertical: 4,
         borderRadius: radii.pill,
-        backgroundColor: colors.imageScrim,
+        backgroundColor: sold ? colors.sold : colors.imageScrim,
       }}
     >
-      <Text style={{ ...type.label, color: "#FFFFFF" }}>
+      <Text style={{ ...type.label, color: sold ? colors.onSold : "#FFFFFF" }}>
         {t(`statuses.${status}`)}
       </Text>
     </View>

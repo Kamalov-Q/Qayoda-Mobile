@@ -1,4 +1,4 @@
-import { forwardRef, useState } from "react";
+import { forwardRef, useRef, useState, type ComponentRef } from "react";
 import {
   View,
   Text,
@@ -13,12 +13,26 @@ import { Ionicons } from "@expo/vector-icons";
 import { spacing, radii, sizing, type } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 import { useT } from "../../i18n";
+import { useKeyboardScroll } from "./keyboardScroll";
 
 const WEB_RESET =
   Platform.OS === "web" ? ({ outline: "none" } as unknown as TextStyle) : null;
 
 /** Roughly five lines — enough that a description doesn't feel cramped. */
 const MULTILINE_HEIGHT = 128;
+
+/**
+ * Placeholder length past which the drawn placeholder is allowed to shrink.
+ *
+ * `adjustsFontSizeToFit` is not free: it re-measures the text against the
+ * box until it fits, and on Android that is enough to feel on a form with
+ * nine fields in it. Nothing shorter than this has ever come close to
+ * overrunning its field — "90 123 45 67", "Narx", a room count — so those
+ * get the plain one-line Text and no measuring. The long ones (an address,
+ * a map search) are the reason the drawn placeholder exists at all, and
+ * they keep it.
+ */
+const SHRINK_PLACEHOLDER_OVER = 18;
 
 interface Props extends TextInputProps {
   label?: string;
@@ -57,6 +71,11 @@ export const TextField = forwardRef<TextInputInstance, Props>(
     const { colors } = useTheme();
     const t = useT();
     const [focused, setFocused] = useState(false);
+    // Measured on focus to decide whether the keyboard is about to cover
+    // this field. The WRAPPER, not the input: a multiline field's label and
+    // its error line are part of what has to stay on screen.
+    const wrap = useRef<ComponentRef<typeof View>>(null);
+    const scrollIntoView = useKeyboardScroll(wrap);
     const [revealed, setRevealed] = useState(false);
 
     const isPassword = !!secureTextEntry;
@@ -79,7 +98,7 @@ export const TextField = forwardRef<TextInputInstance, Props>(
         : colors.border;
 
     return (
-      <View style={{ gap: spacing.sm }}>
+      <View ref={wrap} style={{ gap: spacing.sm }}>
         {label && (
           // Sentence case, not the tracked-out uppercase this used to use:
           // Cyrillic has no small-caps tradition and uppercasing it reads as
@@ -136,6 +155,9 @@ export const TextField = forwardRef<TextInputInstance, Props>(
               secureTextEntry={isPassword && !revealed}
               onFocus={(e) => {
                 setFocused(true);
+                // Ask the enclosing Screen to bring this field clear of the
+                // keyboard. A no-op outside a scrolling Screen.
+                scrollIntoView();
                 onFocus?.(e);
               }}
               onBlur={(e) => {
@@ -171,7 +193,9 @@ export const TextField = forwardRef<TextInputInstance, Props>(
               >
                 <Text
                   numberOfLines={1}
-                  adjustsFontSizeToFit
+                  adjustsFontSizeToFit={
+                    (placeholder?.length ?? 0) > SHRINK_PLACEHOLDER_OVER
+                  }
                   minimumFontScale={0.75}
                   style={{ fontSize: 16, color: colors.textFaint }}
                 >

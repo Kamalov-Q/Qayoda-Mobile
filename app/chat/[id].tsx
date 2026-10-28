@@ -34,6 +34,17 @@ import { useMessages } from "../../src/features/chat/hooks/useMessages";
 import { formatPresence } from "../../src/features/chat/hooks/usePresence";
 import { useSendMessage } from "../../src/features/chat/hooks/useSendMessage";
 import { MessageBubble } from "../../src/features/chat/components/MessageBubble";
+import { BidCard } from "../../src/features/price-bids/components/BidCard";
+import {
+  BidSheet,
+  formatBid,
+} from "../../src/features/price-bids/components/BidSheet";
+import {
+  useAcceptBid,
+  useBidsByIds,
+  useDeclineBid,
+} from "../../src/features/price-bids/hooks/usePriceBids";
+import type { PriceBid } from "../../src/features/price-bids/api/price-bids.api";
 import { ReportChatSheet } from "../../src/features/chat/components/ReportChatSheet";
 import { TypingIndicator } from "../../src/features/chat/components/TypingIndicator";
 import { ChatInput } from "../../src/features/chat/components/ChatInput";
@@ -133,6 +144,56 @@ export default function ChatThreadScreen() {
     loadOlder,
     loadingMore,
   } = useMessages(id, !isDraft);
+
+  /**
+   * The bids behind whichever messages are loaded.
+   *
+   * Fetched as one set rather than per card, and only when the thread
+   * actually contains one — a conversation nobody has haggled in pays
+   * nothing for this. The ids are the dependency, so a new bid message
+   * arriving refetches and an ordinary message does not.
+   */
+  const bidIds = useMemo(
+    () =>
+      (messages ?? [])
+        .map((m) => m.priceBidId)
+        .filter((v): v is string => !!v),
+    [messages],
+  );
+  const bidQuery = useBidsByIds(bidIds);
+  const bidsById = useMemo(() => {
+    const map = new Map<string, PriceBid>();
+    for (const bid of bidQuery.data ?? []) map.set(bid.id, bid);
+    return map;
+  }, [bidQuery.data]);
+
+  const acceptBid = useAcceptBid();
+  const declineBid = useDeclineBid();
+  /** The bid being countered, which is also what opens the counter sheet. */
+  const [counterOf, setCounterOf] = useState<PriceBid | null>(null);
+
+  const onAcceptBid = useCallback(
+    (bid: PriceBid) =>
+      confirm({
+        titleKey: "bids.confirmAcceptTitle",
+        messageKey: "bids.confirmAcceptMessage",
+        params: { price: formatBid(bid.amount, bid.currency) },
+        confirmKey: "bids.accept",
+        onConfirm: () => acceptBid.mutate({ id: bid.id }),
+      }),
+    [acceptBid],
+  );
+
+  const onDeclineBid = useCallback(
+    (bid: PriceBid) =>
+      confirm({
+        titleKey: "bids.confirmDeclineTitle",
+        confirmKey: "bids.decline",
+        destructive: true,
+        onConfirm: () => declineBid.mutate({ id: bid.id }),
+      }),
+    [declineBid],
+  );
   const send = useSendMessage(id);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [editing, setEditing] = useState<ChatMessage | null>(null);
@@ -639,12 +700,30 @@ export default function ChatThreadScreen() {
                   </View>
                 ) : null}
 
-                <MessageBubble
-                  message={item}
-                  mine={item.senderId === userId}
-                  onLongPress={onLongPress}
-                  onPressImage={setPhoto}
-                />
+                {/* A bid draws its card from the BID, which changes state,
+                    rather than from the message, which never does. Until it
+                    loads — or if the reader is not party to it — the message
+                    stays an ordinary bubble, and the server wrote its body
+                    as a readable sentence for exactly that moment. */}
+                {item.priceBidId && bidsById.has(item.priceBidId) ? (
+                  <View style={{ paddingHorizontal: spacing.md }}>
+                    <BidCard
+                      bid={bidsById.get(item.priceBidId)!}
+                      viewerId={userId}
+                      onAccept={onAcceptBid}
+                      onDecline={onDeclineBid}
+                      onCounter={setCounterOf}
+                      busy={acceptBid.isPending || declineBid.isPending}
+                    />
+                  </View>
+                ) : (
+                  <MessageBubble
+                    message={item}
+                    mine={item.senderId === userId}
+                    onLongPress={onLongPress}
+                    onPressImage={setPhoto}
+                  />
+                )}
               </>
             )}
           />
@@ -701,6 +780,21 @@ export default function ChatThreadScreen() {
           visible={reportingMessageId !== null}
           messageId={reportingMessageId || undefined}
           onClose={() => setReportingMessageId(null)}
+        />
+      ) : null}
+
+      {/* Countering: the same sheet the listing page opens, pointed at the
+          bid being answered. Its asking price comes off the bid rather than
+          the listing, so the percentages keep matching the card above it
+          even after the seller has edited the advert. */}
+      {counterOf ? (
+        <BidSheet
+          visible
+          onClose={() => setCounterOf(null)}
+          listingId={counterOf.listingId}
+          askingAmount={counterOf.askingAmount ?? counterOf.amount}
+          askingCurrency={counterOf.askingCurrency ?? counterOf.currency}
+          counterOf={counterOf}
         />
       ) : null}
 

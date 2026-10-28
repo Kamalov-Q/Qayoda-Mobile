@@ -33,7 +33,7 @@ import {
 import { spacing } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
 import { useT } from "../../src/i18n";
-import { Listing } from "../../src/features/listings/api/listings.api";
+import type { MyListing } from "../../src/features/listings/api/listings.api";
 import {
   inPriceRange,
   listingPrice,
@@ -47,12 +47,13 @@ import { useCategories } from "../../src/features/listings/hooks/useCategories";
 // Both filters run over the already-fetched list: /listings/mine returns the
 // user's own listings whole, so filtering client-side costs no request and
 // keeps working offline from the cache.
-const STATUSES = ["ACTIVE", "DRAFT", "ARCHIVED"] as const;
+const STATUSES = ["ACTIVE", "DRAFT", "SOLD", "ARCHIVED"] as const;
 type Status = (typeof STATUSES)[number];
 
 const STATUS_ICONS = {
   ACTIVE: "checkmark-circle-outline",
   DRAFT: "create-outline",
+  SOLD: "pricetag-outline",
   ARCHIVED: "archive-outline",
 } as const satisfies Record<Status, keyof typeof Ionicons.glyphMap>;
 
@@ -107,9 +108,13 @@ export default function MyListingsScreen() {
   const statusOptions = useMemo<Choice<StatusFilter>[]>(
     () => [
       { value: ALL, label: t("filters.all"), icon: ALL_ICON },
+      // `statusTabs`, not `statuses`: this is a tab that names a GROUP of
+      // listings ("Sotilganlar" — the sold ones), while `statuses.SOLD` is
+      // what one listing's own badge says about itself ("Sotildi" — sold).
+      // The same word in both places reads wrong in one of them.
       ...STATUSES.map((value) => ({
         value,
-        label: t(`statuses.${value}`),
+        label: t(`statusTabs.${value}`),
         icon: STATUS_ICONS[value],
       })),
     ],
@@ -130,7 +135,7 @@ export default function MyListingsScreen() {
   // Locale-aware lowercasing costs nothing here and Cyrillic addresses need it.
   const addressQuery = address.trim().toLocaleLowerCase();
 
-  const listings: Listing[] = useMemo(
+  const listings: MyListing[] = useMemo(
     () =>
       (data ?? []).filter(
         (l) =>
@@ -297,7 +302,10 @@ export default function MyListingsScreen() {
             )
           }
           renderItem={({ item }) => (
-            <ListingCard listing={item} onPress={onPress} />
+            // `sale` only ever arrives on this route, and only on the sold
+            // ones — see ListingCard's prop for why it is threaded rather
+            // than read off the listing.
+            <ListingCard listing={item} sale={item.sale} onPress={onPress} />
           )}
         />
       )}

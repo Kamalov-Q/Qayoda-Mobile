@@ -43,6 +43,7 @@ import {
 } from "../../../src/features/listings/utils/format";
 import { useAuthStore } from "../../../src/features/auth/store/auth.store";
 import { requireAuth, requirePhone } from "../../../src/features/auth/guest";
+import { BidSheet } from "../../../src/features/price-bids/components/BidSheet";
 import { usePresence } from "../../../src/features/chat/hooks/usePresence";
 import { useCategories } from "../../../src/features/listings/hooks/useCategories";
 import { useAmenities } from "../../../src/features/listings/hooks/useAmenities";
@@ -50,6 +51,7 @@ import { PresenceStatus } from "../../../src/features/chat/components/PresenceSt
 import { ReviewsSection } from "../../../src/features/reviews/components/ReviewsSection";
 import { CommentsSection } from "../../../src/features/comments/components/CommentsSection";
 import { PromoteSheet } from "../../../src/features/tariffs/components/PromoteSheet";
+import { MarkSoldSheet } from "../../../src/features/listings/components/MarkSoldSheet";
 import {
   TopBadge,
   isTop,
@@ -84,7 +86,11 @@ export default function ListingDetailScreen() {
   const { nameOf: categoryName } = useCategories();
   const { nameOf: amenityName } = useAmenities();
   const [reporting, setReporting] = useState(false);
+  /** The bid sheet. Opened from beside the price, gated behind requirePhone. */
+  const [bidding, setBidding] = useState(false);
   const [promoting, setPromoting] = useState(false);
+  /** The "what did it sell for" sheet. See MarkSoldSheet. */
+  const [markingSold, setMarkingSold] = useState(false);
   const [editing, setEditing] = useState(false);
   // For "Xabar yozish": an existing thread about THIS listing reopens instead
   // of drafting a duplicate — the server would merge them on send anyway, but
@@ -180,6 +186,18 @@ export default function ListingDetailScreen() {
   const activeOffers = listing.offers.filter((o) => o.isActive);
   const offers = activeOffers.length ? activeOffers : listing.offers;
 
+  /**
+   * Which asking price a bid is measured against.
+   *
+   * The sale price where there is one: an advert carrying both a sale and a
+   * rent is still a thing people negotiate the PURCHASE of, and sending the
+   * server an ambiguous bid would have it refuse rather than guess. The
+   * purpose goes with it explicitly for the same reason.
+   */
+  const bidTarget =
+    activeOffers.find((o) => o.purpose === "SALE") ?? activeOffers[0];
+  const canBid = !isOwner && !!bidTarget && listing.status === "ACTIVE";
+
   const floor =
     listing.floor == null
       ? null
@@ -258,6 +276,21 @@ export default function ListingDetailScreen() {
     60_000;
 
   const isArchived = listing.status === "ARCHIVED";
+  const isSold = listing.status === "SOLD";
+  /**
+   * Off the map, either way.
+   *
+   * The two are different facts and say different things to the reader, but
+   * everything structural about them is the same: no TOP to buy, no offers
+   * to take, and one button to put it back.
+   */
+  const isDown = isArchived || isSold;
+  // TOP days banked while the advert is down, rounded UP to whole days: the
+  // seller is being told what they still have, and telling somebody with 28
+  // hours left that they have "1 day" undersells what they paid for.
+  const bankedTopDays = listing.promotionRemainingSeconds
+    ? Math.ceil(listing.promotionRemainingSeconds / 86_400)
+    : 0;
 
   /**
    * Open the thread with the seller.
@@ -305,8 +338,14 @@ export default function ListingDetailScreen() {
     });
   };
 
+  // A sheet, not a confirm(): the seller is asked what it sold for, and that
+  // number is the whole reason this action exists. A yes/no dialog cannot
+  // collect it, and asking afterwards means asking somebody who has already
+  // moved on.
+  const onMarkSold = () => setMarkingSold(true);
+
   const onToggleArchive = () => {
-    if (isArchived) {
+    if (isDown) {
       restore.mutate(listing.id);
       return;
     }
@@ -385,7 +424,24 @@ export default function ListingDetailScreen() {
               />
             ) : null}
 
-            {!isOwner ? (
+            {canBid && bidTarget ? (
+        <BidSheet
+          visible={bidding}
+          onClose={() => setBidding(false)}
+          listingId={listing.id}
+          askingAmount={Number(bidTarget.price)}
+          askingCurrency={bidTarget.currency}
+          purpose={bidTarget.purpose}
+          // Straight into the thread it landed in: a bid that vanishes into
+          // a toast leaves the person who sent it with nowhere to watch for
+          // an answer.
+          onPlaced={(conversationId) =>
+            conversationId ? router.push(`/chat/${conversationId}`) : undefined
+          }
+        />
+      ) : null}
+
+      {!isOwner ? (
               <PhotoAction
                 icon="alert-circle-outline"
                 label={t("report.action")}
@@ -412,6 +468,44 @@ export default function ListingDetailScreen() {
                   purpose={o.purpose}
                 />
               ))}
+
+              {/* Beside the asking price, which is the only place the number
+                  it argues with is on screen. Gated like every other action
+                  that reaches a seller: a bid is contact with a number on
+                  it, and an anonymous one is spam with extra steps. */}
+              {canBid ? (
+                <Pressable
+                  onPress={() => requirePhone(() => setBidding(true))}
+                  accessibilityRole="button"
+                  style={({ pressed }) => ({
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: spacing.xs,
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.sm,
+                    borderRadius: radii.pill,
+                    borderWidth: 1,
+                    borderColor: colors.primaryBorder,
+                    backgroundColor: pressed
+                      ? colors.surfaceRaised
+                      : colors.primarySoft,
+                  })}
+                >
+                  <Ionicons
+                    name="pricetag-outline"
+                    size={14}
+                    color={colors.primary}
+                  />
+                  <Text
+                    style={{ ...text.bodyStrong, color: colors.primary }}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
+                  >
+                    {t("bids.cta")}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : null}
 
@@ -475,9 +569,11 @@ export default function ListingDetailScreen() {
                 }}
               >
                 <Ionicons
-                  name="archive-outline"
+                  // A sale is an outcome, not a withdrawal, so it does not
+                  // wear the archive box.
+                  name={isSold ? "pricetag" : "archive-outline"}
                   size={13}
-                  color={colors.textMuted}
+                  color={isSold ? colors.success : colors.textMuted}
                 />
                 <Text style={text.label}>
                   {t(`statuses.${listing.status}`)}
@@ -569,24 +665,21 @@ export default function ListingDetailScreen() {
 
           {isOwner ? (
             <View style={{ gap: spacing.sm }}>
+              {/* One edit button, not two. The edit modal carries
+                  ImagePickerGrid and submits `images` with the rest of the
+                  form, so a separate "edit images" action offered a second
+                  route to the same thing — and made the owner guess which
+                  one changed what. */}
               <Button
                 title={t("listings.editListing")}
                 icon="create-outline"
                 variant="primary"
                 onPress={() => setEditing(true)}
               />
-              <Button
-                title={t("listings.editImages")}
-                icon="images-outline"
-                variant="secondary"
-                onPress={() =>
-                  router.push(`/listing/${listing.id}/edit-images`)
-                }
-              />
               {/* TOP, for the owner only. Already-TOP listings say until
                   when instead of offering it again — buying twice is a
                   support ticket, not a feature. */}
-              {!isArchived ? (
+              {!isDown ? (
                 isTop(listing.promotedUntil) ? (
                   // What they bought and what is left of it: the badge counts
                   // the days down, the line underneath names the end date.
@@ -611,17 +704,61 @@ export default function ListingDetailScreen() {
                     onPress={() => setPromoting(true)}
                   />
                 )
+              ) : bankedTopDays ? (
+                // The advert is down and it had TOP days left. Said out loud
+                // because `promotedUntil` is null while paused, so without
+                // this line the seller's paid placement looks like it simply
+                // vanished the moment they marked the property sold — which
+                // is what used to happen.
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: spacing.sm,
+                    padding: spacing.sm,
+                    borderRadius: radii.lg,
+                    borderWidth: 1,
+                    borderColor: colors.soldBorder,
+                    backgroundColor: colors.soldSoft,
+                  }}
+                >
+                  <Ionicons name="pause-circle" size={18} color={colors.sold} />
+                  <Text style={{ ...text.caption, flex: 1 }}>
+                    {t("tariffs.topPaused", { days: bankedTopDays })}
+                  </Text>
+                </View>
               ) : null}
 
-              {/* One toggle, labelled with what the tap will do. Archived
-                  listings still open from "my listings", which is where the
-                  way back has to live. */}
+              {/* Sold is offered alongside archive rather than instead of
+                  it, because they are different decisions: "this found a
+                  buyer" and "take this down". Only from live — a listing
+                  already off the map has nothing to sell, and the server
+                  refuses it. Not destructive: it is reversible and it is the
+                  outcome the seller came here for, so it does not wear the
+                  red the delete button does. */}
+              {!isDown ? (
+                <Button
+                  title={t("listings.markSold")}
+                  icon="pricetag-outline"
+                  variant="secondary"
+                  onPress={onMarkSold}
+                />
+              ) : null}
+
+              {/* One toggle, labelled with what the tap will do. Listings
+                  that are off the map still open from "my listings", which
+                  is where the way back has to live — and for a sale that is
+                  "put it back up", not "unarchive". */}
               <Button
                 title={t(
-                  isArchived ? "listings.unarchive" : "listings.archive",
+                  isSold
+                    ? "listings.relist"
+                    : isArchived
+                      ? "listings.unarchive"
+                      : "listings.archive",
                 )}
-                icon={isArchived ? "arrow-undo-outline" : "archive-outline"}
-                variant={isArchived ? "secondary" : "danger"}
+                icon={isDown ? "arrow-undo-outline" : "archive-outline"}
+                variant={isDown ? "secondary" : "danger"}
                 loading={archive.isPending || restore.isPending}
                 onPress={onToggleArchive}
               />
@@ -793,6 +930,12 @@ export default function ListingDetailScreen() {
           onClose={() => setPromoting(false)}
         />
       ) : null}
+
+      <MarkSoldSheet
+        listing={listing}
+        visible={markingSold}
+        onClose={() => setMarkingSold(false)}
+      />
 
       <ListingEditModal
         listing={listing}

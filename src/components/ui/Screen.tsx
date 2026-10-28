@@ -1,15 +1,30 @@
-import { ReactNode, useContext, useEffect, useRef } from "react";
+import {
+  ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
 import {
   View,
   ViewStyle,
   ScrollView,
   KeyboardAvoidingView,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   type ScrollViewInstance,
 } from "react-native";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 // From expo-router, not @react-navigation/elements: since SDK 56 the router
 // vendors React Navigation and refuses a direct import of it at bundle time.
 import { HeaderHeightContext } from "expo-router/react-navigation";
+import {
+  KEYBOARD_GAP,
+  ScrollHostProvider,
+  useKeyboardVisible,
+  type ScrollHost,
+} from "./keyboardScroll";
 import { spacing } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 
@@ -63,7 +78,22 @@ export function Screen({
 }: Props) {
   const { colors } = useTheme();
   const keyboardOffset = useKeyboardOffset();
+  const keyboardUp = useKeyboardVisible();
   const scroller = useRef<ScrollViewInstance>(null);
+  // Live scroll offset, as a ref: onScroll fires every frame and none of
+  // this is drawn, so a state update here would re-render the screen sixty
+  // times a second to deliver a number nobody reads.
+  const offset = useRef(0);
+  const onScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      offset.current = e.nativeEvent.contentOffset.y;
+    },
+    [],
+  );
+  // Published to the fields inside, so one that takes focus below the fold
+  // can ask to be scrolled clear of the keyboard. Lifting the viewport is
+  // not the same as moving the field into it.
+  const host = useMemo<ScrollHost>(() => ({ scroller, offset }), []);
 
   useEffect(() => {
     if (scrollResetKey === undefined) return;
@@ -85,30 +115,54 @@ export function Screen({
   return (
     // StatusBar is set once at the root layout — a per-screen one fights it
     // during transitions and flickers the glyph colour.
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={edges}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        // "padding" on Android too: with edge-to-edge the window stops
-        // resizing for the keyboard, and undefined left bottom fields hidden
-        // behind it (the chat composer bug, everywhere else).
-        behavior="padding"
-        keyboardVerticalOffset={keyboardOffset}
-      >
-        {scroll ? (
-          <ScrollView
-            ref={scroller}
-            contentContainerStyle={{ flexGrow: 1 }}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            showsVerticalScrollIndicator={false}
-          >
-            {body}
-          </ScrollView>
-        ) : (
-          body
-        )}
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    <ScrollHostProvider value={scroll ? host : null}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={edges}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          // "padding" on Android too: with edge-to-edge the window stops
+          // resizing for the keyboard, and undefined left bottom fields hidden
+          // behind it (the chat composer bug, everywhere else).
+          behavior="padding"
+          keyboardVerticalOffset={keyboardOffset}
+        >
+          {scroll ? (
+            <ScrollView
+              ref={scroller}
+              // Room BELOW the content while the keyboard is up.
+              //
+              // This is the half that was missing. The KeyboardAvoidingView
+              // shrinks the viewport so nothing sits under the keyboard, but
+              // scrolling is still bounded by contentHeight - viewportHeight:
+              // once the last field's bottom reaches the keyboard's top edge
+              // there is nothing below it to scroll into, so the field that
+              // most needs lifting — the description, always last — is the one
+              // field that cannot be lifted. Padding the content gives the
+              // scroller somewhere to go. Only while the keyboard is open, so
+              // a closed form has no dead space under it.
+              contentContainerStyle={{
+                flexGrow: 1,
+                paddingBottom: keyboardUp ? KEYBOARD_GAP : 0,
+              }}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              showsVerticalScrollIndicator={false}
+              onScroll={onScroll}
+              // Not 16. The offset is read at ONE moment — when a field takes
+              // focus — and by then the scroll has stopped, so sampling it
+              // sixty times a second on every scrolling screen in the app
+              // (the feed included) bought nothing but a JS callback per
+              // frame. At 100ms the ref can be at most that stale, which
+              // costs a few pixels only if a field is tapped mid-fling.
+              scrollEventThrottle={100}
+            >
+              {body}
+            </ScrollView>
+          ) : (
+            body
+          )}
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </ScrollHostProvider>
   );
 }
 

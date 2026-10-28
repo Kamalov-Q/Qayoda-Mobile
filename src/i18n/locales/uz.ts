@@ -91,6 +91,62 @@ export const uz = {
       "Savollar bo'lsa: +998 95 555 52 29 yoki agromind5229@gmail.com",
   },
 
+  /**
+   * Narx taklifi — price negotiation.
+   *
+   * "Taklif" is the bid; the seller's published price stays "narx". The two
+   * are never called the same thing here, for the same reason the server
+   * calls the table price_bids rather than offers.
+   */
+  bids: {
+    sheetTitle: "Narx taklif qilish",
+    cta: "Narx taklif qilish",
+    asking: "So'ralgan narx — {{price}}",
+    amountPlaceholder: "Miqdor",
+    ttlHint: "Taklif {{days}} kun amal qiladi",
+    send: "Taklif yuborish",
+    notAContract:
+      "Taklif qabul qilinsa ham bu shartnoma emas — kelishuv suhbatda davom etadi.",
+    // The card in the chat thread.
+    // Short units for the preset chips — a so'm price does not fit
+    // a chip spelled out in full.
+    unitMln: "mln",
+    unitMlrd: "mlrd",
+    cardTitle: "Narx taklifi",
+    counterTitle: "Qarshi taklif",
+    offBy: "so'ralgan narxdan −{{percent}}%",
+    aboveBy: "so'ralgan narxdan +{{percent}}%",
+    daysLeft: "{{days}} kun qoldi",
+    lastDay: "Bugun tugaydi",
+    accept: "Qabul qilish",
+    decline: "Rad etish",
+    counter: "Qarshi taklif",
+    withdraw: "Taklifni qaytarib olish",
+    youSent: "Siz yubordingiz",
+    waiting: "Kutilmoqda",
+    // Settled states, printed where the buttons were.
+    confirmAcceptTitle: "Taklif qabul qilinsinmi?",
+    confirmAcceptMessage:
+      "{{price}} narxiga rozilik bildirasiz. Bu shartnoma emas — qolgani sizning kelishuvingiz.",
+    confirmDeclineTitle: "Taklif rad etilsinmi?",
+    statusAccepted: "Qabul qilindi",
+    statusDeclined: "Rad etildi",
+    statusCountered: "Qarshi taklif berildi",
+    statusWithdrawn: "Qaytarib olindi",
+    statusExpired: "Muddati tugadi",
+    // The index of every negotiation, at /activity/bids.
+    myTitle: "Narx takliflari",
+    myHint: "Siz yuborgan va sizga kelgan takliflar",
+    myEmpty: "Hali taklif yo'q",
+    myEmptyHint:
+      "E'londa «Narx taklif qilish» tugmasini bosib savdoni boshlang.",
+    rowYouOffered: "Siz taklif qildingiz",
+    rowTheyOffered: "Sizga taklif qilindi",
+    rowNeedsYou: "Javob kutilmoqda",
+    rowListingGone: "e'lon arxivlangan",
+    rowListingSold: "e'lon sotildi",
+  },
+
   about: {
     title: "Ilova haqida",
     version: "Versiya {{version}}",
@@ -416,11 +472,19 @@ export const uz = {
     listingComment: "e'loningizga izoh qoldirdi",
     listingCommentReply: "izohingizga javob berdi",
     listingReview: "e'loningizni baholadi",
+    priceBidReceived: "e'loningizga narx taklif qildi",
+    priceBidCountered: "qarshi taklif yubordi",
+    priceBidAccepted: "narx taklifingizni qabul qildi",
+    priceBidDeclined: "narx taklifingizni rad etdi",
+    priceBidExpired: "Narx taklifingiz muddati tugadi",
     chatMessage: "sizga xabar yubordi",
     topupSucceeded: "Hisobingiz to'ldirildi",
     topupFailed: "To'lov amalga oshmadi",
     tariffPaid: "Tarif uchun to'lov qabul qilindi",
     tariffExpiring: "Tarifingiz tugayapti",
+    // "va yana 4 kishi" — o'zbek tilida sanoqdan keyin ko'plik qo'shimchasi
+    // qo'yilmaydi, shuning uchun bitta shakl har qanday son uchun to'g'ri.
+    andOthers: "va yana {{count}} kishi",
   },
 
   // Global search: one entry, three kinds of answer. See the segmented
@@ -606,8 +670,6 @@ export const uz = {
     viewDetails: "Batafsil ko'rish →",
     detailsTitle: "E'lon",
     description: "Tavsif",
-    editImages: "Rasmlarni tahrirlash",
-    imagesUpdated: "Rasmlar yangilandi",
     edit: "Tahrirlash",
     editListing: "E'lonni tahrirlash",
     updatedSuccess: "E'lon muvaffaqiyatli yangilandi",
@@ -637,6 +699,20 @@ export const uz = {
 
     perMonth: "/oy",
     perDay: "/kun",
+    markSold: "Sotildi deb belgilash",
+    markSoldConfirmTitle: "E'lon sotildi deb belgilansinmi?",
+    markSoldConfirmMessage: "Ochiq takliflar yopiladi. Rasmlar, matn va xaritadagi belgi saqlanadi — belgi sariq rangda ko'rinadi.",
+    soldPriceHint: "Qancha narxga sotildi?",
+    soldPricePlaceholder: "Haqiqiy narx",
+    // Buni aytib qo'yish kerak: narx ommaviy deb o'ylagan sotuvchi uni
+    // yuqoriroq yozadi, va bo'rttirilgan raqamlar to'plami — bu ma'lumot
+    // emas, ma'lumotga o'xshagan narsa.
+    soldPricePrivate: "Narx faqat sizga va saytga ko'rinadi",
+    soldBelowAsking: "So'ralgan narxdan {{percent}}% past",
+    soldAboveAsking: "So'ralgan narxdan {{percent}}% yuqori",
+    soldFor: "{{price}}ga sotilgan",
+    soldToast: "E'lon sotildi deb belgilandi",
+    relist: "Qayta joylashtirish",
   },
 
   purposes: {
@@ -734,7 +810,7 @@ export const uz = {
     address: "Manzil",
     addressPlaceholder: "Toshkent, Chilonzor tumani, 12-mavze",
     phone: "Aloqa telefoni",
-    phonePlaceholder: "+998 90 123 45 67",
+    phonePlaceholder: "90 123 45 67",
     phoneHint: "Xaridorlar shu raqamga qo'ng'iroq qiladi.",
     description: "Tavsif",
     descriptionPlaceholder:
@@ -822,6 +898,16 @@ export const uz = {
     ACTIVE: "Faol",
     DRAFT: "Qoralama",
     ARCHIVED: "Arxivda",
+    SOLD: "Sotildi",
+  },
+
+  // Bitta e'lonning holati emas, balki e'lonlar GURUHI — "mening
+  // e'lonlarim" ekranidagi bo'limlar uchun ko'plik shakli.
+  statusTabs: {
+    ACTIVE: "Faollar",
+    DRAFT: "Qoralamalar",
+    ARCHIVED: "Arxivdagilar",
+    SOLD: "Sotilganlar",
   },
 
   images: {
@@ -987,6 +1073,11 @@ export const uz = {
     title: "Sozlamalar",
     currency: "Valyuta",
     currencyUsd: "AQSH dollari (USD)",
+    // Narx boshqa valyutada ko'rsatilganda qaysi kursga bo'linganini aytadi.
+    rateLine: "1 USD = {{rate}} so'm",
+    rateSourceCBU: "O'zbekiston Markaziy banki",
+    rateSourceMARKET: "bozor kursi (cbu.uz mavjud emas)",
+    rateSourceCONSTANT: "taxminiy kurs — manbalar javob bermadi",
     currencyUzs: "O'zbek so'mi (UZS)",
     appearance: "Ko'rinish",
     theme: "Mavzu",
@@ -1108,6 +1199,9 @@ export const uz = {
     topBody: "TOP e'lon ro'yxatda belgisi bilan ajralib turadi.",
     topBadge: "TOP",
     topActive: "{{date}} gacha TOP",
+    // E'lon tushirilgan paytda TOP kunlari sarflanmaydi — saqlanib turadi va
+    // e'lon qayta joylashtirilganda shu joydan davom etadi.
+    topPaused: "{{days}} kun TOP saqlanib turadi — e'lonni qayta joylashtirsangiz davom etadi",
     topLeft: "TOP · {{count}} kun qoldi",
     topLastDay: "TOP · bugun tugaydi",
     topBuy: "TOP qilish",

@@ -38,6 +38,12 @@ export default function ActivityScreen() {
       count: unread || undefined,
     },
     {
+      icon: "pricetag-outline",
+      labelKey: "bids.myTitle",
+      hintKey: "bids.myHint",
+      href: "/activity/bids",
+    },
+    {
       icon: "bookmark-outline",
       labelKey: "activity.saved",
       hintKey: "activity.savedHint",

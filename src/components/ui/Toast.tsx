@@ -44,7 +44,22 @@ let nextId = 0;
 const useToastStore = create<ToastState>((set) => ({
   toasts: [],
   push: (toast) =>
-    set((s) => ({ toasts: [{ ...toast, id: nextId++ }, ...s.toasts].slice(0, MAX_VISIBLE) })),
+    set((s) => {
+      // The same message twice is never information. A gated screen that
+      // mounts, toasts and bounces can fire its reason more than once —
+      // two taps on the tab, a remount behind a redirect — and the reader
+      // learns nothing from the second copy except that something is
+      // glitching. Re-show it instead: drop the existing one and put the
+      // new one on top, so the timer restarts and the count stays at one.
+      const same = (a: Content, b: Content) =>
+        a.kind === "key" && b.kind === "key"
+          ? a.key === b.key
+          : a.kind === "text" && b.kind === "text"
+            ? a.text === b.text
+            : false;
+      const rest = s.toasts.filter((t) => !same(t.content, toast.content));
+      return { toasts: [{ ...toast, id: nextId++ }, ...rest].slice(0, MAX_VISIBLE) };
+    }),
   dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 }));
 

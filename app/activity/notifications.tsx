@@ -3,9 +3,9 @@
 // Rows, not pushes — there is no device-token plumbing in this app yet, so
 // this is where a notification lives and the bell's dot is how you learn
 // there is one. Opening the screen is what marks them read.
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { View, Text, FlatList, Pressable, RefreshControl } from "react-native";
-import { router, Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -26,15 +26,20 @@ import {
   useMarkNotificationsRead,
   useNotifications,
 } from "@/src/features/notifications/hooks/useNotifications";
-import type {
-  AppNotification,
-  NotificationKind,
-} from "@/src/features/notifications/api/notifications.api";
+import type { NotificationKind } from "@/src/features/notifications/api/notifications.api";
+import { notificationRoute } from "@/src/features/notifications/notificationTarget";
+import { inboxPreview } from "@/src/features/notifications/inboxPreview";
+import {
+  groupNotifications,
+  type NotificationGroup,
+} from "@/src/features/notifications/inboxGroups";
 
 /** The glyph and tone each kind wears. */
-const LOOK: Record<
-  NotificationKind,
-  { icon: keyof typeof Ionicons.glyphMap; tone: "primary" | "danger" }
+const LOOK: Partial<
+  Record<
+    NotificationKind,
+    { icon: keyof typeof Ionicons.glyphMap; tone: "primary" | "danger" }
+  >
 > = {
   VIDEO_READY: { icon: "checkmark-circle", tone: "primary" },
   VIDEO_FAILED: { icon: "alert-circle", tone: "danger" },
@@ -51,6 +56,12 @@ const LOOK: Record<
 
   CHAT_MESSAGE: { icon: "mail", tone: "primary" },
 
+  PRICE_BID_RECEIVED: { icon: "pricetag", tone: "primary" },
+  PRICE_BID_COUNTERED: { icon: "swap-horizontal", tone: "primary" },
+  PRICE_BID_ACCEPTED: { icon: "checkmark-circle", tone: "primary" },
+  PRICE_BID_DECLINED: { icon: "close-circle", tone: "danger" },
+  PRICE_BID_EXPIRED: { icon: "time", tone: "danger" },
+
   // Money is the one place "danger" earns its red: a failed charge and a
   // tariff about to lapse are both things that stop working if ignored.
   TOPUP_SUCCEEDED: { icon: "wallet", tone: "primary" },
@@ -59,7 +70,21 @@ const LOOK: Record<
   TARIFF_EXPIRING: { icon: "time", tone: "danger" },
 };
 
-const TEXT: Record<NotificationKind, TranslationKey> = {
+/**
+ * What an unrecognised kind looks like.
+ *
+ * The server can add a kind at any time, and a build already on somebody's
+ * phone cannot be taught about it. Before this, LOOK[kind] came back
+ * undefined and the next line read .tone off it — so one unknown row took
+ * the whole inbox screen down. A generic bell and the kind's own name is a
+ * worse row than a written one and an infinitely better one than a crash.
+ */
+const UNKNOWN_LOOK = {
+  icon: "notifications-outline" as keyof typeof Ionicons.glyphMap,
+  tone: "primary" as const,
+};
+
+const TEXT: Partial<Record<NotificationKind, TranslationKey>> = {
   VIDEO_READY: "notifications.videoReady",
   VIDEO_FAILED: "notifications.videoFailed",
   VIDEO_AWAITING_PAYMENT: "notifications.videoAwaitingPayment",
@@ -74,6 +99,12 @@ const TEXT: Record<NotificationKind, TranslationKey> = {
   LISTING_REVIEW: "notifications.listingReview",
 
   CHAT_MESSAGE: "notifications.chatMessage",
+
+  PRICE_BID_RECEIVED: "notifications.priceBidReceived",
+  PRICE_BID_COUNTERED: "notifications.priceBidCountered",
+  PRICE_BID_ACCEPTED: "notifications.priceBidAccepted",
+  PRICE_BID_DECLINED: "notifications.priceBidDeclined",
+  PRICE_BID_EXPIRED: "notifications.priceBidExpired",
 
   TOPUP_SUCCEEDED: "notifications.topupSucceeded",
   TOPUP_FAILED: "notifications.topupFailed",
@@ -94,6 +125,11 @@ export default function NotificationsScreen() {
   useEffect(() => {
     read(undefined);
   }, [read]);
+
+  // Five people liking the same video is one row, not five. Memoised on the
+  // page array rather than recomputed per render: this runs over every row
+  // the inbox has loaded, and the list re-renders on every refetch.
+  const groups = useMemo(() => groupNotifications(list.items), [list.items]);
 
   /**
    * A guest has no inbox, and the query that would fill one is disabled for
@@ -127,9 +163,9 @@ export default function NotificationsScreen() {
           onAction={list.refetch}
         />
       ) : (
-        <FlatList<AppNotification>
-          data={list.items}
-          keyExtractor={(n) => n.id}
+        <FlatList<NotificationGroup>
+          data={groups}
+          keyExtractor={(g) => g.lead.id}
           contentContainerStyle={{
             padding: spacing.md,
             gap: spacing.xs,
@@ -156,7 +192,7 @@ export default function NotificationsScreen() {
             }
           }}
           renderItem={({ item }) => (
-            <NotificationRow notification={item} onRead={read} />
+            <NotificationRow group={item} onRead={read} />
           )}
         />
       )}
@@ -165,64 +201,45 @@ export default function NotificationsScreen() {
 }
 
 function NotificationRow({
-  notification: n,
+  group,
   onRead,
 }: {
-  notification: AppNotification;
-  /** Marks THIS row read — see the tap handler for why that is not redundant. */
+  group: NotificationGroup;
+  /** Marks THESE rows read — see the tap handler for why that is not redundant. */
   onRead: (ids: string[]) => void;
 }) {
   const { colors, text } = useTheme();
   const t = useT();
   const timeAgo = useCommentTime();
 
-  const look = LOOK[n.kind];
+  const n = group.lead;
+  const look = LOOK[n.kind] ?? UNKNOWN_LOOK;
   const tone = look.tone === "danger" ? colors.danger : colors.primary;
   const name =
     [n.actor?.name, n.actor?.surname].filter(Boolean).join(" ") || null;
 
-  // Where the row goes. A notification that cannot be opened is a toast that
-  // outlived its welcome, so every kind lands somewhere: the video, the
-  // person, or — for one waiting to be paid for — the shelf with the button.
+  // The fact the row is about: the amount offered, the sum that cleared, the
+  // stars given. Null for the kinds their own sentence already describes.
+  const preview = inboxPreview(n);
+
+  // An advert that has been taken down or sold still has a row about it, and
+  // the row should say so rather than opening a screen that explains nothing.
+  const listingGone =
+    n.listing?.status === "ARCHIVED" || n.listing?.status === "SOLD";
+
+  // Where the row goes. Shared with the push tap handler — see
+  // notificationTarget: a tap on the lock screen and a tap here must land in
+  // the same place, and they were two copies of this ladder before.
   const open = () => {
     // Opening the screen marks everything read, so this is usually a no-op.
     // It is not redundant for a row that ARRIVED while the screen was open:
     // that one missed the on-mount sweep, and tapping it is the clearest
-    // possible statement that it has been seen.
-    if (!n.read) onRead([n.id]);
+    // possible statement that it has been seen. All of a group's ids, not
+    // just the lead's — the reader has been shown that all of them happened.
+    const unread = group.lead.read ? [] : group.ids;
+    if (unread.length) onRead(unread);
 
-    if (n.kind === "VIDEO_AWAITING_PAYMENT" || n.kind === "VIDEO_FAILED") {
-      router.push("/videos/mine");
-      return;
-    }
-    // Money lands on the wallet, which is where the balance and the button
-    // to fix a failure both are.
-    if (
-      n.kind === "TOPUP_SUCCEEDED" ||
-      n.kind === "TOPUP_FAILED" ||
-      n.kind === "TARIFF_PAID" ||
-      n.kind === "TARIFF_EXPIRING"
-    ) {
-      router.push("/wallet");
-      return;
-    }
-    // Checked before videoId and listingId: a chat row carries neither, but
-    // the order is what keeps it that way if one is ever added.
-    if (n.conversationId) {
-      router.push(`/chat/${n.conversationId}`);
-      return;
-    }
-    if (n.videoId) {
-      router.push(`/videos/${n.videoId}`);
-      return;
-    }
-    // A comment or review opens the listing it was left on, not the
-    // commenter: the thing being discussed is what the reader came for.
-    if (n.listingId) {
-      router.push(`/listing/${n.listingId}`);
-      return;
-    }
-    if (n.actor) router.push(`/profile/${n.actor.id}`);
+    router.push(notificationRoute(n) as never);
   };
 
   return (
@@ -269,27 +286,69 @@ function NotificationRow({
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={text.body} numberOfLines={2}>
           {name ? <Text style={weight("700")}>{name} </Text> : null}
-          {t(TEXT[n.kind])}
+          {/* "and 4 others", when this row stands for several. The count is
+              of ROWS, not of named people: two likes from one person inside
+              the dedupe window are one row, and somebody whose profile was
+              deleted has no name to list. */}
+          {group.count > 1 ? (
+            <Text style={weight("700")}>
+              {t("notifications.andOthers", { count: group.count - 1 })}{" "}
+            </Text>
+          ) : null}
+          {/* An unknown kind still gets its line: the server's own name for
+              it reads as noise, but it reads, and the row stays tappable. */}
+          {TEXT[n.kind] ? t(TEXT[n.kind]!) : t("notifications.title")}
           {/* Which ad it was about. Someone with twenty live listings cannot
               act on "left a review" without being told on what. */}
           {n.listing?.title ? (
             <Text style={weight("600")}> · {n.listing.title}</Text>
           ) : null}
         </Text>
-        <Text style={{ ...text.caption, color: colors.textFaint }}>
-          {timeAgo(n.createdAt)}
-        </Text>
+
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: spacing.xs,
+          }}
+        >
+          <Text style={{ ...text.caption, color: colors.textFaint }}>
+            {timeAgo(n.createdAt)}
+          </Text>
+          {preview ? (
+            <Text
+              style={{ ...text.caption, color: colors.text, flexShrink: 1 }}
+              numberOfLines={1}
+            >
+              · {preview}
+            </Text>
+          ) : null}
+          {listingGone ? (
+            <Text
+              style={{ ...text.caption, color: colors.textMuted }}
+              numberOfLines={1}
+            >
+              · {t(`statuses.${n.listing!.status}` as TranslationKey)}
+            </Text>
+          ) : null}
+        </View>
       </View>
 
-      {/* The clip it is about, where there is one. */}
-      {n.video?.thumbUrl ? (
+      {/* What it is about, in one picture. The video's frame if there is one,
+          otherwise the advert's cover — which used to be a grey glyph, so the
+          half of the inbox that is about the actual product was the half you
+          could not skim. */}
+      {n.video?.thumbUrl ?? n.listing?.thumbUrl ? (
         <Image
-          source={{ uri: n.video.thumbUrl }}
+          source={{ uri: (n.video?.thumbUrl ?? n.listing?.thumbUrl)! }}
           style={{
             width: 34,
-            height: 48,
+            // A reel is portrait and a listing photo is landscape; one shape
+            // for both would crop whichever it was not drawn for.
+            height: n.video?.thumbUrl ? 48 : 34,
             borderRadius: radii.sm,
             backgroundColor: colors.surfaceRaised,
+            opacity: listingGone ? 0.45 : 1,
           }}
           contentFit="cover"
         />

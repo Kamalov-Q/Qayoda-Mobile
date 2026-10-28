@@ -25,6 +25,14 @@ export interface ChatMessage {
   height: number | null;
   waveform: number[] | null;
   replyToId: string | null;
+  /**
+   * The price bid this message announces, or null on an ordinary one.
+   *
+   * Not a MessageType: the server sends bids as TEXT whose body reads as a
+   * sentence, so a build that predates bids shows the sentence instead of an
+   * empty bubble. A build that has this draws the card from the bid itself.
+   */
+  priceBidId?: string | null;
   /** Set only on a forward — whose words these originally were. */
   forwardedFromUserId?: string | null;
   forwardedFromName?: string | null;

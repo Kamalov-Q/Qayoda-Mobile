@@ -24,6 +24,12 @@ export type NotificationKind =
   | "LISTING_REVIEW"
   /** One row per CONVERSATION, never one per message. */
   | "CHAT_MESSAGE"
+  // Price negotiation. `meta` carries { bidId, amount, currency, direction }.
+  | "PRICE_BID_RECEIVED"
+  | "PRICE_BID_COUNTERED"
+  | "PRICE_BID_ACCEPTED"
+  | "PRICE_BID_DECLINED"
+  | "PRICE_BID_EXPIRED"
   // Money.
   | "TOPUP_SUCCEEDED"
   | "TOPUP_FAILED"
@@ -44,10 +50,14 @@ export interface NotificationVideo {
   thumbUrl: string | null;
 }
 
-/** Enough of a listing to say WHICH one; no image, by design on the server. */
+/** Enough of a listing to say WHICH one, and to draw it. */
 export interface NotificationListing {
   id: string;
   title: string | null;
+  /** So a row can say the advert is gone rather than opening a dead screen. */
+  status: "DRAFT" | "ACTIVE" | "ARCHIVED" | "SOLD";
+  /** The cover, at thumbnail size. One query for the page, not a join. */
+  thumbUrl: string | null;
 }
 
 export interface AppNotification {

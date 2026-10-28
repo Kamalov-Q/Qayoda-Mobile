@@ -79,7 +79,15 @@ export interface Listing {
   id: string;
   ownerId: string;
   category: PropertyCategory;
-  status: "DRAFT" | "ACTIVE" | "ARCHIVED";
+  /**
+   * SOLD is not a kind of archived.
+   *
+   * Archived is the seller taking the advert down, for any reason. SOLD is
+   * the property having found a buyer — a fact worth keeping, and the one
+   * the owner wants to see on their own list. Both are off the map and
+   * closed to offers.
+   */
+  status: "DRAFT" | "ACTIVE" | "ARCHIVED" | "SOLD";
   title: string | null;
   descriptionHtml: string | null;
   descriptionText: string | null;
@@ -114,12 +122,31 @@ export interface Listing {
   createdAt: string;
   /**
    * While this is in the future the listing is TOP and wears the badge.
-   * Null for everything that was never promoted.
    *
-   * Only the badge is implemented: nothing reorders the feed or the map yet,
-   * so a TOP listing is marked, not ranked.
+   * Null for everything that was never promoted — AND while a promotion is
+   * paused, which is deliberately the same null: see
+   * `promotionRemainingSeconds`. Every reader here treats a paused promotion
+   * as not promoted without having to know pausing exists.
+   *
+   * It ranks as well as badges, which this comment used to deny: the feed
+   * puts live promotions first on the default `newest` sort
+   * (listing.repository.ts). Explicit price sorts are left honest — a
+   * promoted listing must not pretend to be the cheapest — and the map and
+   * the home "latest" strip do not rank by it either.
    */
   promotedUntil: string | null;
+  /**
+   * TOP days bought and not yet served, banked while the advert is down.
+   *
+   * A promotion used to keep burning after a listing was sold or archived,
+   * while every feed filtered it out — so the seller paid for placement
+   * nobody could see. Taking it down now banks the remainder here; relisting
+   * hands it back, counting from that moment.
+   *
+   * Only the owner has anything to do with this, and only on a listing that
+   * is down: a live listing always reads null here.
+   */
+  promotionRemainingSeconds: number | null;
   /** Moves on every edit — what the "edited" label is decided from. */
   updatedAt: string;
   publishedAt: string | null;
@@ -155,6 +182,17 @@ export interface ListingOwner {
   isVerifiedRealtor: boolean;
   createdAt: string;
 }
+
+/**
+ * Where the USD/UZS rate came from.
+ *
+ * `CBU` is the Central Bank of Uzbekistan's published figure — the official
+ * one, and what anybody here will check a price against. `MARKET` is a
+ * mid-market aggregate used only when cbu.uz cannot be reached (it does not
+ * answer hosts outside Uzbekistan, which is permanently true of the
+ * production server). `CONSTANT` is a hardcoded last resort.
+ */
+export type RateSource = "CBU" | "MARKET" | "CONSTANT";
 
 export interface MapPointFeature {
   listingId: string;
@@ -336,6 +374,56 @@ function appendCommonFilters(
 }
 
 /**
+ * The owner's own row.
+ *
+ * Only `/listings/mine` carries `sale`, and only on the sold ones — that
+ * route is behind the session and scoped to the caller, so the figure cannot
+ * reach anybody but the person who entered it.
+ */
+export type MyListing = Listing & { sale: ListingSale | null };
+
+/**
+ * What a listing sold for.
+ *
+ * Deliberately NOT a field on `Listing`. The detail endpoint is public and
+ * unauthenticated, so the server keeps this in its own owner-guarded place —
+ * see the ListingSale entity. It arrives here two ways and two ways only:
+ * attached to the owner's own `/listings/mine` rows, and from
+ * `/listings/:id/sale`.
+ *
+ * Numerics come over the wire as numbers here (the server has already cast
+ * them), but a `numeric` column is a string in Postgres and has leaked
+ * through as one before, so every reader coerces.
+ */
+export interface ListingSale {
+  listingId: string;
+  /** WHICH offer sold — a listing can carry a sale price and a rent at once. */
+  purpose: OfferPurpose;
+  price: number;
+  currency: string;
+  priceUsd: number | null;
+  /** What was being asked at the moment of sale, snapshotted by the server. */
+  askingPrice: number | null;
+  askingCurrency: string | null;
+  askingPriceUsd: number | null;
+  soldAt: string;
+}
+
+/**
+ * What the seller is asked when they mark something sold.
+ *
+ * `purpose` is only required when the listing has more than one live offer;
+ * the server refuses with SALE_PURPOSE_REQUIRED rather than guessing, because
+ * filing a sale price against a rent asking price produces a plausible
+ * number and a wrong one.
+ */
+export interface MarkSoldInput {
+  amount: number;
+  currency?: "UZS" | "USD";
+  purpose?: OfferPurpose;
+}
+
+/**
  * What POST /listings/:id/promote answers with: the new end date, and nothing
  * else. NOT a Listing — writing this into the detail cache in place of one
  * leaves the screen without `offers` and it crashes on the next render.
@@ -392,18 +480,27 @@ export const listingApi = {
   getSimilar: (id: string, limit = 6) =>
     api<Listing[]>(`/listings/${id}/similar?limit=${limit}`, { auth: false }),
 
-  /** CBU's daily USD/UZS rate, cached server-side. Public. */
+  /**
+   * The daily USD/UZS rate, cached server-side. Public.
+   *
+   * `source` says where it came from — see RateSource. Optional, because an
+   * API that predates the second source sends neither it nor `isFallback`,
+   * and a build in somebody's pocket has to cope with that.
+   */
   getRates: () =>
-    api<{ usdToUzs: number; updatedAt: string | null }>("/rates", {
-      auth: false,
-    }),
+    api<{
+      usdToUzs: number;
+      updatedAt: string | null;
+      source?: RateSource;
+      isFallback?: boolean;
+    }>("/rates", { auth: false }),
 
   /** Newest ACTIVE listings, for the Home strip. Public. */
   getLatest: (limit = 10) =>
     api<Listing[]>(`/listings/latest?limit=${limit}`, { auth: false }),
 
   getMine: (limit = 20, offset = 0) =>
-    api<Listing[]>(`/listings/mine?limit=${limit}&offset=${offset}`),
+    api<MyListing[]>(`/listings/mine?limit=${limit}&offset=${offset}`),
 
   /** The account screen's three totals — the lists paginate, counts don't. */
   getCounts: () =>
@@ -436,7 +533,23 @@ export const listingApi = {
       body: { tariffId },
     }),
 
-  /** Undoes an archive. Returns the listing, now ACTIVE and back on the map. */
+  /**
+   * The deal went through.
+   *
+   * Comes off the map and closes every open offer, with SOLD as the reason
+   * each bidder is given. Keeps the photos and the text, so a link somebody
+   * saved still opens something that explains itself.
+   */
+  markSold: (id: string, input: MarkSoldInput) =>
+    api<Listing>(`/listings/${id}/sold`, { method: "PATCH", body: input }),
+
+  /** What it went for. Owner only — never on the public listing. */
+  sale: (id: string) => api<ListingSale | null>(`/listings/${id}/sale`),
+
+  /**
+   * Undoes an archive OR a sale. Returns the listing, now ACTIVE and back on
+   * the map. Offers closed on the way down are not reopened.
+   */
   restore: (id: string) =>
     api<Listing>(`/listings/${id}/restore`, { method: "PATCH" }),
 
