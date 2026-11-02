@@ -31,6 +31,27 @@ const CONTACTS = [
     value: "+998 95 555 52 29",
     url: "tel:+998955555229",
   },
+  {
+    // The same number as support, deliberately shown twice.
+    //
+    // An agency or a developer looking to advertise does not read "Telefon"
+    // as an invitation — it reads as the line you ring when the app is
+    // broken. A row that says what it is for is the whole point, and one
+    // number is easier to answer than two.
+    labelKey: "about.contactPartnership" as TranslationKey,
+    hintKey: "about.contactPartnershipHint" as TranslationKey,
+    icon: "briefcase-outline",
+    value: "+998 95 555 52 29",
+    url: "tel:+998955555229",
+  },
+  {
+    // The key existed and nothing used it. The site is live now, and it is
+    // where the legal documents below actually live.
+    labelKey: "about.contactWebsite" as TranslationKey,
+    icon: "globe-outline",
+    value: "growencity.uz",
+    url: "https://growencity.uz",
+  },
 ] as const;
 
 /**
@@ -123,6 +144,7 @@ export default function AboutScreen() {
                 icon={row.icon}
                 label={t(row.labelKey)}
                 value={row.value}
+                hint={"hintKey" in row ? t(row.hintKey) : undefined}
                 divider={index > 0}
                 onPress={() => Linking.openURL(row.url).catch(() => {})}
               />
@@ -156,12 +178,15 @@ function InfoRow({
   icon,
   label,
   value,
+  hint,
   divider,
   onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   value?: string;
+  /** What the row is FOR, when the label alone does not say it. */
+  hint?: string;
   divider: boolean;
   onPress: () => void;
 }) {
@@ -171,7 +196,9 @@ function InfoRow({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={value ? `${label}: ${value}` : label}
+      accessibilityLabel={
+        [label, value, hint].filter(Boolean).join(', ')
+      }
       style={({ pressed }) => ({
         flexDirection: "row",
         alignItems: "center",
@@ -188,6 +215,11 @@ function InfoRow({
         {value ? (
           <Text style={{ ...type.caption, color: colors.textMuted }}>
             {value}
+          </Text>
+        ) : null}
+        {hint ? (
+          <Text style={{ ...type.caption, color: colors.textFaint }}>
+            {hint}
           </Text>
         ) : null}
       </View>

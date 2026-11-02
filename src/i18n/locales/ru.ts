@@ -148,6 +148,8 @@ export const ru: Dictionary = {
     contactEmail: "Email",
     contactPhone: "Телефон",
     contactWebsite: "Сайт",
+    contactPartnership: "По вопросам сотрудничества",
+    contactPartnershipHint: "Реклама и партнёрство",
     legalTitle: "Документы",
     privacy: "Политика конфиденциальности",
     offer: "Условия публичной оферты",

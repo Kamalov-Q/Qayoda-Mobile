@@ -157,6 +157,8 @@ export const uz = {
     contactEmail: "Email",
     contactPhone: "Telefon",
     contactWebsite: "Veb-sayt",
+    contactPartnership: "Hamkorlik uchun aloqa",
+    contactPartnershipHint: "Reklama va hamkorlik bo'yicha",
     legalTitle: "Hujjatlar",
     privacy: "Maxfiylik siyosati",
     offer: "Ommaviy oferta shartlari",
