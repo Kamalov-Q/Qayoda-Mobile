@@ -474,7 +474,18 @@ export const listingApi = {
     return api<ViewportResponse>(`/listings/map?${params}`, { auth: false });
   },
 
-  getById: (id: string) => api<Listing>(`/listings/${id}`, { auth: false }),
+  /**
+   * The listing detail.
+   *
+   * Sends the token when there is one — note the absence of `auth: false`,
+   * which the sibling calls here still carry. The endpoint is public and
+   * answers a signed-out caller perfectly well, but it now decides from the
+   * caller WHETHER TO INCLUDE THE SELLER'S PHONE. Suppressing the header
+   * would make every user anonymous to it, and the phone row on the detail
+   * page and the call button on the map preview would quietly vanish for
+   * signed-in users too.
+   */
+  getById: (id: string) => api<Listing>(`/listings/${id}`),
 
   /** Same category, nearest first — the detail page's "more like this". */
   getSimilar: (id: string, limit = 6) =>
