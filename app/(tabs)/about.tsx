@@ -34,32 +34,52 @@ const CONTACTS = [
 ] as const;
 
 /**
- * The documents, hosted rather than bundled.
+ * The documents, on the WEBSITE rather than bundled or on the API.
  *
  * Google Play and the App Store both require the privacy policy and the
- * account-deletion page to be reachable at a public URL, so the website holds
- * the only copy — a correction there needs no new build.
+ * account-deletion page at a public URL, so a hosted copy is not optional —
+ * and a correction to a hosted copy needs no new build.
  *
- * Uzbek lives at the root and Russian under /ru/, which is why the language
- * is a path segment rather than a query: the pages link to each other.
+ * ── Why these moved off api.growencity.uz ──────────────────────────────────
+ *
+ * They used to be static HTML served by the API's nginx, from before the
+ * website existed. The website then grew real pages for the same three
+ * documents, and there were two copies of the same legal text with nothing
+ * keeping them in step.
+ *
+ * They drifted within weeks, in the direction nobody would guess: the static
+ * files had the current contact details and the maintained website pages had
+ * the old ones. Which copy is right is not a question a privacy policy
+ * should raise.
+ *
+ * The website is the one copy now. It is also the URL Play and App Store
+ * Connect are given, so a reviewer and a user read the same page — and the
+ * language toggle, the contents sidebar and the contact block come with it,
+ * none of which the static files had.
+ *
+ * The old /legal/*.html files can stay where they are: a store listing or a
+ * screenshot somewhere may still point at them. They should be replaced with
+ * redirects to these paths, so there is one document and one URL for it.
  */
-const LEGAL_BASE = "https://api.growencity.uz/legal";
+const SITE = "https://growencity.uz";
 
 const LEGAL = [
   {
     labelKey: "about.privacy" as TranslationKey,
     icon: "shield-checkmark-outline",
-    file: "privacy.html",
+    path: "privacy",
   },
   {
+    // "Public offer" is the terms of use — the website calls the same
+    // document by its own name.
     labelKey: "about.offer" as TranslationKey,
     icon: "document-text-outline",
-    file: "offer.html",
+    path: "terms",
   },
   {
     labelKey: "about.deleteAccount" as TranslationKey,
     icon: "trash-outline",
-    file: "delete-account.html",
+    path: "account-deletion",
   },
 ] as const;
 
@@ -67,7 +87,9 @@ export default function AboutScreen() {
   const { text } = useTheme();
   const t = useT();
   const language = useLanguage();
-  const legalDir = language === "ru" ? `${LEGAL_BASE}/ru` : LEGAL_BASE;
+  // The website carries the language as the first path segment for BOTH
+  // languages — there is no bare root. `/ru/privacy`, `/uz/privacy`.
+  const legalDir = `${SITE}/${language === "ru" ? "ru" : "uz"}`;
   const version = Constants.expoConfig?.version ?? "1.0.0";
 
   return (
@@ -118,7 +140,7 @@ export default function AboutScreen() {
                 divider={index > 0}
                 onPress={() => {
                   WebBrowser.openBrowserAsync(
-                    `${legalDir}/${row.file}`,
+                    `${legalDir}/${row.path}`,
                   ).catch(() => {});
                 }}
               />
