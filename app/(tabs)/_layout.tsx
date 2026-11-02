@@ -175,13 +175,12 @@ export default function TabsLayout() {
           ),
         }}
       />
-      {/* Off the bar, but still a route: reached from Settings and the
-          profile quick links. Every file under (tabs) becomes a tab unless it
-          says otherwise, hence href:null rather than simply omitting it.
-          (My listings used to live here too; it is a stack route now — a
-          hidden tab cannot show a back button, so pushing it stranded people
-          on the home feed. See app/listings/mine.tsx.) */}
-      <Tabs.Screen name="about" options={{ href: null }} />
+      {/* About has followed My listings out of here, to app/about.tsx, for
+          the reason the previous comment gave and did not act on: a hidden
+          tab cannot show a back button, and pushing a tab route makes no
+          back entry — so the screen opened and the navigator resolved
+          straight to the first tab. It looked like About redirected to
+          Home. Nothing under (tabs) is hidden any more. */}
       <Tabs.Screen
         name="account"
         options={{

@@ -219,6 +219,12 @@ export default function RootLayout() {
                 tab route never made a back entry — which is why "back" from
                 here landed on Home instead of where you came from. */}
             <Stack.Screen name="saved" options={{ title: t("saved.title") }} />
+            {/* Was a hidden tab (href: null) under (tabs), for the same
+                reason `saved` and `listings/mine` once were — and with the
+                same result: pushing a tab route makes no back entry, so the
+                screen opened and the navigator immediately resolved to the
+                first tab. It looked like About redirected to Home. */}
+            <Stack.Screen name="about" options={{ title: t("about.title") }} />
             <Stack.Screen
               name="activity/index"
               options={{ title: t("activity.title") }}

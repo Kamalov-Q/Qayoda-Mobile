@@ -285,7 +285,7 @@ export default function SettingsScreen() {
         <Section title={t("about.title")}>
           <Card flush>
             <Pressable
-              onPress={() => router.push("/(tabs)/about")}
+              onPress={() => router.push("/about")}
               accessibilityRole="button"
               accessibilityLabel={t("about.title")}
               style={({ pressed }) => ({

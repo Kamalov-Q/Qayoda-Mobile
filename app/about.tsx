@@ -10,11 +10,11 @@ import {
   Card,
   Section,
   BrandMark,
-  TAB_EDGES,
-} from "../../src/components/ui";
-import { spacing, type } from "../../src/theme/tokens";
-import { useTheme } from "../../src/theme/useTheme";
-import { useT, useLanguage, type TranslationKey } from "../../src/i18n";
+  HEADER_EDGES,
+} from "../src/components/ui";
+import { spacing, type } from "../src/theme/tokens";
+import { useTheme } from "../src/theme/useTheme";
+import { useT, useLanguage, type TranslationKey } from "../src/i18n";
 
 // Not translated: a phone number and an email address read the same in every
 // language.
@@ -114,7 +114,7 @@ export default function AboutScreen() {
   const version = Constants.expoConfig?.version ?? "1.0.0";
 
   return (
-    <Screen style={{ paddingTop: spacing.md }} edges={TAB_EDGES}>
+    <Screen style={{ paddingTop: spacing.md }} edges={HEADER_EDGES}>
       <View style={{ gap: spacing.xl }}>
         <Text style={text.display}>{t("about.title")}</Text>
 

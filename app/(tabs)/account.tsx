@@ -60,7 +60,7 @@ const LINKS = [
     key: "about",
     labelKey: "profile.linkAbout" as TranslationKey,
     icon: "information-circle-outline",
-    href: "/(tabs)/about" as Href,
+    href: "/about" as Href,
   },
 ] as const;
 

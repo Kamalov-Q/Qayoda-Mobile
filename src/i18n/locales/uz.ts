@@ -152,7 +152,7 @@ export const uz = {
     version: "Versiya {{version}}",
     descriptionTitle: "Growen City nima?",
     description:
-      "Growen City — ko'chmas mulkni xaritada izlash ilovasi. E'lonlar shunchaki ro'yxat emas: har bir mulk o'z chegarasi bilan xaritada turadi, narxi va rasmlari bilan. Bu matn — namuna, keyinroq haqiqiy tavsif bilan almashtiriladi.",
+      "Growen City — O'zbekistonda uy-joy sotib olish, sotish va ijaraga berish uchun ilova.\n\nFarqi xaritada: e'lon shunchaki ro'yxatdagi qator emas, balki o'z chegarasi bilan chizilgan joy. Yer uchastkasi qayergacha cho'zilganini, uy qaysi ko'chaga qaraganini va atrofda nima borligini — hammasini e'lonni ochmasdan ko'rasiz.\n\nQidiruvni tuman, narx, xonalar soni va mulk turi bo'yicha toraytirasiz. Yoqqan e'lonlarni saqlab qo'yasiz, sotuvchi bilan ilovada yozishasiz, o'z e'loningizni esa bir necha daqiqada joylaysiz.",
     contactTitle: "Bog'lanish",
     contactEmail: "Email",
     contactPhone: "Telefon",
