@@ -157,6 +157,12 @@ export const ru: Dictionary = {
   },
 
   auth: {
+    acceptPrefix: "Продолжая, я принимаю",
+    acceptOffer: "условия публичной оферты",
+    acceptMiddle: "и",
+    acceptPrivacy: "политику конфиденциальности",
+    acceptSuffix: "",
+    acceptRequired: "Примите условия, чтобы продолжить",
     welcomeTitle: "Добро пожаловать",
     welcomeSubtitle:
       "Введите номер телефона — код придёт по SMS. Если аккаунта нет, он создастся сам.",

@@ -166,6 +166,12 @@ export const uz = {
   },
 
   auth: {
+    acceptPrefix: "Davom etish orqali siz",
+    acceptOffer: "ommaviy oferta shartlari",
+    acceptMiddle: "va",
+    acceptPrivacy: "maxfiylik siyosati",
+    acceptSuffix: "bilan tanishdim va roziman",
+    acceptRequired: "Davom etish uchun shartlarni qabul qiling",
     welcomeTitle: "Xush kelibsiz",
     welcomeSubtitle:
       "Telefon raqamingizni kiriting — kod SMS orqali keladi. Hisob yo'q bo'lsa, o'zi yaratiladi.",

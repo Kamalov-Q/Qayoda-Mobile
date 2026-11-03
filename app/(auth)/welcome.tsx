@@ -22,8 +22,9 @@
 // account is asked: establishSession routes it to /onboarding when the
 // verify call comes back isNew with no name. The question is now asked of
 // exactly the people it applies to, after they are already signed in.
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Text, View } from "react-native";
+import * as WebBrowser from "expo-web-browser";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -35,11 +36,12 @@ import {
   ErrorBanner,
   BrandMark,
   BackButton,
+  Checkbox,
   LanguageSwitcher,
 } from "../../src/components/ui";
 import { spacing } from "../../src/theme/tokens";
 import { useTheme } from "../../src/theme/useTheme";
-import { useT } from "../../src/i18n";
+import { useT, useLanguage } from "../../src/i18n";
 import { errorMessage } from "../../src/lib/api-error";
 import { useRequestOtp } from "../../src/features/auth/hooks/useAuth";
 
@@ -62,6 +64,7 @@ export default function WelcomeScreen() {
   const requestOtp = useRequestOtp();
   const { text, colors } = useTheme();
   const t = useT();
+  const language = useLanguage();
 
   const schema = useMemo(() => makeSchema(t), [t]);
   const {
@@ -77,8 +80,27 @@ export default function WelcomeScreen() {
   // One call, one outcome: the code is on its way and the next screen takes
   // it. Whether the number already has an account is the server's business
   // and nothing this screen has to branch on.
-  const onContinue = ({ phone }: FormData) =>
+  /**
+   * Accepting the offer is a precondition for signing in, not a step of its
+   * own — so it gates every route out of this screen, phone and Telegram
+   * alike. A consent that one button honours and another ignores is not a
+   * consent.
+   */
+  const [accepted, setAccepted] = useState(false);
+
+  const onContinue = ({ phone }: FormData) => {
+    // Checked here as well as in `disabled`: the phone field submits on
+    // its return key, which never touches the button.
+    if (!accepted) return;
     requestOtp.mutate({ phone: normalizePhone(phone) });
+  };
+
+  // The documents live on the website, the same copies the About screen and
+  // the stores link to. See app/about.tsx.
+  const legal = (path: "terms" | "privacy") =>
+    WebBrowser.openBrowserAsync(
+      `https://growencity.uz/${language === "ru" ? "ru" : "uz"}/${path}`,
+    ).catch(() => {});
 
   const error = requestOtp.isError ? errorMessage(requestOtp.error) : null;
 
@@ -140,10 +162,48 @@ export default function WelcomeScreen() {
 
           <ErrorBanner message={error} />
 
+          {/* The sentence carries two links, so each one takes the press
+              itself and stops it reaching the row — otherwise opening the
+              offer would also tick the box on the way past. */}
+          <Checkbox
+            checked={accepted}
+            onChange={setAccepted}
+            accessibilityLabel={[
+              t("auth.acceptPrefix"),
+              t("auth.acceptOffer"),
+              t("auth.acceptMiddle"),
+              t("auth.acceptPrivacy"),
+              t("auth.acceptSuffix"),
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            <Text style={text.caption}>
+              {t("auth.acceptPrefix")}{" "}
+              <Text
+                onPress={() => void legal("terms")}
+                suppressHighlighting
+                style={{ color: colors.primary, textDecorationLine: "underline" }}
+              >
+                {t("auth.acceptOffer")}
+              </Text>{" "}
+              {t("auth.acceptMiddle")}{" "}
+              <Text
+                onPress={() => void legal("privacy")}
+                suppressHighlighting
+                style={{ color: colors.primary, textDecorationLine: "underline" }}
+              >
+                {t("auth.acceptPrivacy")}
+              </Text>
+              {t("auth.acceptSuffix") ? ` ${t("auth.acceptSuffix")}` : ""}
+            </Text>
+          </Checkbox>
+
           <Button
             title={t("common.continue")}
             onPress={handleSubmit(onContinue)}
             loading={requestOtp.isPending}
+            disabled={!accepted}
           />
         </View>
 
@@ -169,7 +229,7 @@ export default function WelcomeScreen() {
             variant="secondary"
             icon="paper-plane-outline"
             onPress={() => router.push("/telegram")}
-            disabled={requestOtp.isPending}
+            disabled={requestOtp.isPending || !accepted}
           />
         </View>
       </View>

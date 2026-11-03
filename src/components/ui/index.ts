@@ -5,6 +5,7 @@ export { DebouncedTextField } from "./DebouncedTextField";
 export { OtpInput } from "./OtpInput";
 export { SegmentedControl } from "./SegmentedControl";
 export { Chip, ChipGroup } from "./Chip";
+export * from "./Checkbox";
 export { SelectGrid, type SelectGridOption } from "./SelectGrid";
 export { FilterSheet, FilterButton, PriceRangeFilter } from "./FilterSheet";
 export { FilterPill } from "./FilterPill";
