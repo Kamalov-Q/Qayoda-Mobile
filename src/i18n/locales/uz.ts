@@ -1197,6 +1197,8 @@ export const uz = {
     days: "{{count}} kun",
     cost: "Narxi",
     free: "Bepul",
+    // Birinchi e'lon sovg'a: narx chizib ko'rsatiladi, pul yechilmaydi.
+    firstFreeHint: "Birinchi e'loningiz bepul — balansdan hech narsa yechilmaydi",
     balance: "Balansingiz",
     notEnough: "Balans yetarli emas",
     notEnoughBody:

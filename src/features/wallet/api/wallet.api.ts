@@ -39,6 +39,20 @@ export interface WalletOverview {
    * account's uuid.
    */
   accountNo: number;
+  /**
+   * First-use-free actions this account has NOT spent yet, e.g.
+   * ["LISTING_POST"] until they post their first listing.
+   *
+   * Per account, and the server is the only judge of it — the app must never
+   * infer it from "they have no listings", because a deleted listing would
+   * make that read free again while the server charges.
+   *
+   * Optional because an older API does not send it: absent is treated as
+   * "nothing free", which is the safe way round. The app under-promising and
+   * the post turning out free is a nice surprise; the reverse is a 402 on a
+   * screen that said "Bepul".
+   */
+  freeActions?: string[];
 }
 
 export type TxKind =

@@ -14,6 +14,13 @@ interface Props {
   balance?: string | null;
   /** For a timed tariff: "· 7 kun". */
   durationDays?: number | null;
+  /**
+   * This action is on the house for this account — the first-post grant is
+   * still unspent. The price is shown struck through rather than hidden: the
+   * point is that they are being given something, which a row reading
+   * "Bepul" alone does not say.
+   */
+  free?: boolean;
 }
 
 /**
@@ -32,11 +39,19 @@ interface Props {
  * Renders nothing when there is no price. An action nobody has set a tariff
  * for is free, and a row reading "0 so'm" only invites the question of
  * whether the price failed to load.
+ *
+ * `free` is the other kind of free: there IS a price, and this account is
+ * not paying it this once. That state drops the balance line entirely. It
+ * has to — a new account's balance is zero, so the shortfall warning would
+ * fire on the very first listing somebody posts, which is precisely the
+ * red-mark-with-nothing-to-do-about-it problem described above, on the one
+ * screen where there is genuinely nothing to do about it.
  */
 export const PriceNotice = memo(function PriceNotice({
   price,
   balance,
   durationDays,
+  free = false,
 }: Props) {
   const { colors, text } = useTheme();
   const t = useT();
@@ -44,8 +59,9 @@ export const PriceNotice = memo(function PriceNotice({
   if (price === undefined || Number(price) <= 0) return null;
 
   // Compared as numbers, not strings: both are decimal strings from the API,
-  // and "9000" > "10000" lexically.
-  const short = balance != null && Number(balance) < Number(price);
+  // and "9000" > "10000" lexically. A free action is never short: nothing is
+  // being taken, so the balance cannot fail to cover it.
+  const short = !free && balance != null && Number(balance) < Number(price);
 
   return (
     <View
@@ -69,17 +85,52 @@ export const PriceNotice = memo(function PriceNotice({
         <Text style={{ ...text.body, flex: 1, color: colors.textMuted }}>
           {t("tariffs.cost")}
         </Text>
-        <Text style={{ ...type.body, ...weight("700"), color: colors.text }}>
+        <Text
+          style={{
+            ...type.body,
+            ...weight("700"),
+            color: free ? colors.textFaint : colors.text,
+            textDecorationLine: free ? "line-through" : "none",
+          }}
+        >
           {formatThousands(price)} {t("listings.som")}
           {durationDays
             ? ` · ${t("tariffs.days", { count: durationDays })}`
             : ""}
         </Text>
+
+        {free ? (
+          <View
+            style={{
+              paddingHorizontal: spacing.sm,
+              paddingVertical: 2,
+              borderRadius: radii.sm,
+              borderWidth: 1,
+              borderColor: colors.successBorder,
+              backgroundColor: colors.successSurface,
+            }}
+          >
+            <Text
+              style={{ ...text.caption, ...weight("700"), color: colors.success }}
+            >
+              {t("tariffs.free")}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
+      {/* Why it is free, said once. Without this the struck-through price
+          reads as a bug or a discount nobody can account for. */}
+      {free ? (
+        <Text style={{ ...text.caption, color: colors.textFaint }}>
+          {t("tariffs.firstFreeHint")}
+        </Text>
+      ) : null}
+
       {/* Balance is context, not an alarm — it only goes red when it is the
-          reason the action cannot proceed. */}
-      {balance != null ? (
+          reason the action cannot proceed. Hidden entirely while free: see
+          the note on `free` above. */}
+      {!free && balance != null ? (
         <View
           style={{
             flexDirection: "row",

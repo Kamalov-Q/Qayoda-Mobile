@@ -2,7 +2,7 @@
   "expo": {
     "name": "Growen City",
     "slug": "growencity",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "growencity",
@@ -22,7 +22,6 @@
     },
     "android": {
       "package": "uz.growencity.app",
-      "versionCode": 6,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#0A2024",

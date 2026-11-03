@@ -579,6 +579,16 @@ export default function AddListingScreen() {
   // and colour it red when the balance will not cover it.
   const { priceOf } = useTariffs();
   const wallet = useWalletOverview();
+  /**
+   * The first listing is on the house, and the server decides whether this
+   * account has already had it — never the app. Safe while the balance is
+   * still loading: this only renders on the last step, several screens in,
+   * by which time the query has long settled, and false just means the
+   * normal price row.
+   */
+  const freeFirstListing = (wallet.data?.freeActions ?? []).includes(
+    "LISTING_POST",
+  );
   const {
     images,
     pickAndUpload,
@@ -1594,6 +1604,7 @@ export default function AddListingScreen() {
             <PriceNotice
               price={priceOf("LISTING_POST")}
               balance={wallet.data?.balance}
+              free={freeFirstListing}
             />
             <ErrorBanner
               message={create.isError ? errorMessage(create.error) : null}
